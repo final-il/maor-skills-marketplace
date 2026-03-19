@@ -35,6 +35,15 @@
       "skills": [
         "./skills/architecture-diagrams"
       ]
+    },
+    {
+      "name": "mac-expert",
+      "description": "Apple macOS expert for configuring, diagnosing, fixing, and optimizing MacBooks and Macs. Covers system settings, shell config, networking, Homebrew, storage, security, performance, and troubleshooting.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/mac-expert"
+      ]
     }
   ]
 }
