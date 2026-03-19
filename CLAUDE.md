@@ -44,6 +44,15 @@ maor-skills-marketplace/
 | **technical-docs** | Structured documentation with YAML frontmatter — output feeds into docx/pptx/pdf skills |
 | **architecture-diagrams** | Diagrams in Mermaid, PlantUML, Draw.io |
 
+## IMPORTANT: All Skills and Agents Go Here
+
+**Every new skill or agent created in any Claude Code session must be added to this marketplace repo.** This is the single source of truth for Maor's custom skills. After adding a skill:
+1. Follow the steps below to register it
+2. Commit and push to `final-il/maor-skills-marketplace`
+3. Install via the marketplace to verify the marketplace config is correct and the skill works
+
+This applies whether working inside this repo or from any other directory.
+
 ## How to Add a New Skill
 
 1. Create `skills/<skill-name>/SKILL.md` with YAML frontmatter (`name`, `description`)
@@ -60,7 +69,8 @@ maor-skills-marketplace/
    ```
 4. Update `README.md` with the new skill in the table
 5. Commit and push
-6. User runs `/plugin` to update, then `/reload-plugins`
+6. Install via marketplace: run `/plugin` → select "Browse and install plugins" → select `maor-skills-marketplace` → install the new skill
+7. Run `/reload-plugins` to activate
 
 ## Skill Writing Guide
 
