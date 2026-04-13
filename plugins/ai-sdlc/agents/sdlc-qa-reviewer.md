@@ -59,6 +59,8 @@ You receive:
    - No obvious performance issues?
 
    **c. Test Coverage**
+   - Run `uv run pytest -v` (or project's test command) and check the coverage report
+   - Overall coverage must be >= 80% — if not, this is a blocking issue
    - Is every acceptance criterion covered by at least one test?
    - Are edge cases tested?
    - Are error paths tested?
@@ -84,6 +86,7 @@ You receive:
    {Observations — keep it brief, only note real issues}
 
    ### Test Coverage
+   Coverage: {X}% (required: 80%)
    {Assessment of test adequacy}
 
    ### Issues

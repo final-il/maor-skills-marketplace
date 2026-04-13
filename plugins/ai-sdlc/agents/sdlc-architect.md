@@ -72,6 +72,10 @@ For each story key:
    ### Dependencies
    {Any new packages needed, or existing modules to import}
 
+   ### Test Coverage
+   - pytest-cov must be in dev dependencies with `--cov-fail-under=80`
+   - {Specific areas to test for this story}
+
    ### Edge Cases
    - {Edge case 1 and how to handle it}
    - {Edge case 2}

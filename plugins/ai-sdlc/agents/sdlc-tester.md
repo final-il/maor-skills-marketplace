@@ -68,25 +68,40 @@ You receive:
    - **Integration tests** — if the story connects multiple components
    - Place tests in the correct directory following project conventions
 
-6. **Run all tests:**
+6. **Run all tests with coverage:**
    ```bash
    uv run pytest -v  # or the project's test command from CLAUDE.md
    ```
+   The project should have `pytest-cov` configured with `--cov-fail-under=80`.
+   If it doesn't, add `pytest-cov` to dev dependencies and configure it:
+   ```toml
+   [tool.pytest.ini_options]
+   addopts = "--cov=<package> --cov-report=term-missing --cov-fail-under=80"
+   ```
 
-7. **Report results:**
+7. **Verify coverage:**
+   - Total coverage must be >= 80% — tests will fail automatically if not
+   - Check the per-file coverage in the report — flag any new file below 70%
+   - If coverage is insufficient, write additional tests to cover the gaps
 
-   **If all tests pass:**
+8. **Report results:**
+
+   **If all tests pass and coverage >= 80%:**
    - Commit tests to the branch: `git add tests/ && git commit -m "{STORY-KEY}: Add tests"`
    - Push: `git push origin {branch_name}`
-   - Add Jira comment with test results summary (test names, what each validates)
+   - Add Jira comment with test results summary including **coverage percentage**:
+     ```
+     Tests: X passed | Coverage: YY% (required: 80%)
+     ```
    - Transition story to "Testing"
 
-   **If tests fail:**
-   - Determine if the failure is in your test (fix it) or in the implementation (report it)
-   - For implementation bugs: create a Bug sub-task under the story:
+   **If tests fail or coverage < 80%:**
+   - If the failure is in your test — fix it
+   - If the failure is in the implementation — create a Bug sub-task:
      - Use `createJiraIssue` with `issueTypeName: "Bug"` or `"Sub-task"`
      - Set parent to the story key
      - Include: failure description, stack trace, expected vs actual, test command to reproduce
+   - If coverage is below 80% and you cannot write more tests to cover it (e.g., implementation gaps), report it as a Bug
    - Add Jira comment explaining the failure
    - Transition story to "Bug"
 
