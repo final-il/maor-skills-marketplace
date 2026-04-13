@@ -14,24 +14,35 @@ description: |
 
 You help users analyze Jira ticket data using the `jiralyzer` CLI tool. You translate natural language questions into DuckDB SQL queries, execute them, interpret results, and generate visualizations.
 
-## Prerequisites
+## How to Run Commands
 
-The `jiralyzer` CLI must be installed and a database must be populated:
+Jiralyzer is a Python package managed with `uv`. **All commands must be run from the jiralyzer project directory using `uv run`:**
 
 ```bash
-# Install
-pip install jiralyzer  # or: uv pip install jiralyzer
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer <command> [args...]
+```
 
+Every `jiralyzer` command shown in this skill should be run this way. For example:
+- `jiralyzer stats` → `cd /Users/maorb/git/jiralyzer && uv run jiralyzer stats`
+- `jiralyzer query "SELECT ..."` → `cd /Users/maorb/git/jiralyzer && uv run jiralyzer query "SELECT ..."`
+
+The default database path is `jiralyzer.db` in the current directory (`/Users/maorb/git/jiralyzer/jiralyzer.db`). Use `--db <path>` to override.
+
+## Prerequisites
+
+A database must be populated before analysis:
+
+```bash
 # Ingest data (from Jira REST API JSON export with expand=changelog)
-jiralyzer ingest export.json
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer ingest export.json
 
 # Verify
-jiralyzer stats
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer stats
 ```
 
 If the user hasn't ingested data yet, guide them to:
 1. Export from Jira REST API with `expand=changelog` (provides full history)
-2. Run `jiralyzer ingest <path-to-json>`
+2. Run `cd /Users/maorb/git/jiralyzer && uv run jiralyzer ingest <path-to-json>`
 
 ## Workflow
 
@@ -39,11 +50,11 @@ When the user asks an analytics question:
 
 ### 1. Check database exists
 
-Run `jiralyzer schema` to verify data is loaded. If it fails or returns empty, guide the user to ingest data first.
+Run `cd /Users/maorb/git/jiralyzer && uv run jiralyzer schema` to verify data is loaded. If it fails or returns empty, guide the user to ingest data first.
 
 ### 2. Understand the schema
 
-Run `jiralyzer schema` to get the current table structure. The database has 6 tables:
+Run `cd /Users/maorb/git/jiralyzer && uv run jiralyzer schema` to get the current table structure. The database has 6 tables:
 
 - **tickets** — One row per Jira issue (key, status, assignee, priority, resolution_days, etc.)
 - **status_changes** — Status transition history from changelog
@@ -67,10 +78,10 @@ Translate the user's question into DuckDB SQL. Key considerations:
 
 ```bash
 # For data analysis
-jiralyzer query "<sql>" --format json
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer query "<sql>" --format json
 
 # For display to user
-jiralyzer query "<sql>" --format table
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer query "<sql>" --format table
 ```
 
 Always explain what the results mean in context. Don't just show numbers — provide insights.
@@ -80,7 +91,7 @@ Always explain what the results mean in context. Don't just show numbers — pro
 If the results benefit from a chart, generate one:
 
 ```bash
-jiralyzer chart "<sql>" --type <chart_type> --x <col> --y <col> --output chart.html --open
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer chart "<sql>" --type <chart_type> --x <col> --y <col> --output chart.html --open
 ```
 
 See `references/visualization-guide.md` for chart type selection guidance.
@@ -116,8 +127,8 @@ Combine data and visualization into a concise report:
 For a quick overview, run:
 
 ```bash
-jiralyzer stats              # Text summary
-jiralyzer stats --format json  # Machine-readable
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer stats              # Text summary
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer stats --format json  # Machine-readable
 ```
 
 This shows: table row counts, date ranges, status distribution, top assignees, resolution metrics.
@@ -127,15 +138,16 @@ This shows: table row counts, date ranges, status distribution, top assignees, r
 For downstream analysis (Snowflake, BigQuery, etc.):
 
 ```bash
-jiralyzer export-parquet ./exports/                    # All tables
-jiralyzer export-parquet ./exports/ --tables tickets    # Specific tables
-jiralyzer export-parquet ./exports/ --compression zstd  # Better compression
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer export-parquet ./exports/                    # All tables
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer export-parquet ./exports/ --tables tickets    # Specific tables
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer export-parquet ./exports/ --compression zstd  # Better compression
 ```
 
 ## Rules
 
-- Always use `jiralyzer` CLI commands — never access the database directly
-- Default DB path is `jiralyzer.db` in the current directory; use `--db <path>` to override
+- Always run commands via `cd /Users/maorb/git/jiralyzer && uv run jiralyzer <command>` — never use bare `jiralyzer`
+- Never access the database directly — always use the CLI
+- Default DB path is `jiralyzer.db` in the jiralyzer project directory; use `--db <path>` to override
 - When generating SQL, prefer CTEs over subqueries for readability
 - Always LIMIT results for exploratory queries (LIMIT 20 default)
 - If a query fails, check the schema and adjust — column names are exact
