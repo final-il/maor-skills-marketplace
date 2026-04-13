@@ -22,6 +22,28 @@ The user provides `$ARGUMENTS` which can be:
 2. **A Jira epic key** (matches pattern like `PROJ-123`) — resume an existing pipeline
 3. **A text description** — treat as a new project description
 
+## Feedback Loop — Bugs and New Features from Testing
+
+When the product is already built and the user reports a bug or requests a feature discovered during testing:
+
+1. **Don't re-run the full SDLC ceremony** — the project context already exists
+2. **Add stories directly** to the existing Jira project under a new or existing epic
+3. **Skip Phase 1 (Planning)** — the user already knows what they need; create tickets directly
+4. **Skip Phase 3 (Architecture)** if the change is straightforward — post a brief tech spec as a Jira comment and transition to "Selected for Development"
+5. **Run Phase 4-7 normally** — develop, test, QA, bug fix
+
+Indicators that this is a feedback loop (not a new project):
+- The user says "add this to our project" or references existing Jira project/epic
+- The repo already has code, CLAUDE.md, and existing Jira tickets
+- The request is a bug fix, missing feature, or gap found during testing
+- The scope is small (1-5 stories, not a full project)
+
+In this mode, the orchestrator:
+1. Discovers the existing project context (same as Phase 0, but faster — reuse known cloudId, projectKey, transitions)
+2. Creates an epic + stories directly (or adds stories to an existing epic)
+3. Sets up dependency links
+4. Proceeds to architecture (brief) → develop → test → QA
+
 ## Phase 0: Initialization
 
 1. Parse `$ARGUMENTS` to determine input type
@@ -164,9 +186,25 @@ When `$ARGUMENTS` is a Jira epic key:
 1. Fetch the epic and all child stories
 2. Check each story's status
 3. Resume from where the pipeline left off:
-   - "To Do" stories → start at Phase 3 (Architecture)
-   - "Ready for Dev" → Phase 4 (Develop)
+   - "Backlog" / "To Do" stories → start at Phase 3 (Architecture)
+   - "Selected for Development" / "Ready for Dev" → Phase 4 (Develop)
    - "In Review" → Phase 5 (Test)
    - "Testing" → Phase 6 (QA)
    - "Bug" → Phase 7 (Bug Fix)
    - "Done" → skip
+
+## Lifecycle — How Work Flows Back
+
+The SDLC is not a one-shot pipeline. After Phase 8 (Completion), the product enters a continuous cycle:
+
+```
+Build → Test/Use → Find gaps → Add stories → Build → ...
+```
+
+When the user tests the product and finds bugs or missing features:
+1. They come back with `/sdlc` and describe the issue or new feature
+2. The orchestrator detects this is a feedback loop (see "Feedback Loop" section above)
+3. New stories are added to the existing project, built, tested, and reviewed
+4. No need to re-plan the whole project — just the delta
+
+This keeps all work tracked in Jira under the same project, maintaining full traceability from initial build through iterative improvements.
