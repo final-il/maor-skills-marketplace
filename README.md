@@ -6,11 +6,11 @@ A collection of custom skills, agents, and plugins for Claude Code.
 
 | Skill | Description |
 |-------|-------------|
-| [aws-secure-architecture](skills/aws-secure-architecture/) | Design secure AWS architectures with defense-in-depth — private connectivity, egress control, multi-account security, and zero-trust patterns |
-| [technical-docs](skills/technical-docs/) | Generate structured technical documentation — architecture docs, runbooks, ADRs, API docs, postmortems, security reviews |
-| [architecture-diagrams](skills/architecture-diagrams/) | Generate architecture diagrams in Mermaid, PlantUML, and Draw.io formats |
-| [mac-expert](skills/mac-expert/) | Apple macOS expert — system config, diagnostics, shell, networking, Homebrew, security, performance, troubleshooting |
-| [jiralyzer](skills/jiralyzer/) | Jira ticket analytics — natural language queries, SQL generation, DuckDB, interactive Plotly charts |
+| [aws-secure-architecture](plugins/aws-secure-architecture/) | Design secure AWS architectures with defense-in-depth — private connectivity, egress control, multi-account security, and zero-trust patterns |
+| [technical-docs](plugins/technical-docs/) | Generate structured technical documentation — architecture docs, runbooks, ADRs, API docs, postmortems, security reviews |
+| [architecture-diagrams](plugins/architecture-diagrams/) | Generate architecture diagrams in Mermaid, PlantUML, and Draw.io formats |
+| [mac-expert](plugins/mac-expert/) | Apple macOS expert — system config, diagnostics, shell, networking, Homebrew, security, performance, troubleshooting |
+| [jiralyzer](plugins/jiralyzer/) | Jira ticket analytics — natural language queries, SQL generation, DuckDB, interactive Plotly charts |
 
 ## Plugins
 
@@ -34,5 +34,4 @@ A collection of custom skills, agents, and plugins for Claude Code.
 
 ## Structure
 
-- `skills/` — Individual skills with `SKILL.md` and optional `references/`
-- `plugins/` — Multi-component plugins with agents, commands, and skills
+- `plugins/` — All plugins (both skill-only and multi-component) with their own `.claude-plugin/plugin.json`, skills, agents, and commands

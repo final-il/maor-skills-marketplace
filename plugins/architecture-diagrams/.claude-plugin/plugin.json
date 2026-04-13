@@ -1,0 +1,8 @@
+{
+  "name": "architecture-diagrams",
+  "description": "Generate architecture and infrastructure diagrams in Mermaid, PlantUML, and Draw.io formats — flowcharts, sequence diagrams, cloud infrastructure diagrams with native AWS/Azure/GCP icons.",
+  "author": {
+    "name": "Maor B",
+    "email": "maorb@final.co.il"
+  }
+}

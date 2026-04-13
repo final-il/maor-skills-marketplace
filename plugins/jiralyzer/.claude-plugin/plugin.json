@@ -1,0 +1,8 @@
+{
+  "name": "jiralyzer",
+  "description": "Jira ticket analytics — natural language queries, SQL generation, interactive charts",
+  "author": {
+    "name": "Maor B",
+    "email": "maorb@final.co.il"
+  }
+}

@@ -11,48 +11,46 @@ maor-skills-marketplace/
 ├── CLAUDE.md                          ← You are here
 ├── README.md
 ├── .claude-plugin/
-│   └── marketplace.json               ← Marketplace config — lists all plugins/skills
-├── skills/
-│   ├── aws-secure-architecture/
-│   │   ├── SKILL.md
-│   │   └── references/
-│   │       ├── private-to-saas.md
-│   │       ├── multi-account-network.md
-│   │       └── zero-trust-service-mesh.md
-│   ├── technical-docs/
-│   │   ├── SKILL.md
-│   │   └── references/
-│   │       ├── architecture.md, runbook.md, adr.md
-│   │       ├── api-docs.md, postmortem.md
-│   │       └── security-review.md
-│   ├── architecture-diagrams/
-│   │   ├── SKILL.md
-│   │   └── references/
-│   │       ├── flowchart.md, sequence.md
-│   │       └── cloud-infra.md
-│   └── mac-expert/
-│       └── SKILL.md
+│   └── marketplace.json               ← Marketplace config — lists all plugins
 └── plugins/
-    └── ai-sdlc/                       ← Multi-agent SDLC automation plugin
-        ├── .claude-plugin/
-        │   └── plugin.json
-        ├── commands/
-        │   └── sdlc.md                ← Orchestrator entry point (/sdlc)
+    ├── aws-secure-architecture/       ← Skill plugin
+    │   ├── .claude-plugin/plugin.json
+    │   └── skills/aws-secure-architecture/
+    │       ├── SKILL.md
+    │       └── references/
+    ├── technical-docs/                ← Skill plugin
+    │   ├── .claude-plugin/plugin.json
+    │   └── skills/technical-docs/
+    │       ├── SKILL.md
+    │       └── references/
+    ├── architecture-diagrams/         ← Skill plugin
+    │   ├── .claude-plugin/plugin.json
+    │   └── skills/architecture-diagrams/
+    │       ├── SKILL.md
+    │       └── references/
+    ├── mac-expert/                    ← Skill plugin
+    │   ├── .claude-plugin/plugin.json
+    │   └── skills/mac-expert/
+    │       └── SKILL.md
+    ├── jiralyzer/                     ← Skill plugin
+    │   ├── .claude-plugin/plugin.json
+    │   └── skills/jiralyzer/
+    │       ├── SKILL.md
+    │       └── references/
+    └── ai-sdlc/                       ← Multi-agent SDLC plugin
+        ├── .claude-plugin/plugin.json
+        ├── commands/sdlc.md
         ├── agents/
-        │   ├── sdlc-planner.md        ← Phase 1: Requirements → epics/stories (opus)
-        │   ├── sdlc-jira-creator.md   ← Phase 2: Creates Jira tickets (sonnet)
-        │   ├── sdlc-architect.md      ← Phase 3: Tech specs per story (opus)
-        │   ├── sdlc-developer.md      ← Phase 4: Writes code, opens PRs (opus)
-        │   ├── sdlc-tester.md         ← Phase 5: Writes + runs tests (sonnet)
-        │   ├── sdlc-qa-reviewer.md    ← Phase 6: Code review + validation (opus)
-        │   └── sdlc-bug-fixer.md      ← Phase 7: Fixes bugs, re-tests (sonnet)
-        └── skills/
-            └── sdlc-conventions/
-                ├── SKILL.md           ← Jira conventions, ticket templates
-                └── references/
-                    ├── workflow-states.md
-                    ├── ticket-templates.md
-                    └── context-protocol.md
+        │   ├── sdlc-planner.md        ← Phase 1: Requirements → epics/stories
+        │   ├── sdlc-jira-creator.md   ← Phase 2: Creates Jira tickets
+        │   ├── sdlc-architect.md      ← Phase 3: Tech specs per story
+        │   ├── sdlc-developer.md      ← Phase 4: Writes code, opens PRs
+        │   ├── sdlc-tester.md         ← Phase 5: Writes + runs tests
+        │   ├── sdlc-qa-reviewer.md    ← Phase 6: Code review + validation
+        │   └── sdlc-bug-fixer.md      ← Phase 7: Fixes bugs, re-tests
+        └── skills/sdlc-conventions/
+            ├── SKILL.md
+            └── references/
 ```
 
 ## Skills
@@ -63,6 +61,7 @@ maor-skills-marketplace/
 | **technical-docs** | Structured documentation with YAML frontmatter |
 | **architecture-diagrams** | Diagrams in Mermaid, PlantUML, Draw.io |
 | **mac-expert** | macOS system config, diagnostics, troubleshooting |
+| **jiralyzer** | Jira ticket analytics — natural language queries, SQL, charts |
 
 ## Plugins
 
@@ -89,22 +88,31 @@ This applies whether working inside this repo or from any other directory.
 
 ## How to Add a New Skill
 
-1. Create `skills/<skill-name>/SKILL.md` with YAML frontmatter (`name`, `description`)
-2. Add optional `references/` directory for detailed guidance files
-3. Update `.claude-plugin/marketplace.json` — add a new entry to the `plugins` array:
+Each skill is its own plugin under `plugins/`. This prevents cross-registration of skills across plugin namespaces.
+
+1. Create `plugins/<skill-name>/.claude-plugin/plugin.json`:
    ```json
    {
      "name": "skill-name",
      "description": "What the skill does",
-     "source": "./",
-     "strict": false,
-     "skills": ["./skills/skill-name"]
+     "author": { "name": "Maor B", "email": "maorb@final.co.il" }
    }
    ```
-4. Update `README.md` with the new skill in the table
-5. Commit and push
-6. Install via marketplace: run `/plugin` → select "Browse and install plugins" → select `maor-skills-marketplace` → install the new skill
-7. Run `/reload-plugins` to activate
+2. Create `plugins/<skill-name>/skills/<skill-name>/SKILL.md` with YAML frontmatter (`name`, `description`)
+3. Add optional `references/` directory for detailed guidance files
+4. Update `.claude-plugin/marketplace.json` — add a new entry to the `plugins` array:
+   ```json
+   {
+     "name": "skill-name",
+     "description": "What the skill does",
+     "source": "./plugins/skill-name",
+     "strict": false
+   }
+   ```
+5. Update `README.md` with the new skill in the table
+6. Commit and push
+7. Install via marketplace: run `/plugin` → select "Browse and install plugins" → select `maor-skills-marketplace` → install the new skill
+8. Run `/reload-plugins` to activate
 
 ## How to Add a New Plugin
 

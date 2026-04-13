@@ -1,0 +1,8 @@
+{
+  "name": "technical-docs",
+  "description": "Generate structured technical documentation — architecture docs, runbooks, ADRs, API docs, postmortems, and security reviews. Output is structured markdown with frontmatter, designed to feed into docx/pptx/pdf skills.",
+  "author": {
+    "name": "Maor B",
+    "email": "maorb@final.co.il"
+  }
+}

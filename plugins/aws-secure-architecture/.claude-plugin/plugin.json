@@ -1,0 +1,8 @@
+{
+  "name": "aws-secure-architecture",
+  "description": "Design secure AWS architectures with defense-in-depth — private connectivity, egress control, multi-account security, and zero-trust patterns",
+  "author": {
+    "name": "Maor B",
+    "email": "maorb@final.co.il"
+  }
+}

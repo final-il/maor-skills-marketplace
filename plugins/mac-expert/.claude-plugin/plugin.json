@@ -1,0 +1,8 @@
+{
+  "name": "mac-expert",
+  "description": "Apple macOS expert for configuring, diagnosing, fixing, and optimizing MacBooks and Macs. Covers system settings, shell config, networking, Homebrew, storage, security, performance, and troubleshooting.",
+  "author": {
+    "name": "Maor B",
+    "email": "maorb@final.co.il"
+  }
+}

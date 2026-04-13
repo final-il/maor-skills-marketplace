@@ -12,47 +12,32 @@
     {
       "name": "aws-secure-architecture",
       "description": "Design secure AWS architectures with defense-in-depth — private connectivity, egress control, multi-account security, and zero-trust patterns",
-      "source": "./",
-      "strict": false,
-      "skills": [
-        "./skills/aws-secure-architecture"
-      ]
+      "source": "./plugins/aws-secure-architecture",
+      "strict": false
     },
     {
       "name": "technical-docs",
       "description": "Generate structured technical documentation — architecture docs, runbooks, ADRs, API docs, postmortems, and security reviews. Output is structured markdown with frontmatter, designed to feed into docx/pptx/pdf skills.",
-      "source": "./",
-      "strict": false,
-      "skills": [
-        "./skills/technical-docs"
-      ]
+      "source": "./plugins/technical-docs",
+      "strict": false
     },
     {
       "name": "architecture-diagrams",
       "description": "Generate architecture and infrastructure diagrams in Mermaid, PlantUML, and Draw.io formats — flowcharts, sequence diagrams, cloud infrastructure diagrams with native AWS/Azure/GCP icons.",
-      "source": "./",
-      "strict": false,
-      "skills": [
-        "./skills/architecture-diagrams"
-      ]
+      "source": "./plugins/architecture-diagrams",
+      "strict": false
     },
     {
       "name": "mac-expert",
       "description": "Apple macOS expert for configuring, diagnosing, fixing, and optimizing MacBooks and Macs. Covers system settings, shell config, networking, Homebrew, storage, security, performance, and troubleshooting.",
-      "source": "./",
-      "strict": false,
-      "skills": [
-        "./skills/mac-expert"
-      ]
+      "source": "./plugins/mac-expert",
+      "strict": false
     },
     {
       "name": "jiralyzer",
       "description": "Jira ticket analytics — natural language queries, SQL generation, interactive charts",
-      "source": "./",
-      "strict": false,
-      "skills": [
-        "./skills/jiralyzer"
-      ]
+      "source": "./plugins/jiralyzer",
+      "strict": false
     },
     {
       "name": "ai-sdlc",
