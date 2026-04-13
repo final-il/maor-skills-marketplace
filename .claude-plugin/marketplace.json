@@ -46,6 +46,15 @@
       ]
     },
     {
+      "name": "jiralyzer",
+      "description": "Jira ticket analytics — natural language queries, SQL generation, interactive charts",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/jiralyzer"
+      ]
+    },
+    {
       "name": "ai-sdlc",
       "description": "AI-SDLC: Automated software development lifecycle with Jira coordination. Plans projects, creates tickets, designs architecture, writes code, tests, reviews, and fixes bugs through coordinated agents.",
       "source": "./plugins/ai-sdlc",

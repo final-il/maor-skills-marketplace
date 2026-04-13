@@ -10,6 +10,7 @@ A collection of custom skills, agents, and plugins for Claude Code.
 | [technical-docs](skills/technical-docs/) | Generate structured technical documentation — architecture docs, runbooks, ADRs, API docs, postmortems, security reviews |
 | [architecture-diagrams](skills/architecture-diagrams/) | Generate architecture diagrams in Mermaid, PlantUML, and Draw.io formats |
 | [mac-expert](skills/mac-expert/) | Apple macOS expert — system config, diagnostics, shell, networking, Homebrew, security, performance, troubleshooting |
+| [jiralyzer](skills/jiralyzer/) | Jira ticket analytics — natural language queries, SQL generation, DuckDB, interactive Plotly charts |
 
 ## Plugins
 
