@@ -97,13 +97,13 @@ Always explain what the results mean in context. Don't just show numbers — pro
 If the results benefit from a chart, generate one:
 
 ```bash
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer chart "<sql>" --type <chart_type> --x <col> --y <col> --output chart.html --open
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer chart "<sql>" --type <chart_type> --x <col> --y <col> --output chart.png
 ```
 
 See `references/visualization-guide.md` for chart type selection guidance.
 
 Chart types: `bar`, `line`, `pie`, `histogram`, `scatter`, `heatmap`, `stacked_bar`
-Output formats: `.html` (interactive Plotly), `.png` (static Matplotlib)
+Output formats: `.png` (static Matplotlib, **default — works reliably**), `.html` (interactive Plotly — may be blank behind corporate proxies)
 
 ### 6. Present narrative
 
