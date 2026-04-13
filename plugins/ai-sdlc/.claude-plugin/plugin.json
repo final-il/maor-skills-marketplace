@@ -1,0 +1,8 @@
+{
+  "name": "ai-sdlc",
+  "description": "AI-powered software development lifecycle. Automates planning, Jira ticket creation, architecture design, implementation, testing, QA review, and bug fixing through coordinated agents that use Jira as a message bus.",
+  "author": {
+    "name": "Maor B",
+    "email": "maorb@final.co.il"
+  }
+}

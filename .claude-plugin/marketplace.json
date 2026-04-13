@@ -44,6 +44,12 @@
       "skills": [
         "./skills/mac-expert"
       ]
+    },
+    {
+      "name": "ai-sdlc",
+      "description": "AI-SDLC: Automated software development lifecycle with Jira coordination. Plans projects, creates tickets, designs architecture, writes code, tests, reviews, and fixes bugs through coordinated agents.",
+      "source": "./plugins/ai-sdlc",
+      "strict": false
     }
   ]
 }
