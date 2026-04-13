@@ -28,21 +28,27 @@ Every `jiralyzer` command shown in this skill should be run this way. For exampl
 
 The default database path is `jiralyzer.db` in the current directory (`/Users/maorb/git/jiralyzer/jiralyzer.db`). Use `--db <path>` to override.
 
-## Prerequisites
+## Data Loading
 
-A database must be populated before analysis:
+Before querying, ensure data is in the database. The `sync` command pulls directly from Jira REST API:
 
 ```bash
-# Ingest data (from Jira REST API JSON export with expand=changelog)
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer ingest export.json
+# Set Jira credentials (one-time setup)
+export JIRA_URL=https://your-site.atlassian.net
+export JIRA_EMAIL=your-email@example.com
+export JIRA_API_TOKEN=your-api-token
 
-# Verify
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer stats
+# Full sync — all issues in a project
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer sync --project <KEY>
+
+# Incremental sync — only issues updated since a date
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer sync --project <KEY> --since 2026-04-01
+
+# Optionally save raw JSON export
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer sync --project <KEY> --output export.json
 ```
 
-If the user hasn't ingested data yet, guide them to:
-1. Export from Jira REST API with `expand=changelog` (provides full history)
-2. Run `cd /Users/maorb/git/jiralyzer && uv run jiralyzer ingest <path-to-json>`
+The sync command fetches all issues with `expand=changelog` (full history including status changes, assignments, worklogs) and automatically ingests them into DuckDB.
 
 ## Workflow
 
@@ -50,7 +56,7 @@ When the user asks an analytics question:
 
 ### 1. Check database exists
 
-Run `cd /Users/maorb/git/jiralyzer && uv run jiralyzer schema` to verify data is loaded. If it fails or returns empty, guide the user to ingest data first.
+Run `cd /Users/maorb/git/jiralyzer && uv run jiralyzer stats` to check if data is loaded. If no data, ask the user for their Jira project key and run `sync` to populate the database.
 
 ### 2. Understand the schema
 
