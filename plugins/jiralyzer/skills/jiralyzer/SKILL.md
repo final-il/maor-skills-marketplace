@@ -54,9 +54,26 @@ The sync command fetches all issues with `expand=changelog` (full history includ
 
 When the user asks an analytics question:
 
-### 1. Check database exists
+### 1. Identify the target project and ensure its data is loaded
 
-Run `cd /Users/maorb/git/jiralyzer && uv run jiralyzer stats` to check if data is loaded. If no data, ask the user for their Jira project key and run `sync` to populate the database.
+**This step is critical.** The database can contain multiple projects. You must determine which project the user is asking about and verify that project's data is present.
+
+1. **Extract the project key** from the user's request (e.g., "analyze CSI-PM" → project key is `CSI-PM`, "CREQ tickets" → project key is `CREQ`).
+
+2. **Check which projects are in the database:**
+   ```bash
+   cd /Users/maorb/git/jiralyzer && uv run jiralyzer query "SELECT project, COUNT(*) as count FROM tickets GROUP BY project ORDER BY count DESC"
+   ```
+
+3. **If the requested project is NOT in the results, sync it first:**
+   ```bash
+   cd /Users/maorb/git/jiralyzer && uv run jiralyzer sync --project <KEY>
+   ```
+   This requires JIRA_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables. If they're not set, ask the user to set them.
+
+4. **If the database has no data at all**, ask the user for their Jira project key and run sync.
+
+5. **Always filter queries by project** when multiple projects exist in the database. Add `WHERE project = '<KEY>'` to all queries. Do NOT mix data from different projects.
 
 ### 2. Understand the schema
 
@@ -154,6 +171,7 @@ cd /Users/maorb/git/jiralyzer && uv run jiralyzer export-parquet ./exports/ --co
 - Always run commands via `cd /Users/maorb/git/jiralyzer && uv run jiralyzer <command>` — never use bare `jiralyzer`
 - Never access the database directly — always use the CLI
 - Default DB path is `jiralyzer.db` in the jiralyzer project directory; use `--db <path>` to override
+- **Always identify the target project first.** Check which projects are loaded, sync if needed, and filter all queries with `WHERE project = '<KEY>'` when multiple projects exist
 - When generating SQL, prefer CTEs over subqueries for readability
 - Always LIMIT results for exploratory queries (LIMIT 20 default)
 - If a query fails, check the schema and adjust — column names are exact
