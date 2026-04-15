@@ -147,17 +147,39 @@ When the user asks to **categorize**, **classify**, **segment**, or **understand
 
 4. **Use SQL only for aggregation, not classification.** Once you've identified categories and the patterns that define them, you can use SQL `CASE WHEN` for counting. But the category definitions come from your semantic understanding, not from guessing keywords.
 
-5. **For large datasets (>200 tickets):** Read in batches of 50-100 using `OFFSET` and `LIMIT`. Build your understanding incrementally. Don't try to dump all tickets into a single JSON blob.
+5. **Read ALL tickets, but in chunks.** It is critical to read every ticket for thorough analysis. Use batches of 50-100 with `OFFSET` and `LIMIT`. After each batch, note the patterns and categories you've found so far, then continue to the next batch. This prevents context overflow while ensuring complete coverage.
 
 6. **Identify automation candidates** by looking for:
    - Near-identical summaries (repetitive tasks)
    - Formulaic naming patterns (e.g., "Q2 - {project}: {task} - {team}")
    - Recurring work types that follow a template
 
+7. **Present findings incrementally.** Write your analysis text as you go — don't accumulate everything and try to output it all at once. After each major finding, share it with the user.
+
 ### What NOT to do
-- Don't dump hundreds of tickets as raw JSON into a temp file and process with Python
+- Don't dump all tickets in a single query — read in chunks of 50-100 to manage context
 - Don't use `LIKE '%keyword%'` as your primary classification strategy
 - Don't skip reading the actual ticket content — SQL aggregation on unread data produces shallow insights
+
+## Generating Charts
+
+**Always prefer the `jiralyzer chart` CLI** for visualizations. It produces professional styled PNG charts automatically.
+
+```bash
+cd /Users/maorb/git/jiralyzer && uv run jiralyzer chart "<sql>" --type bar --x <col> --y <col> --output chart.png
+```
+
+If you need a custom visualization that the CLI can't produce:
+1. **Write the Python script to a file first**, then run it. Do NOT write large inline Python in Bash calls — it times out.
+   ```bash
+   cat > /tmp/chart_script.py << 'PYEOF'
+   import matplotlib.pyplot as plt
+   # ... your code ...
+   PYEOF
+   cd /Users/maorb/git/jiralyzer && .venv/bin/python3 /tmp/chart_script.py
+   ```
+2. Keep scripts short — one chart per script, not six.
+3. Use the jiralyzer `.venv` Python so matplotlib is available.
 
 ## Common Question Patterns
 
