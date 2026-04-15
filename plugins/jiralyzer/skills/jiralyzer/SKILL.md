@@ -130,6 +130,35 @@ Combine data and visualization into a concise report:
 - Link to the chart if generated
 - Suggest follow-up questions
 
+## Semantic Analysis (Categorize, Classify, Understand)
+
+When the user asks to **categorize**, **classify**, **segment**, or **understand** their ticket data, do NOT fall back to SQL `LIKE` keyword matching. You are an LLM — use your semantic understanding.
+
+### Approach
+
+1. **Sample first, don't dump everything.** Query a representative batch (50-100 tickets) with summaries:
+   ```bash
+   cd /Users/maorb/git/jiralyzer && uv run jiralyzer query "SELECT key, summary, issue_type, priority, status, assignee FROM tickets WHERE project = '<KEY>' ORDER BY key LIMIT 100" --format json
+   ```
+
+2. **Read and understand the summaries yourself.** Look for themes, patterns, team names, work types, naming conventions, repeated structures. You are the classifier — not SQL.
+
+3. **Build categories from what you see.** After reading the sample, define categories (e.g., by domain, by work type, by repetitiveness). Then query more batches if needed to validate.
+
+4. **Use SQL only for aggregation, not classification.** Once you've identified categories and the patterns that define them, you can use SQL `CASE WHEN` for counting. But the category definitions come from your semantic understanding, not from guessing keywords.
+
+5. **For large datasets (>200 tickets):** Read in batches of 50-100 using `OFFSET` and `LIMIT`. Build your understanding incrementally. Don't try to dump all tickets into a single JSON blob.
+
+6. **Identify automation candidates** by looking for:
+   - Near-identical summaries (repetitive tasks)
+   - Formulaic naming patterns (e.g., "Q2 - {project}: {task} - {team}")
+   - Recurring work types that follow a template
+
+### What NOT to do
+- Don't dump hundreds of tickets as raw JSON into a temp file and process with Python
+- Don't use `LIKE '%keyword%'` as your primary classification strategy
+- Don't skip reading the actual ticket content — SQL aggregation on unread data produces shallow insights
+
 ## Common Question Patterns
 
 | User asks about... | Tables to query | Typical chart |
