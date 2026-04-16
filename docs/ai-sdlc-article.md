@@ -136,12 +136,112 @@ Every line of code can be traced back through a PR → a story → an epic → t
 | Post-release stories | 4 (CSI-27 through CSI-30) |
 | Bug-fix loops | Multiple, all resolved within 3 iterations |
 
+## The Next Challenge: How Do You DevOps an AI System?
+
+With the pipeline working and Jiralyzer in production, I hit a problem I didn't expect: **how do you develop new features for a system that's also your development tool?**
+
+The AI-SDLC pipeline is a Claude Code plugin. Its agents, commands, and skill files ARE the product — markdown files that Claude reads and follows. The marketplace has `autoUpdate: true`, so any push to `main` immediately updates the plugin for all users. There's no build step, no deploy gate. Push equals deploy.
+
+This is fine when things work. It's terrifying when you want to add a web designer agent to the SDLC flow and you're not sure if it'll break the existing pipeline.
+
+### The Naive Approach (and Why It Fails)
+
+My first instinct: feature branches. Work on a `feat/web-designer` branch, test it, merge when ready.
+
+Problem: Claude Code loads plugins from the marketplace's `main` branch. There's no way to tell a test session "use this feature branch." Your plugin instructions are deployed the moment they hit `main`. Feature branches keep your code separate, but your test sessions still run the production plugin.
+
+### The Second Attempt: Duplicate Everything
+
+What if we clone the repos? `maor-skills-marketplace-dev` as a separate GitHub repo, `jiralyzer-dev` as another. Register the dev marketplace alongside the production one. Develop in the `-dev` repos, test there, then copy changes back to production when they work.
+
+We built this. It worked. Then we started finding the edges.
+
+**The SKILL.md problem:** The jiralyzer skill contains hardcoded local paths (`cd /Users/maorb/git/jiralyzer && uv run jiralyzer ...`). The dev version needs to point to `/Users/maorb/git/jiralyzer-dev/`. When you "promote" from dev to prod, you need to `sed` the paths. That's manageable.
+
+**The CLAUDE.md problem:** I started customizing the dev repo's CLAUDE.md — adding "DEV" labels, dev-specific workflow instructions, different "How to Commit" sections. Then I realized: these files ARE the product. They're not config that differs per environment. They're the instructions that define how the system behaves. You can't `sed` "This is the dev marketplace. All new skills are developed and tested here first" back into "Every new skill or agent created in any Claude Code session must be added to this marketplace repo."
+
+Lesson learned: **product files must stay identical between environments.** The only allowed difference is mechanical (a path string), never semantic (different instructions, different labels, different workflow descriptions).
+
+### The Breakthrough: One Repo, Two Branches, One Parameter
+
+While investigating Claude Code's marketplace configuration, we discovered the `ref` parameter:
+
+```json
+"maor-skills-marketplace-dev": {
+  "source": {
+    "source": "git",
+    "url": "https://github.com/org/maor-skills-marketplace.git",
+    "ref": "dev"
+  }
+}
+```
+
+Same repo. Different branches. Two marketplace entries in settings. No duplicate repos, no sync scripts, no path swapping between repos.
+
+Now the setup is:
+- **One marketplace repo** with `main` (production) and `dev` (development) branches
+- **Settings** register the same repo twice — once for `main`, once for `dev` via `ref`
+- **Project-level settings** in dev directories override which marketplace plugins are active
+- **Promotion** is just `git merge dev` into `main`
+
+The SKILL.md path difference (`/jiralyzer/` vs `/jiralyzer-dev/`) lives naturally as a branch-level difference. No scripting needed.
+
+### The Two-Terminal Workflow
+
+The final pattern that emerged:
+
+**Terminal 1 (prod):** Open Claude in `/Users/maorb/git/jiralyzer/`. Global settings load production plugins. Everything works as users expect. Stable.
+
+**Terminal 2 (dev):** Open Claude in `/Users/maorb/git/jiralyzer-dev/`. Project-level settings override global plugins, loading the dev marketplace versions. Experimental changes here don't touch production.
+
+For the marketplace itself (where AI-SDLC agents live), there's no separate directory — just switch to the `dev` branch, make changes, push, test, merge when ready.
+
+### What Doesn't Need Its Own Repo
+
+Not everything needs a dev/prod split. AI-SDLC lives inside the marketplace as a plugin. Its "code" is agent prompts and command definitions — markdown files. There's no local execution, no database, no state. When you improve an agent prompt and push to `main`, every new session gets the update. If the change is bad, you push a fix. The blast radius is low and the recovery time is one commit.
+
+Jiralyzer is different. It has Python code, a DuckDB database, a CLI that runs locally. The dev version needs separate code, a separate database, and a SKILL.md that points to the dev directory. That's what justifies the two-directory setup.
+
+The rule: **if the product runs locally with state, it needs a dev directory. If it's just instructions that Claude reads, branch and merge is enough.**
+
+## What I Learned (Updated)
+
+### 5 (continued). DevOps for AI systems is its own discipline
+
+Traditional DevOps assumes your code is in a repo and your deployment is a separate process. With AI plugin systems, the instructions ARE the code AND the deployment. Push equals deploy. This collapses the usual dev/staging/prod pipeline into something that needs new patterns — like marketplace `ref` parameters and project-level settings overrides.
+
+### 6. Don't over-engineer the dev/prod split
+
+We went through three iterations: feature branches (too simple), duplicate repos (too complex), single repo with branch refs (just right). The temptation to build elaborate infrastructure is strong. But the right answer was a parameter that already existed — we just hadn't looked for it.
+
+### 7. Product files aren't config files
+
+The moment you start adding "DEV" labels and environment-specific instructions to files that define your system's behavior, you've created a merge nightmare. Treat instruction files like code: identical across environments, with only mechanical differences (paths, URLs) that can be maintained as branch-level diffs.
+
+## The Numbers (Updated)
+
+| | |
+|---|---|
+| Jira tickets | 30 (5 epics, 25 stories) |
+| Automated tests | 93 |
+| Code coverage | 90% |
+| DuckDB tables | 6 |
+| Real tickets analyzed | 2,648 (across 3 Jira projects) |
+| Mid-pipeline pivots | 2 (format + API) |
+| Stories dropped | 1 (CSI-15, no longer needed) |
+| Post-release stories | 4 (CSI-27 through CSI-30) |
+| Bug-fix loops | Multiple, all resolved within 3 iterations |
+| Dev/prod iterations | 3 (branches → dup repos → ref parameter) |
+| GitHub repos cleaned up | 4 (eliminated duplicate repos) |
+
 ## What's Next
 
-The pipeline is proven on one project. The next step is running it on different types of projects — infrastructure automation, API services, frontend features — to see where the agent prompts need to generalize and where they're already flexible enough.
+The pipeline is proven on one project. The dev/prod infrastructure is in place. The next step is running the pipeline on different types of projects — infrastructure automation, API services, frontend features — to see where the agent prompts need to generalize and where they're already flexible enough.
+
+The immediate feature on deck: a Metabase-powered interactive dashboard for Jiralyzer, so analytics aren't limited to CLI charts.
 
 The bigger question: can this pattern scale to a team where some agents are AI and some are humans, sharing the same Jira board, the same workflow, the same status transitions? The plumbing is already there. Jira doesn't care who transitions a ticket.
 
 ---
 
-*Built with Claude Code, 7 AI agents, and a healthy respect for corporate proxies.*
+*Built with Claude Code, 7 AI agents, a healthy respect for corporate proxies, and three tries to get dev/prod right.*
