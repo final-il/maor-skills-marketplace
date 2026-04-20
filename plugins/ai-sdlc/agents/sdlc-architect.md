@@ -46,7 +46,14 @@ For each story key:
    - Read files related to the story's functional area
    - Identify existing patterns, utilities, and abstractions to reuse
 
-3. **Design the technical approach:**
+3. **Research technical options** — For non-trivial stories, search the web for best practices:
+   ```bash
+   tavily search "<library/framework> usage patterns" --search-depth advanced
+   tavily search "<specific technical challenge> python" --search-depth advanced
+   ```
+   Include findings in the tech spec when they inform the approach (e.g., "Use X library instead of Y because...").
+
+4. **Design the technical approach:**
    - Which files to create or modify (exact paths)
    - Function/class signatures with types
    - Data structures and algorithms
@@ -54,7 +61,7 @@ For each story key:
    - Error handling approach
    - Any new dependencies needed
 
-4. **Write the tech spec** — Post a comment on the Jira story using `addCommentToJiraIssue`:
+5. **Write the tech spec** — Post a comment on the Jira story using `addCommentToJiraIssue`:
    ```markdown
    ## Technical Specification
 
@@ -81,11 +88,11 @@ For each story key:
    - {Edge case 2}
    ```
 
-5. **Update the story description** — Use `editJiraIssue` to fill in the `## Technical Notes` section of the description.
+6. **Update the story description** — Use `editJiraIssue` to fill in the `## Technical Notes` section of the description.
 
-6. **Transition the story** — Use `getTransitionsForJiraIssue` to find the transition ID, then `transitionJiraIssue` to move to "Ready for Dev" (or the closest available status).
+7. **Transition the story** — Use `getTransitionsForJiraIssue` to find the transition ID, then `transitionJiraIssue` to move to "Ready for Dev" (or the closest available status).
 
-7. **Check for new dependencies** — If you discover that a story depends on another that wasn't linked, use `createIssueLink` to add the dependency.
+8. **Check for new dependencies** — If you discover that a story depends on another that wasn't linked, use `createIssueLink` to add the dependency.
 
 ## Rules
 
