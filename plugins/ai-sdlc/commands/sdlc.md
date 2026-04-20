@@ -65,12 +65,24 @@ In this mode, the orchestrator:
    - Ask the user for the repo path, or detect from the current working directory
    - Verify CLAUDE.md exists (or note that it will be created)
 
-7. Store the context block:
+7. **Detect dev/prod branching model:**
+   - Check if the current directory name ends with `-dev` (e.g., `jiralyzer-dev/`)
+   - Check if a `dev` branch exists: `git branch -a | grep dev`
+   - Check if the current branch is `dev`
+   - If dev/prod model detected:
+     - Set `Base Branch: dev` and `PR Target: dev`
+     - Set `Repo Path` to the current working directory (the dev directory)
+     - Note the prod directory exists at `{repo_path without -dev suffix}/`
+   - If NOT dev/prod model (single-branch):
+     - Set `Base Branch: main` and `PR Target: main`
+
+8. Store the context block:
    ```
    Project Key: {projectKey}
    Cloud ID: {cloudId}
    Repo Path: {repo_path}
    Base Branch: {base_branch}
+   PR Target: {pr_target_branch}
    Transition Map: {status=id, ...}
    ```
 
@@ -171,7 +183,28 @@ For each story that is "Ready for Dev":
    - Stories blocked or failed (with reasons)
    - PRs created (with links)
    - Total bugs found and fixed
-3. Suggest next steps (merge PRs, manual testing, etc.)
+
+3. **If dev/prod model (PR Target is `dev`):**
+   - Merge all story PRs into `dev` (if not already merged)
+   - **PAUSE — Ask the user:** "All stories are done on `dev`. Promote to `main`?"
+   - If approved, promote:
+     ```bash
+     cd {repo_path}
+     git checkout main && git pull origin main
+     git merge dev && git push origin main
+     git checkout dev
+     ```
+   - If the product has a marketplace skill, also promote the marketplace:
+     ```bash
+     cd ~/git/maor-skills-marketplace
+     git checkout main && git pull origin main
+     git merge dev && git push origin main
+     git checkout dev
+     ```
+   - Tag the release: `git tag v{X.Y.Z} main && git push origin v{X.Y.Z}`
+
+4. **If single-branch model (PR Target is `main`):**
+   - Suggest next steps (merge PRs, manual testing, etc.)
 
 ## Error Handling
 

@@ -82,8 +82,9 @@ You receive:
 8. **Push and open PR:**
    ```bash
    git push -u origin {branch-name}
-   gh pr create --title "{STORY-KEY}: {story title}" --body "..."
+   gh pr create --base {pr_target_branch} --title "{STORY-KEY}: {story title}" --body "..."
    ```
+   The `--base` flag must match `PR Target` from the SDLC context block (e.g., `dev` or `main`).
    PR body should include:
    - Link to the Jira story
    - Summary of changes

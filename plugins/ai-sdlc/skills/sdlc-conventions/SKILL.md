@@ -51,6 +51,21 @@ Agents run in isolation. They share context through three channels:
 
 See `references/context-protocol.md` for the full specification.
 
+## Branching Model
+
+The pipeline supports two branching models, detected automatically in Phase 0:
+
+**Dev/Prod model** (`dev` + `main` branches):
+- Agents branch from `dev`, PRs target `dev`
+- After all stories are Done, orchestrator offers to promote `dev` → `main`
+- Context block sets: `Base Branch: dev`, `PR Target: dev`
+
+**Single-branch model** (default):
+- Agents branch from `main`, PRs target `main`
+- Context block sets: `Base Branch: main`, `PR Target: main`
+
+Agents never need to know which model is active — they use `{base_branch}` and `{pr_target_branch}` from the context block.
+
 ## Agent Workflow Rules
 
 1. **Always read from Jira first** — Get the ticket's current state before acting
@@ -60,3 +75,4 @@ See `references/context-protocol.md` for the full specification.
 5. **Create Bug sub-tasks** — When tests fail or QA finds issues, create a Bug sub-task under the parent Story
 6. **Commit messages** — Always include the Jira ticket key: `{STORY-KEY}: {summary}`
 7. **Branch naming** — Use `{story-key}/{short-slug}` (e.g., `PROJ-42/xml-parser`)
+8. **PR target** — Always use `--base {pr_target_branch}` when creating PRs

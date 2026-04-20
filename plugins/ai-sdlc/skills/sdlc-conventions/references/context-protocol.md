@@ -14,11 +14,16 @@ The orchestrator passes a standardized context block to every agent:
 ## SDLC Context
 - Project Key: {projectKey}
 - Cloud ID: {cloudId}
-- Repo Path: {absolute_path_to_project_repo}
-- Base Branch: {main_branch_name}
+- Repo Path: {absolute_path_to_working_directory}
+- Base Branch: {branch_agents_branch_from}
+- PR Target: {branch_PRs_merge_into}
 - Issue Keys: {comma-separated list of relevant Jira issue keys}
 - Transition Map: To Do={id}, Planning={id}, Ready for Dev={id}, In Progress={id}, In Review={id}, Testing={id}, Done={id}, Bug={id}
 ```
+
+**Base Branch** is the branch agents create feature branches from (e.g., `dev` or `main`).
+**PR Target** is the branch PRs are opened against — usually the same as Base Branch.
+In a dev/prod workflow (`dev` + `main` branches), both are `dev` during development. The orchestrator handles promotion to `main` separately.
 
 This block is injected into the agent's spawn prompt. It provides the structural information agents need to interact with Jira and the codebase.
 
