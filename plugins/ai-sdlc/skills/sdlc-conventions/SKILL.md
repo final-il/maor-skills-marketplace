@@ -51,6 +51,17 @@ Agents run in isolation. They share context through three channels:
 
 See `references/context-protocol.md` for the full specification.
 
+## Pipeline Phases
+
+```
+Phase 0: Init → Phase 1: Plan → Phase 2: Jira → Phase 3: Architect
+  → Phase 3.5: Design (optional, user-facing stories only)
+  → Phase 4: Develop → Phase 5: Test → Phase 6: QA → Phase 7: Bug Fix
+  → Phase 8: Completion + Promotion
+```
+
+Phase 3.5 (Design) is skipped for purely backend stories. When it runs, the user approves the design before development begins.
+
 ## Branching Model
 
 The pipeline supports two branching models, detected automatically in Phase 0:

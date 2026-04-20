@@ -6,7 +6,7 @@
 |--------|---------|------------|-----------|
 | **To Do** | Story created, not yet designed | Jira Creator agent | Architect agent |
 | **Planning** | Architect is designing the tech spec | Architect agent (start) | Architect agent (end) |
-| **Ready for Dev** | Tech spec complete, implementation can begin | Architect agent | Developer agent |
+| **Ready for Dev** | Tech spec complete (+ design spec if UI story), implementation can begin | Architect agent (or Designer after approval) | Developer agent |
 | **In Progress** | Developer is actively writing code | Developer agent (start) | Developer agent (end) |
 | **In Review** | Code written and PR opened, awaiting tests | Developer agent | Tester agent |
 | **Testing** | Tests written and passing, awaiting QA review | Tester agent | QA Reviewer agent |

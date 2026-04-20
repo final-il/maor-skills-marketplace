@@ -130,6 +130,33 @@ In this mode, the orchestrator:
 
 3. Report to user which stories are now ready for development
 
+## Phase 3.5: Design (Optional)
+
+**Skip for stories with no user-facing component** (pure backend, data processing, infrastructure).
+
+For stories that involve UI, CLI output, dashboards, or any user-visible interface:
+
+1. **Identify design-relevant stories** — Check each "Ready for Dev" story. If the tech spec mentions:
+   - CLI commands with output (tables, formatted text)
+   - Web pages, components, or layouts
+   - Charts, visualizations, or dashboards
+   - User prompts or interactive flows
+   Then the story needs design.
+
+2. **Spawn the `sdlc-designer` agent** with:
+   - SDLC context block
+   - The story key (has tech spec in comments)
+
+3. The designer reads the tech spec, analyzes existing UI patterns in the codebase, and posts a "## Design Specification" comment on the story (wireframes, colors, UX flow, output examples).
+
+4. **PAUSE — Present the design to the user for approval.**
+   - Show the design spec (or summarize key decisions)
+   - Ask: "Approve this design? Or modify?"
+   - Do NOT proceed to development until the user approves
+   - If rejected, re-spawn the designer with the user's feedback
+
+5. Stories that don't need design proceed directly to Phase 4.
+
 ## Phase 4-7: Implementation Loop
 
 Process stories in dependency order (stories with no blockers first).

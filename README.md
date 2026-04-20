@@ -25,6 +25,7 @@ A collection of custom skills, agents, and plugins for Claude Code.
 | sdlc-planner | Breaks projects into epics/stories with acceptance criteria | opus |
 | sdlc-jira-creator | Creates Jira tickets with hierarchy and links | sonnet |
 | sdlc-architect | Designs technical specs per story | opus |
+| sdlc-designer | UI/UX design specs — layouts, colors, wireframes (optional, user-facing stories only) | opus |
 | sdlc-developer | Implements code, commits, opens PRs | opus |
 | sdlc-tester | Writes and runs tests | sonnet |
 | sdlc-qa-reviewer | Reviews code quality and requirement compliance | opus |

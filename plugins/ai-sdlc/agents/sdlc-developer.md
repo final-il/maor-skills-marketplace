@@ -37,8 +37,9 @@ You receive:
 
 1. **Read the Jira story** — Use `getJiraIssue` to read:
    - Description (requirements, acceptance criteria)
-   - Comments (tech spec from the architect)
+   - Comments (tech spec from the architect, design spec from the designer if present)
    - Parse the tech spec to understand: files to create/modify, approach, interfaces
+   - If a design spec exists, follow it for all user-facing output (layouts, colors, formatting, UX flow)
 
 2. **Read project conventions** — In the repo:
    - Read `CLAUDE.md` for coding standards, commands, architecture

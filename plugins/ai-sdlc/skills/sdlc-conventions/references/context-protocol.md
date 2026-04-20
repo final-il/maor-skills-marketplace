@@ -67,11 +67,14 @@ Agents also **write** to the repo (developer, tester, bug-fixer):
 ```
 Planner → (structured plan as text) → Orchestrator → (plan as prompt) → Jira Creator
 Jira Creator → (issue keys in Jira) → Orchestrator → (keys as prompt) → Architect
-Architect → (tech spec as Jira comment) → [Jira] → Developer reads it
+Architect → (tech spec as Jira comment) → [Jira] → Designer reads it (if UI story)
+Designer → (design spec as Jira comment) → [Jira] → User approves → Developer reads it
 Developer → (code in repo + PR link as Jira comment) → [Jira] → Tester reads it
 Tester → (test results as Jira comment) → [Jira] → QA reads it
 QA → (review as Jira comment) → [Jira] → Bug Fixer reads it (if bugs)
 ```
+
+For stories without UI components, the Designer step is skipped and the flow goes directly from Architect to Developer.
 
 ## Rules for Agents
 
