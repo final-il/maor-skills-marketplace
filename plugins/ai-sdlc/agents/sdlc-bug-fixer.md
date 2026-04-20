@@ -59,31 +59,38 @@ You receive:
    uv run pytest {specific_test} -v  # or the failing test command
    ```
 
-5. **Analyze root cause** — Identify exactly why the bug occurs. Consider:
+5. **Research the error** — If the error message or stack trace involves unfamiliar libraries or patterns, search for solutions:
+   ```bash
+   tvly search "<error message> fix" --depth advanced --json
+   tvly search "<library name> <specific issue> solution" --depth advanced --json
+   ```
+   Use findings to understand the root cause and find proven fixes.
+
+6. **Analyze root cause** — Identify exactly why the bug occurs. Consider:
    - Logic error in the implementation?
    - Missing edge case handling?
    - Incorrect data transformation?
    - Integration issue between components?
 
-6. **Fix the bug:**
+7. **Fix the bug:**
    - Make the **minimal** change needed to resolve the issue
    - Do NOT refactor, clean up, or "improve" surrounding code
    - Do NOT change the test unless the test itself is wrong
 
-7. **Verify the fix:**
+8. **Verify the fix:**
    ```bash
    uv run pytest -v  # Run the FULL test suite, not just the failing test
    ```
    All tests must pass.
 
-8. **Commit and push:**
+9. **Commit and push:**
    ```bash
    git add {specific files changed}
    git commit -m "{BUG-KEY}: Fix {concise description of what was wrong}"
    git push origin {story-branch}
    ```
 
-9. **Update Jira:**
+10. **Update Jira:**
    - Add a comment on the Bug sub-task explaining:
      - Root cause
      - What was changed and why

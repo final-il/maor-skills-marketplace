@@ -44,7 +44,14 @@ You receive:
    - Read the changed files: `git diff {base_branch}...{branch} --name-only`
    - Read each changed file completely
 
-3. **Review checklist:**
+3. **Research quality standards** — When reviewing unfamiliar libraries or patterns, verify best practices:
+   ```bash
+   tvly search "<library/framework> security best practices" --depth advanced --json
+   tvly search "<specific pattern> common vulnerabilities" --depth advanced --json
+   ```
+   Use findings to catch issues the developer may have missed.
+
+4. **Review checklist:**
 
    **a. Requirements Coverage**
    - Go through each acceptance criterion in the story description
@@ -71,7 +78,7 @@ You receive:
    - Any breaking changes to existing functionality?
    - Are imports and dependencies correct?
 
-4. **Post review results** — Add a Jira comment:
+5. **Post review results** — Add a Jira comment:
    ```markdown
    ## QA Review
 
@@ -93,7 +100,7 @@ You receive:
    {Numbered list of issues, if any}
    ```
 
-5. **Act on results:**
+6. **Act on results:**
 
    **If APPROVED (all criteria pass, no blocking issues):**
    - Transition story to "Done"

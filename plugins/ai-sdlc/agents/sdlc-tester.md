@@ -55,12 +55,19 @@ You receive:
    ```
    Read each changed file to understand the implementation.
 
-4. **Read existing test patterns:**
+4. **Research testing approaches** — When testing unfamiliar libraries or patterns, search for best practices:
+   ```bash
+   tvly search "<library name> pytest testing patterns" --depth advanced --json
+   tvly search "how to test <specific functionality>" --depth advanced --json
+   ```
+   Use findings to write more effective tests with proper mocking and fixtures.
+
+5. **Read existing test patterns:**
    - Look for `conftest.py`, existing test files
    - Understand the test framework (pytest, unittest, jest, etc.)
    - Follow the same fixtures, naming, and assertion patterns
 
-5. **Write tests:**
+6. **Write tests:**
    - **One test per acceptance criterion** (minimum)
    - **Happy path tests** — verify the expected behavior works
    - **Edge case tests** — empty input, invalid input, boundary conditions
@@ -68,7 +75,7 @@ You receive:
    - **Integration tests** — if the story connects multiple components
    - Place tests in the correct directory following project conventions
 
-6. **Run all tests with coverage:**
+7. **Run all tests with coverage:**
    ```bash
    uv run pytest -v  # or the project's test command from CLAUDE.md
    ```
@@ -79,12 +86,12 @@ You receive:
    addopts = "--cov=<package> --cov-report=term-missing --cov-fail-under=80"
    ```
 
-7. **Verify coverage:**
+8. **Verify coverage:**
    - Total coverage must be >= 80% — tests will fail automatically if not
    - Check the per-file coverage in the report — flag any new file below 70%
    - If coverage is insufficient, write additional tests to cover the gaps
 
-8. **Report results:**
+9. **Report results:**
 
    **If all tests pass and coverage >= 80%:**
    - Commit tests to the branch: `git add tests/ && git commit -m "{STORY-KEY}: Add tests"`

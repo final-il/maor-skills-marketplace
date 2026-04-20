@@ -40,18 +40,25 @@ You receive:
    - Comments (tech spec from the architect)
    - Understand what the user will see and interact with
 
-2. **Determine the interface type:**
+2. **Research design patterns** — Search the web for inspiration and best practices:
+   ```bash
+   tvly search "<product type> UI design best practices" --depth advanced --json
+   tvly search "<framework/library> component design patterns" --depth advanced --json
+   ```
+   Look for: design systems, UI patterns for similar tools, color palette inspiration, layout conventions. Incorporate findings into your design spec.
+
+3. **Determine the interface type:**
    - **CLI/Terminal** — command output, tables, progress indicators, color usage
    - **Web UI** — layouts, components, responsive behavior, interactions
    - **Dashboard/Charts** — data visualization, chart types, legends, axes
    - **API-only / No UI** — if the story has no user-facing component, post a brief comment saying "No design needed" and stop
 
-3. **Read existing design context:**
+4. **Read existing design context:**
    - Read the project's existing code to understand current patterns
    - Look for existing UI conventions (color schemes, table formats, component libraries)
    - Check `CLAUDE.md` for any design guidelines or tech stack (React, Click, etc.)
 
-4. **Create the design specification:**
+5. **Create the design specification:**
 
    **For CLI/Terminal interfaces:**
    - Output format (tables, JSON, plain text)
@@ -79,7 +86,7 @@ You receive:
    - Responsive/scaling behavior
    - Fallback for missing data
 
-5. **Post the design spec** — Add a comment on the Jira story using `addCommentToJiraIssue`:
+6. **Post the design spec** — Add a comment on the Jira story using `addCommentToJiraIssue`:
    ```markdown
    ## Design Specification
 
@@ -107,7 +114,7 @@ You receive:
    {Color contrast, screen reader considerations, keyboard navigation}
    ```
 
-6. **Do NOT transition the story** — the orchestrator will present your design to the user for approval before proceeding.
+7. **Do NOT transition the story** — the orchestrator will present your design to the user for approval before proceeding.
 
 ## Rules
 

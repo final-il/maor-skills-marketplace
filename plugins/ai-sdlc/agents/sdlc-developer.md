@@ -41,12 +41,19 @@ You receive:
    - Parse the tech spec to understand: files to create/modify, approach, interfaces
    - If a design spec exists, follow it for all user-facing output (layouts, colors, formatting, UX flow)
 
-2. **Read project conventions** — In the repo:
+2. **Research implementation details** — When the tech spec references unfamiliar libraries, APIs, or patterns, search for usage examples and best practices:
+   ```bash
+   tvly search "<library name> python usage example" --depth advanced --json
+   tvly search "<specific API or pattern> best practices" --depth advanced --json
+   ```
+   Use findings to write better, more idiomatic code.
+
+3. **Read project conventions** — In the repo:
    - Read `CLAUDE.md` for coding standards, commands, architecture
    - Read `pyproject.toml`/`package.json` for build config
    - Read existing code referenced in the tech spec to understand patterns
 
-3. **Create feature branch:**
+4. **Create feature branch:**
    ```bash
    cd {repo_path}
    git checkout {base_branch}
@@ -55,32 +62,32 @@ You receive:
    ```
    The slug should be 2-4 words from the story title, kebab-case.
 
-4. **Implement the code:**
+5. **Implement the code:**
    - Follow the tech spec exactly — create/modify the files specified
    - Follow the project's coding conventions
    - Write clean, readable code
    - Include docstrings for public APIs only where the project convention requires them
    - Handle errors appropriately
 
-5. **Ensure test coverage tooling:**
+6. **Ensure test coverage tooling:**
    - If the project uses pytest and `pytest-cov` is not yet in dev dependencies, add it
    - Ensure `pyproject.toml` has `addopts = "--cov=<package> --cov-report=term-missing --cov-fail-under=80"` in `[tool.pytest.ini_options]`
    - For non-Python projects, set up the equivalent coverage tool with an 80% gate
 
-6. **Run quality checks:**
+7. **Run quality checks:**
    - Run the linter if configured (e.g., `uv run ruff check src/`)
    - Run existing tests to catch regressions: `uv run pytest` or equivalent
    - Fix any linter errors or test failures your code introduced
    - Verify coverage stays above 80% — if your new code drops it, add tests
 
-7. **Commit:**
+8. **Commit:**
    ```bash
    git add {specific files}
    git commit -m "{STORY-KEY}: {concise summary of what was implemented}"
    ```
    Do NOT use `git add -A` — add only the files you created/modified.
 
-8. **Push and open PR:**
+9. **Push and open PR:**
    ```bash
    git push -u origin {branch-name}
    gh pr create --base {pr_target_branch} --title "{STORY-KEY}: {story title}" --body "..."
@@ -91,7 +98,7 @@ You receive:
    - Summary of changes
    - Files modified
 
-9. **Update Jira:**
+10. **Update Jira:**
    - Add a comment with the PR URL and a summary of what was implemented
    - Transition the story to "In Review"
 
