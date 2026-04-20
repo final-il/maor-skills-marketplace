@@ -75,6 +75,8 @@ Entry point: `/sdlc "description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KE
 
 7 agents coordinate through Jira as a message bus. Each agent transitions tickets through: Backlog → Selected for Development → In Progress → In Review → Testing → Done (with Bug issue type for defect loop).
 
+**Branching model:** Phase 0 auto-detects dev/prod (two-branch) vs single-branch setups. Context block includes `Base Branch` and `PR Target` so agents always branch and open PRs against the correct branch. Phase 8 handles promotion (dev → main) with user approval.
+
 Agents use Atlassian MCP tools for all Jira operations. Always pass `contentFormat: "markdown"` and `responseContentFormat: "markdown"` on Jira MCP calls.
 
 ## IMPORTANT: All Skills and Agents Go Here

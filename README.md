@@ -30,7 +30,9 @@ A collection of custom skills, agents, and plugins for Claude Code.
 | sdlc-qa-reviewer | Reviews code quality and requirement compliance | opus |
 | sdlc-bug-fixer | Fixes bugs found by tester/QA | sonnet |
 
-**Usage:** `/sdlc "project description"` or `/sdlc /path/to/plan.md`
+**Usage:** `/sdlc "project description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KEY` (resume)
+
+**Branching:** Auto-detects dev/prod model (dev + main branches) or single-branch. PRs target the correct branch automatically. Promotion (dev → main) offered at completion with user approval.
 
 ## Structure
 
