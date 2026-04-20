@@ -61,9 +61,71 @@ In this mode, the orchestrator:
    - Use `getTransitionsForJiraIssue` to map status names to transition IDs
    - Build the transition map: `{status_name: transition_id}`
 
-6. **Identify the project repo:**
-   - Ask the user for the repo path, or detect from the current working directory
-   - Verify CLAUDE.md exists (or note that it will be created)
+6. **Identify or create the project repo:**
+
+   First, determine if this is a new product or an existing one:
+   - Check if the current working directory is a git repo (`git rev-parse --git-dir`)
+   - Check if there's a CLAUDE.md in the current directory
+   - If the user provided a Jira epic key → existing product (skip creation)
+
+   **If EXISTING product (git repo found):**
+   - Use the current working directory as the repo path
+   - Read CLAUDE.md for project context
+
+   **If NEW product (no git repo, or user confirms new project):**
+   - Ask the user for the product name (e.g., "jiralyzer")
+   - Ask: "Should I set up the full dev/prod structure?" (recommend yes)
+   - If yes, create the dev/prod structure:
+     ```bash
+     # Create the repo on GitHub
+     gh repo create final-il/{product-name} --private
+
+     # Clone as dev directory
+     cd ~/git
+     git clone https://github.com/final-il/{product-name}.git {product-name}-dev
+     cd {product-name}-dev
+
+     # Configure git identity
+     git config user.email "maorb@final.co.il"
+     git config user.name "Maor B"
+
+     # Create dev branch
+     git checkout -b dev
+     git push origin dev
+
+     # Clone prod directory (stays on main)
+     cd ~/git
+     git clone https://github.com/final-il/{product-name}.git {product-name}
+     cd {product-name}
+     git config user.email "maorb@final.co.il"
+     git config user.name "Maor B"
+     ```
+   - Create project-level settings for dev directory:
+     ```bash
+     mkdir -p ~/git/{product-name}-dev/.claude
+     ```
+     Write `~/git/{product-name}-dev/.claude/settings.json`:
+     ```json
+     {
+       "enabledPlugins": {
+         "ai-sdlc@maor-skills-marketplace": false,
+         "ai-sdlc@maor-skills-marketplace-dev": true
+       },
+       "extraKnownMarketplaces": {
+         "maor-skills-marketplace-dev": {
+           "source": {
+             "source": "git",
+             "url": "https://github.com/final-il/maor-skills-marketplace.git",
+             "ref": "dev"
+           },
+           "autoUpdate": true
+         }
+       }
+     }
+     ```
+   - Create initial CLAUDE.md with project name, tech stack (ask user), and git conventions
+   - Commit initial structure to `dev` branch, push
+   - Set working directory to `~/git/{product-name}-dev/`
 
 7. **Detect dev/prod branching model:**
    - Check if the current directory name ends with `-dev` (e.g., `jiralyzer-dev/`)
