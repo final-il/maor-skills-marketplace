@@ -67,12 +67,18 @@ You receive:
    ```
    Read each changed file to understand the implementation.
 
-4. **Research testing approaches** — When testing unfamiliar libraries or patterns, search for best practices:
+4. **Load testing skills** — Invoke relevant skills:
+   ```
+   Skill("tavily:tavily-search")
+   Skill("superpowers:test-driven-development")
+   Skill("superpowers:verification-before-completion")
+   ```
+   Follow the TDD skill for test structure and methodology. Search for best practices:
    ```bash
    tvly search "<library name> pytest testing patterns" --depth advanced --json
    tvly search "how to test <specific functionality>" --depth advanced --json
    ```
-   Use findings to write more effective tests with proper mocking and fixtures.
+   Follow verification-before-completion: always confirm all tests pass and coverage meets threshold before reporting results.
 
 5. **Read existing test patterns:**
    - Look for `conftest.py`, existing test files

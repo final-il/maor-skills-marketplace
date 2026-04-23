@@ -53,12 +53,17 @@ You receive:
    - Parse the tech spec to understand: files to create/modify, approach, interfaces
    - If a design spec exists, follow it for all user-facing output (layouts, colors, formatting, UX flow)
 
-2. **Research implementation details** — When the tech spec references unfamiliar libraries, APIs, or patterns, search for usage examples and best practices:
+2. **Load development skills** — Invoke relevant skills:
+   ```
+   Skill("tavily:tavily-search")
+   Skill("superpowers:verification-before-completion")
+   ```
+   Search for usage examples when the tech spec references unfamiliar libraries:
    ```bash
    tvly search "<library name> python usage example" --depth advanced --json
    tvly search "<specific API or pattern> best practices" --depth advanced --json
    ```
-   Use findings to write better, more idiomatic code.
+   Follow the verification-before-completion skill: always run tests and verify output before claiming the story is done.
 
 3. **Read project conventions** — In the repo:
    - Read `CLAUDE.md` for coding standards, commands, architecture

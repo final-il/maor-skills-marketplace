@@ -71,12 +71,18 @@ You receive:
    uv run pytest {specific_test} -v  # or the failing test command
    ```
 
-5. **Research the error** — If the error message or stack trace involves unfamiliar libraries or patterns, search for solutions:
+5. **Load debugging skills** — Invoke relevant skills:
+   ```
+   Skill("tavily:tavily-search")
+   Skill("superpowers:systematic-debugging")
+   Skill("superpowers:verification-before-completion")
+   ```
+   Follow the systematic-debugging skill: form hypotheses, test them, narrow down the root cause methodically. Search for solutions:
    ```bash
    tvly search "<error message> fix" --depth advanced --json
    tvly search "<library name> <specific issue> solution" --depth advanced --json
    ```
-   Use findings to understand the root cause and find proven fixes.
+   Follow verification-before-completion: run the full test suite and verify all tests pass before claiming the fix is done.
 
 6. **Analyze root cause** — Identify exactly why the bug occurs. Consider:
    - Logic error in the implementation?

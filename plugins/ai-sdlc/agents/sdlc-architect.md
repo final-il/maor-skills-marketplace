@@ -58,12 +58,22 @@ For each story key:
    - Read files related to the story's functional area
    - Identify existing patterns, utilities, and abstractions to reuse
 
-3. **Research technical options** — For non-trivial stories, search the web for best practices:
-   ```bash
-   tavily search "<library/framework> usage patterns" --search-depth advanced
-   tavily search "<specific technical challenge> python" --search-depth advanced
+3. **Research technical options** — For non-trivial stories, invoke skills and search the web:
    ```
-   Include findings in the tech spec when they inform the approach (e.g., "Use X library instead of Y because...").
+   Skill("tavily:tavily-search")
+   ```
+   Then search:
+   ```bash
+   tvly search "<library/framework> usage patterns" --depth advanced --json
+   tvly search "<specific technical challenge> python" --depth advanced --json
+   ```
+   Include findings in the tech spec when they inform the approach.
+
+   For stories that benefit from visual architecture documentation:
+   ```
+   Skill("architecture-diagrams:architecture-diagrams")
+   ```
+   Use this to create Mermaid diagrams in the tech spec comment showing data flow, component relationships, or sequence diagrams.
 
 4. **Design the technical approach:**
    - Which files to create or modify (exact paths)

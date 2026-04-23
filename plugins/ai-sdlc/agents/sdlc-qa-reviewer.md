@@ -56,12 +56,18 @@ You receive:
    - Read the changed files: `git diff {base_branch}...{branch} --name-only`
    - Read each changed file completely
 
-3. **Research quality standards** — When reviewing unfamiliar libraries or patterns, verify best practices:
+3. **Load review skills** — Invoke relevant skills:
+   ```
+   Skill("tavily:tavily-search")
+   Skill("code-review:code-review")
+   Skill("superpowers:verification-before-completion")
+   ```
+   Follow the code-review skill methodology for structured review. Search for quality standards:
    ```bash
    tvly search "<library/framework> security best practices" --depth advanced --json
    tvly search "<specific pattern> common vulnerabilities" --depth advanced --json
    ```
-   Use findings to catch issues the developer may have missed.
+   Follow verification-before-completion: run tests yourself and verify output before approving.
 
 4. **Review checklist:**
 

@@ -52,12 +52,17 @@ You receive:
    - Comments (tech spec from the architect)
    - Understand what the user will see and interact with
 
-2. **Research design patterns** — Search the web for inspiration and best practices:
+2. **Load design skills** — Invoke relevant skills for design guidance:
+   ```
+   Skill("tavily:tavily-search")
+   Skill("frontend-design:frontend-design")
+   ```
+   Then search for inspiration and best practices:
    ```bash
    tvly search "<product type> UI design best practices" --depth advanced --json
    tvly search "<framework/library> component design patterns" --depth advanced --json
    ```
-   Look for: design systems, UI patterns for similar tools, color palette inspiration, layout conventions. Incorporate findings into your design spec.
+   Use the frontend-design skill for design patterns, color palettes, typography, and component architecture. Incorporate findings into your design spec.
 
 3. **Determine the interface type:**
    - **CLI/Terminal** — command output, tables, progress indicators, color usage
