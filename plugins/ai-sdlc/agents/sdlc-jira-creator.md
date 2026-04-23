@@ -61,7 +61,7 @@ If epics with matching summaries exist, skip them and note duplicates.
 ### Step 3: Create Epics
 For each epic in the plan, call `mcp__mcp-atlassian__jira_create_issue`:
 - `project_key`: from context block
-- `summary`: epic title
+- `summary`: **MUST** be prefixed with the project name: `"{project_name}: {epic title}"` (e.g., "jiralyzer: Database Layer")
 - `issue_type`: "Epic"
 - `description`: epic description
 - `additional_fields`: `"{\"labels\": [\"ai-sdlc\"]}"`
