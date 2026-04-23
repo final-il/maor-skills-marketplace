@@ -254,6 +254,8 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
 
 5. Stories that don't need design proceed directly to Phase 4.
 
+**IMPORTANT: The designer MUST run in the foreground, NOT in the background.** The user must review and approve designs before any development begins on those stories. Running the designer in the background skips the approval gate — this is not allowed. If you want to parallelize, you may develop non-design stories (pure backend/infrastructure) while waiting for design approval on UI stories, but the designer itself must be foreground so you can present its output to the user immediately.
+
 ## Phase 4-7: Implementation Loop
 
 Process stories in dependency order (stories with no blockers first).
@@ -337,6 +339,17 @@ For each story that is "Ready for Dev":
 
 4. **If single-branch model (PR Target is `main`):**
    - Suggest next steps (merge PRs, manual testing, etc.)
+
+## Environment — Read Before Running Any Commands
+
+Before running package managers or network-dependent tools, check the project's CLAUDE.md and the user's environment notes for proxy/TLS configuration. Common issues:
+
+- **uv/uvx behind Zscaler TLS proxy:** Always prefix with `SSL_CERT_FILE=~/.config/uv/ca-bundle.pem` (combined certifi + Zscaler bundle). Without this, `uv sync` and `uv run` will fail with `invalid peer certificate: UnknownIssuer`.
+- **npm behind Zscaler:** May need `npm config set cafile /tmp/full-ca-bundle.pem`.
+- **SSH blocked:** Use HTTPS for git. Run `gh auth setup-git` if needed.
+- **Never use `--break-system-packages`** for pip.
+
+This applies to all phases that run shell commands (Phase 4–7). Pass this environment context to spawned developer/tester/bug-fixer agents in their prompts.
 
 ## Error Handling
 
