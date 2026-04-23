@@ -44,6 +44,12 @@
       "description": "AI-SDLC: Automated software development lifecycle with Jira coordination. Plans projects, creates tickets, designs architecture, writes code, tests, reviews, and fixes bugs through coordinated agents.",
       "source": "./plugins/ai-sdlc",
       "strict": false
+    },
+    {
+      "name": "session-handoff",
+      "description": "Capture session progress and create structured handoff notes so the next session can resume without rediscovery.",
+      "source": "./plugins/session-handoff",
+      "strict": false
     }
   ]
 }
