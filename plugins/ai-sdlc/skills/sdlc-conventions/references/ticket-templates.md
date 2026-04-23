@@ -22,8 +22,10 @@
 
 ## Epic Template
 
+**Naming convention:** Epic summaries MUST be prefixed with the project name and an em dash: `"{Project Name} — {Epic Title}"`. Example: `"Jiralyzer — Data Processing Pipeline"`.
+
 ```markdown
-# {Epic Title}
+# {Project Name} — {Epic Title}
 
 ## Overview
 {1-2 paragraph description of the functional area}

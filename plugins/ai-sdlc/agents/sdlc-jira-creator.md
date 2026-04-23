@@ -72,10 +72,12 @@ Record the returned QBV key — all epics will be parented to it.
 ### Step 4: Create Epics
 For each epic in the plan, call `mcp__mcp-atlassian__jira_create_issue`:
 - `project_key`: from context block
-- `summary`: epic title
+- `summary`: **`"{project_name} — {epic title}"`** (always prefix with the project name and em dash)
 - `issue_type`: "Epic"
 - `description`: epic description
 - `additional_fields`: `"{\"labels\": [\"ai-sdlc\", \"{project_name}\"], \"parent\": \"{QBV-KEY}\"}"`
+
+**Example:** If project_name is "Jiralyzer" and the epic is "Data Processing Pipeline", the summary must be: `"Jiralyzer — Data Processing Pipeline"`
 
 Record the returned key (e.g., CSI-100) — you need it for linking stories.
 

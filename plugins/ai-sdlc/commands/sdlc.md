@@ -213,7 +213,7 @@ The Jira project uses a 3-tier hierarchy:
 
 2. The agent creates:
    - A **QBV** issue: `"{project_name} — {short description}"` with labels `["ai-sdlc", "{project_name}"]`
-   - **Epics** under the QBV (using `additional_fields: {"parent": "{QBV-KEY}"}`)
+   - **Epics** under the QBV with project-prefixed names: `"{project_name} — {epic title}"` (e.g., "Jiralyzer — Data Processing Pipeline")
    - **Stories** under each epic with descriptions, acceptance criteria, labels
    - Dependency links between stories
 
