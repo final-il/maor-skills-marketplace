@@ -45,6 +45,7 @@ After ToolSearch returns the tool schemas, you can call the MCP tools normally.
 You receive from the orchestrator prompt:
 - The approved plan text (epics and stories with acceptance criteria)
 - SDLC context block with: projectKey, cloudId, transition map
+- The project name (e.g., "2c", "jiralyzer")
 
 ## Process
 
@@ -52,19 +53,29 @@ You receive from the orchestrator prompt:
 Call ToolSearch as described above. Wait for it to return.
 
 ### Step 2: Check for duplicates
-Search for existing epics to avoid duplicates:
+Search for existing QBV and epics to avoid duplicates:
 ```
-mcp__mcp-atlassian__jira_search(jql: "project = {projectKey} AND issuetype = Epic AND labels = ai-sdlc", limit: 50)
+mcp__mcp-atlassian__jira_search(jql: "project = {projectKey} AND issuetype = QBV AND labels = ai-sdlc AND labels = {project_name}", limit: 10)
 ```
-If epics with matching summaries exist, skip them and note duplicates.
+If a QBV with matching name exists, reuse it. Also check epics under it.
 
-### Step 3: Create Epics
+### Step 3: Create QBV (project-level container)
+Create a QBV issue as the top-level container for the project:
+- `project_key`: from context block
+- `summary`: `"{project_name} — {short project description}"`
+- `issue_type`: "QBV"
+- `description`: project overview
+- `additional_fields`: `"{\"labels\": [\"ai-sdlc\", \"{project_name}\"]}"`
+
+Record the returned QBV key — all epics will be parented to it.
+
+### Step 4: Create Epics
 For each epic in the plan, call `mcp__mcp-atlassian__jira_create_issue`:
 - `project_key`: from context block
-- `summary`: **MUST** be prefixed with the project name: `"{project_name}: {epic title}"` (e.g., "jiralyzer: Database Layer")
+- `summary`: epic title
 - `issue_type`: "Epic"
 - `description`: epic description
-- `additional_fields`: `"{\"labels\": [\"ai-sdlc\"]}"`
+- `additional_fields`: `"{\"labels\": [\"ai-sdlc\", \"{project_name}\"], \"parent\": \"{QBV-KEY}\"}"`
 
 Record the returned key (e.g., CSI-100) — you need it for linking stories.
 

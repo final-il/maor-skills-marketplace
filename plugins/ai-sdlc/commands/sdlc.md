@@ -157,11 +157,13 @@ In this mode, the orchestrator:
 
 8. Store the context block:
    ```
+   Project Name: {product_name}
    Project Key: {projectKey}
    Cloud ID: {cloudId}
    Repo Path: {repo_path}
    Base Branch: {base_branch}
    PR Target: {pr_target_branch}
+   QBV Key: {qbv_key or "to be created"}
    Transition Map: {status=id, ...}
    ```
 
@@ -184,16 +186,26 @@ In this mode, the orchestrator:
 
 ## Phase 2: Jira Ticket Creation
 
+### Hierarchy: QBV → Epic → Story
+
+The Jira project uses a 3-tier hierarchy:
+- **QBV** (level 2) — one per product/project (e.g., "2c — Agent Conversation Visualizer")
+- **Epic** (level 1) — functional area within the project, parented to the QBV
+- **Story** (level 0) — individual work item, parented to an Epic
+
 1. Spawn the `sdlc-jira-creator` agent with:
    - The approved plan text
    - The SDLC context block (cloudId, projectKey, issue types)
+   - **The project name** (for QBV title and epic prefix)
 
 2. The agent creates:
-   - Epic(s) in Jira
-   - Stories under each epic with descriptions, acceptance criteria, labels
+   - A **QBV** issue: `"{project_name} — {short description}"` with labels `["ai-sdlc", "{project_name}"]`
+   - **Epics** under the QBV (using `additional_fields: {"parent": "{QBV-KEY}"}`)
+   - **Stories** under each epic with descriptions, acceptance criteria, labels
    - Dependency links between stories
 
 3. Collect the returned issue keys. Report to user:
+   - QBV key
    - Epic key(s) created
    - Story keys and titles
    - Link to the Jira board
