@@ -38,16 +38,18 @@ This is the **primary** channel for substantive context:
 
 **Reading context from Jira:**
 ```
-1. Use getJiraIssue with the ticket key to read description + fields
-2. Comments are included in the response (most recent first)
-3. Parse the structured comment format to find the relevant section
+1. Use ToolSearch to load: select:mcp__mcp-atlassian__jira_get_issue
+2. Call mcp__mcp-atlassian__jira_get_issue with the ticket key to read description + fields
+3. Comments are included in the response (most recent first)
+4. Parse the structured comment format to find the relevant section
 ```
 
 **Writing context to Jira:**
 ```
-1. Use addCommentToJiraIssue with contentFormat: "markdown"
-2. Follow the comment templates in ticket-templates.md
-3. Use structured headers (## Tech Spec, ## Test Results, etc.) so downstream agents can find sections
+1. Use ToolSearch to load: select:mcp__mcp-atlassian__jira_add_comment
+2. Call mcp__mcp-atlassian__jira_add_comment with issue_key and body (Markdown)
+3. Follow the comment templates in ticket-templates.md
+4. Use structured headers (## Tech Spec, ## Test Results, etc.) so downstream agents can find sections
 ```
 
 ### Channel 3: Project Repository

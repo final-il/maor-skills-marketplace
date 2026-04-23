@@ -39,20 +39,20 @@ You receive:
 
 2. **Check for duplicates** — Search the Jira project for existing issues with matching summaries:
    ```
-   Use searchJiraIssuesUsingJql with: project = {projectKey} AND summary ~ "{epic title}" AND issuetype = Epic
+   Use mcp__mcp-atlassian__jira_search with jql: project = {projectKey} AND summary ~ "{epic title}" AND issuetype = Epic
    ```
+   Note: MCP tools are deferred — use `ToolSearch` with query `select:mcp__mcp-atlassian__jira_search` to load the schema before calling.
    Skip creation if an exact match exists. Report duplicates to the orchestrator.
 
 3. **Create Epics** — For each epic in the plan:
-   - Use `createJiraIssue` with `issueTypeName: "Epic"`
-   - Set `contentFormat: "markdown"` and `responseContentFormat: "markdown"`
-   - Include the full epic description from the plan
-   - Add labels: `["ai-sdlc"]`
+   - Use `mcp__mcp-atlassian__jira_create_issue` with `issue_type: "Epic"`, `project_key: "{projectKey}"`
+   - Include the full epic description
+   - Add labels via `additional_fields: "{\"labels\": [\"ai-sdlc\"]}"`
    - Note the returned epic key
 
 4. **Create Stories** — For each story under an epic:
-   - Use `createJiraIssue` with `issueTypeName: "Story"`
-   - Set the parent to the epic key (using the `parent` field or `additional_fields`)
+   - Use `mcp__mcp-atlassian__jira_create_issue` with `issue_type: "Story"`, `project_key: "{projectKey}"`
+   - Link to epic via `additional_fields: "{\"parent\": \"{EPIC-KEY}\", \"labels\": [\"ai-sdlc\"]}"`
    - Format the description using the story template:
      ```markdown
      ## Description
@@ -72,8 +72,8 @@ You receive:
    - Set priority based on complexity: L→High, M→Medium, S→Low
 
 5. **Create dependency links** — For stories with dependencies:
-   - Use `createIssueLink` with `linkTypeName: "Blocks"`
-   - The blocking story is `outwardIssueKey`, blocked story is `inwardIssueKey`
+   - Use `mcp__mcp-atlassian__jira_create_issue_link` with `link_type: "Blocks"`
+   - `outward_issue_key` = the blocking story, `inward_issue_key` = the blocked story
 
 6. **Add summary comment to epic** — Post a comment on the epic listing all created stories with their keys.
 
@@ -94,11 +94,17 @@ Return a structured list:
 Total: {N} epics, {M} stories created
 ```
 
+## MCP Tool Access
+
+MCP tools are deferred — you MUST load them before calling. At the start of your work, run:
+```
+ToolSearch with query: "select:mcp__mcp-atlassian__jira_search,mcp__mcp-atlassian__jira_create_issue,mcp__mcp-atlassian__jira_create_issue_link,mcp__mcp-atlassian__jira_add_comment"
+```
+
 ## Rules
 
-- Always use `contentFormat: "markdown"` and `responseContentFormat: "markdown"` on all MCP calls
 - Never create issues outside the specified project
 - If an issue type is not available (e.g., no "Epic" type), fall back to "Task" and note it
-- If `createJiraIssue` fails, log the error and continue with remaining tickets
-- Use `lookupJiraAccountId` if you need to set an assignee
+- If `mcp__mcp-atlassian__jira_create_issue` fails, log the error and continue with remaining tickets
+- Use `mcp__mcp-atlassian__jira_get_user_profile` if you need to look up an assignee
 - Do NOT assign stories — leave them unassigned for agents to pick up

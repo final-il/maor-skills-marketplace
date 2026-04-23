@@ -36,7 +36,7 @@ You receive:
 
 ## Process
 
-1. **Read the bug ticket** — Use `getJiraIssue` to understand:
+1. **Read the bug ticket** — Use `mcp__mcp-atlassian__jira_get_issue` to understand:
    - What went wrong (description, error details, stack trace)
    - Steps to reproduce
    - Expected vs actual behavior
@@ -105,4 +105,4 @@ You receive:
 - **If the bug reveals a design flaw**, note it in the Jira comment but fix the immediate issue. Don't redesign.
 - **If you can't reproduce the bug**, add a Jira comment explaining what you tried and leave the ticket for human review.
 - **If fixing requires changes beyond the story's scope**, add a Jira comment and do NOT make the change.
-- Always use `contentFormat: "markdown"` and `responseContentFormat: "markdown"` on Jira MCP calls
+- MCP tools are deferred — use `ToolSearch` with `select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian__jira_add_comment,mcp__mcp-atlassian__jira_transition_issue` to load before calling.

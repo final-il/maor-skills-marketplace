@@ -51,14 +51,13 @@ In this mode, the orchestrator:
 3. If Jira key: fetch the epic and its child stories to determine pipeline state
 
 4. **Discover Jira project:**
-   - Use `getVisibleJiraProjects` to list available projects
+   - Use `mcp__mcp-atlassian__jira_get_all_projects` to list available projects
    - Ask the user which project to use (or auto-detect from epic key)
-   - Use `getJiraProjectIssueTypesMetadata` to get available issue types
-   - Note the cloudId and projectKey
+   - Note the projectKey
 
 5. **Discover workflow transitions:**
    - Find an existing ticket in the project, or ask the user for a sample ticket key
-   - Use `getTransitionsForJiraIssue` to map status names to transition IDs
+   - Use `mcp__mcp-atlassian__jira_get_transitions` to map status names to transition IDs
    - Build the transition map: `{status_name: transition_id}`
 
 6. **Identify or create the project repo:**

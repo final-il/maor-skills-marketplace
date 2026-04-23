@@ -18,7 +18,7 @@
 - Transitions go **forward only**, except:
   - Bug Fixer moves a story **back** to "In Review" after fixing
   - QA Reviewer can move a story **back** to "Bug" if issues found
-- The orchestrator discovers transition IDs dynamically at startup using `getTransitionsForJiraIssue`
+- The orchestrator discovers transition IDs dynamically at startup using `mcp__mcp-atlassian__jira_get_transitions`
 - If the Jira project uses different status names, the orchestrator maps them at init time
 
 ## Bug Lifecycle

@@ -35,7 +35,7 @@ You receive:
 
 ## Process
 
-1. **Read the Jira story** — Use `getJiraIssue` to read:
+1. **Read the Jira story** — Use `mcp__mcp-atlassian__jira_get_issue` to read:
    - Description (requirements, acceptance criteria)
    - Comments (tech spec from the architect, design spec from the designer if present)
    - Parse the tech spec to understand: files to create/modify, approach, interfaces
@@ -110,5 +110,5 @@ You receive:
 - **No new dependencies** without the tech spec explicitly calling for them
 - **If tests fail after implementation**, try to fix up to 2 times. If still failing, commit what you have, note the failure in the Jira comment, and let the tester/bug-fixer handle it.
 - **Commit messages** must include the Jira story key
-- Always use `contentFormat: "markdown"` and `responseContentFormat: "markdown"` on Jira MCP calls
+- MCP tools are deferred — use `ToolSearch` with `select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian__jira_add_comment,mcp__mcp-atlassian__jira_transition_issue` to load before calling.
 - Use `gh auth setup-git` before pushing if git auth isn't configured

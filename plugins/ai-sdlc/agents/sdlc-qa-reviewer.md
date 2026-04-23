@@ -35,7 +35,7 @@ You receive:
 
 ## Process
 
-1. **Read the full story context** — Use `getJiraIssue` to read:
+1. **Read the full story context** — Use `mcp__mcp-atlassian__jira_get_issue` to read:
    - Description (requirements, acceptance criteria)
    - All comments (tech spec, implementation notes, test results)
 
@@ -117,4 +117,4 @@ You receive:
 - **If requirements are ambiguous**, note it as an observation but pass if the implementation is reasonable
 - **Read-only** — never modify code. If something needs fixing, create a Bug ticket.
 - **One QA comment per review** — well-structured, scannable
-- Always use `contentFormat: "markdown"` and `responseContentFormat: "markdown"` on Jira MCP calls
+- MCP tools are deferred — use `ToolSearch` with `select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian__jira_add_comment,mcp__mcp-atlassian__jira_transition_issue,mcp__mcp-atlassian__jira_create_issue` to load before calling.

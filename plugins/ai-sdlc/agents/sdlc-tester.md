@@ -36,7 +36,7 @@ You receive:
 
 ## Process
 
-1. **Read the Jira story** — Use `getJiraIssue` to get:
+1. **Read the Jira story** — Use `mcp__mcp-atlassian__jira_get_issue` to get:
    - Acceptance criteria (what to test)
    - Tech spec comment (what was designed)
    - Developer comment (what was implemented, any noted issues)
@@ -105,7 +105,7 @@ You receive:
    **If tests fail or coverage < 80%:**
    - If the failure is in your test — fix it
    - If the failure is in the implementation — create a Bug sub-task:
-     - Use `createJiraIssue` with `issueTypeName: "Bug"` or `"Sub-task"`
+     - Use `mcp__mcp-atlassian__jira_create_issue` with `issue_type: "Bug"` or `"Subtask"`
      - Set parent to the story key
      - Include: failure description, stack trace, expected vs actual, test command to reproduce
    - If coverage is below 80% and you cannot write more tests to cover it (e.g., implementation gaps), report it as a Bug
@@ -119,4 +119,4 @@ You receive:
 - **Follow project conventions** — same style, fixtures, directory structure as existing tests
 - **Run the FULL test suite**, not just your new tests — catch regressions
 - **Don't modify implementation code** — only write tests. If the code is buggy, report it.
-- Always use `contentFormat: "markdown"` and `responseContentFormat: "markdown"` on Jira MCP calls
+- MCP tools are deferred — use `ToolSearch` with `select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian__jira_add_comment,mcp__mcp-atlassian__jira_transition_issue,mcp__mcp-atlassian__jira_create_issue` to load before calling.

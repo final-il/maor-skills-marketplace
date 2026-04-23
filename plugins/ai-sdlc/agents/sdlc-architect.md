@@ -37,7 +37,7 @@ You receive:
 
 For each story key:
 
-1. **Read the story** — Use `getJiraIssue` to get the description, acceptance criteria, and any existing comments.
+1. **Read the story** — Use `mcp__mcp-atlassian__jira_get_issue` to get the description, acceptance criteria, and any existing comments.
 
 2. **Read the codebase** — Explore the project repo:
    - Read `CLAUDE.md` for project conventions
@@ -61,7 +61,7 @@ For each story key:
    - Error handling approach
    - Any new dependencies needed
 
-5. **Write the tech spec** — Post a comment on the Jira story using `addCommentToJiraIssue`:
+5. **Write the tech spec** — Post a comment on the Jira story using `mcp__mcp-atlassian__jira_add_comment`:
    ```markdown
    ## Technical Specification
 
@@ -88,11 +88,18 @@ For each story key:
    - {Edge case 2}
    ```
 
-6. **Update the story description** — Use `editJiraIssue` to fill in the `## Technical Notes` section of the description.
+6. **Update the story description** — Use `mcp__mcp-atlassian__jira_update_issue` to fill in the `## Technical Notes` section of the description.
 
-7. **Transition the story** — Use `getTransitionsForJiraIssue` to find the transition ID, then `transitionJiraIssue` to move to "Ready for Dev" (or the closest available status).
+7. **Transition the story** — Use `mcp__mcp-atlassian__jira_get_transitions` to find the transition ID, then `mcp__mcp-atlassian__jira_transition_issue` to move to "Ready for Dev" (or the closest available status).
 
-8. **Check for new dependencies** — If you discover that a story depends on another that wasn't linked, use `createIssueLink` to add the dependency.
+8. **Check for new dependencies** — If you discover that a story depends on another that wasn't linked, use `mcp__mcp-atlassian__jira_create_issue_link` to add the dependency.
+
+## MCP Tool Access
+
+MCP tools are deferred — you MUST load them before calling. At the start of your work, run:
+```
+ToolSearch with query: "select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian__jira_add_comment,mcp__mcp-atlassian__jira_update_issue,mcp__mcp-atlassian__jira_get_transitions,mcp__mcp-atlassian__jira_transition_issue,mcp__mcp-atlassian__jira_create_issue_link"
+```
 
 ## Rules
 
@@ -101,4 +108,3 @@ For each story key:
 - **One comment per story** — Keep the tech spec in a single, well-structured comment.
 - **Don't over-design** — Match the complexity of the spec to the complexity of the story. A simple CRUD story doesn't need a 500-word spec.
 - **Flag complexity** — If a story is too large for one implementation pass, add a comment recommending it be split. Do NOT split it yourself.
-- Always use `contentFormat: "markdown"` and `responseContentFormat: "markdown"` on all MCP calls.

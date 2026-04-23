@@ -77,13 +77,34 @@ The pipeline supports two branching models, detected automatically in Phase 0:
 
 Agents never need to know which model is active — they use `{base_branch}` and `{pr_target_branch}` from the context block.
 
+## Required MCP Server: mcp-atlassian
+
+The AI-SDLC pipeline requires the standalone `mcp-atlassian` MCP server (configured via `/mcp`). All Jira operations use `mcp__mcp-atlassian__jira_*` tools.
+
+**IMPORTANT:** MCP tools are deferred — agents MUST use `ToolSearch` to load tool schemas before calling them.
+
+| Operation | MCP Tool |
+|-----------|----------|
+| Search issues | `mcp__mcp-atlassian__jira_search` |
+| Get issue details | `mcp__mcp-atlassian__jira_get_issue` |
+| Create issue | `mcp__mcp-atlassian__jira_create_issue` |
+| Update issue | `mcp__mcp-atlassian__jira_update_issue` |
+| Add comment | `mcp__mcp-atlassian__jira_add_comment` |
+| Transition status | `mcp__mcp-atlassian__jira_transition_issue` |
+| Get transitions | `mcp__mcp-atlassian__jira_get_transitions` |
+| Create link | `mcp__mcp-atlassian__jira_create_issue_link` |
+| Link to epic | `mcp__mcp-atlassian__jira_link_to_epic` |
+| List projects | `mcp__mcp-atlassian__jira_get_all_projects` |
+| Look up user | `mcp__mcp-atlassian__jira_get_user_profile` |
+
 ## Agent Workflow Rules
 
-1. **Always read from Jira first** — Get the ticket's current state before acting
-2. **Always write back to Jira** — Post results as comments so the next agent has context
-3. **Use markdown in Jira** — Set `contentFormat: "markdown"` and `responseContentFormat: "markdown"` on all MCP calls
-4. **Transition tickets** — Move tickets to the correct status when done
-5. **Create Bug sub-tasks** — When tests fail or QA finds issues, create a Bug sub-task under the parent Story
-6. **Commit messages** — Always include the Jira ticket key: `{STORY-KEY}: {summary}`
-7. **Branch naming** — Use `{story-key}/{short-slug}` (e.g., `PROJ-42/xml-parser`)
-8. **PR target** — Always use `--base {pr_target_branch}` when creating PRs
+1. **Load MCP tools first** — Use `ToolSearch` with `select:mcp__mcp-atlassian__jira_get_issue,...` before any Jira call
+2. **Always read from Jira first** — Get the ticket's current state before acting
+3. **Always write back to Jira** — Post results as comments so the next agent has context
+4. **Use markdown in Jira** — The `mcp__mcp-atlassian__jira_add_comment` body parameter accepts Markdown directly
+5. **Transition tickets** — Move tickets to the correct status when done
+6. **Create Bug sub-tasks** — When tests fail or QA finds issues, create a Bug sub-task under the parent Story
+7. **Commit messages** — Always include the Jira ticket key: `{STORY-KEY}: {summary}`
+8. **Branch naming** — Use `{story-key}/{short-slug}` (e.g., `PROJ-42/xml-parser`)
+9. **PR target** — Always use `--base {pr_target_branch}` when creating PRs

@@ -35,7 +35,7 @@ You receive:
 
 ## Process
 
-1. **Read the story context** — Use `getJiraIssue` to read:
+1. **Read the story context** — Use `mcp__mcp-atlassian__jira_get_issue` to read:
    - Description (requirements, acceptance criteria)
    - Comments (tech spec from the architect)
    - Understand what the user will see and interact with
@@ -86,7 +86,7 @@ You receive:
    - Responsive/scaling behavior
    - Fallback for missing data
 
-6. **Post the design spec** — Add a comment on the Jira story using `addCommentToJiraIssue`:
+6. **Post the design spec** — Add a comment on the Jira story using `mcp__mcp-atlassian__jira_add_comment`:
    ```markdown
    ## Design Specification
 
@@ -124,4 +124,4 @@ You receive:
 - **Less is more** — prefer clean, minimal designs. Don't over-design simple features.
 - **One comment per story** — keep the design spec in a single well-structured comment.
 - **Skip gracefully** — if the story is purely backend (no user-facing component), say so briefly and stop.
-- Always use `contentFormat: "markdown"` and `responseContentFormat: "markdown"` on all MCP calls.
+- MCP tools are deferred — use `ToolSearch` with `select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian__jira_add_comment` to load before calling.
