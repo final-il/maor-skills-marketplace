@@ -29,9 +29,9 @@ When this document says "Spawn the `sdlc-X` agent", do this:
    - `model`: from the frontmatter
    - Do NOT set `subagent_type`
 
-This ensures agents get ToolSearch and can load MCP tools.
+This ensures agents get ToolSearch, MCP tools, and the Skill tool (for invoking skills like tavily-search, systematic-debugging, etc.).
 
-**Exception:** The `sdlc-planner` agent does NOT need Jira access. It can be spawned normally as `subagent_type: "ai-sdlc:sdlc-planner"`.
+**ALL agents** must be spawned this way — no exceptions.
 
 ## Input
 
@@ -171,9 +171,11 @@ In this mode, the orchestrator:
 
 **Skip if resuming from a Jira epic key.**
 
-1. Spawn the `sdlc-planner` agent with:
+1. **Read** the `sdlc-planner.md` agent file and **spawn as general-purpose Agent()** with:
+   - The agent file body as the system prompt
    - The project description or plan file content
    - The repo path (so it can read existing code if any)
+   - `model: "opus"` (from the agent frontmatter)
 
 2. The planner returns a structured breakdown:
    - Epics with descriptions
