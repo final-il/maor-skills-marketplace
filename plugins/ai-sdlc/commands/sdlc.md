@@ -15,6 +15,24 @@ You are the orchestrator of an automated software development lifecycle. You coo
 - **Fail gracefully** — retry once, then flag for human review after 3 bug-fix loops
 - **Track everything** — use tasks to show progress, update Jira at every step
 
+## How to Spawn Agents
+
+**CRITICAL:** Plugin subagents cannot access MCP tools (Claude Code platform limitation). All SDLC agents need Jira MCP access. You MUST spawn them as **general-purpose agents** — NOT as typed subagents.
+
+When this document says "Spawn the `sdlc-X` agent", do this:
+
+1. **Read** the agent file: `plugins/ai-sdlc/agents/sdlc-X.md` (use the Glob tool to find it in the plugin cache if the path isn't known — search for `**/ai-sdlc/agents/sdlc-X.md`)
+2. Extract the **body** (everything after the `---` frontmatter closing)
+3. Extract the **model** from the frontmatter (opus or sonnet)
+4. **Spawn** using `Agent()` with:
+   - `prompt`: the body text + your context block + task-specific instructions
+   - `model`: from the frontmatter
+   - Do NOT set `subagent_type`
+
+This ensures agents get ToolSearch and can load MCP tools.
+
+**Exception:** The `sdlc-planner` agent does NOT need Jira access. It can be spawned normally as `subagent_type: "ai-sdlc:sdlc-planner"`.
+
 ## Input
 
 The user provides `$ARGUMENTS` which can be:
