@@ -40,6 +40,14 @@ The user provides `$ARGUMENTS` which can be:
 2. **A Jira epic key** (matches pattern like `PROJ-123`) — resume an existing pipeline
 3. **A text description** — treat as a new project description
 
+### Flags
+
+Parse these flags from `$ARGUMENTS` before processing:
+
+- **`--auto`** — Auto-approve all gates. Skip all approval pauses (plan approval, design approval, promotion). The pipeline runs end-to-end without stopping. Use for testing or trusted pipelines.
+
+Strip flags from `$ARGUMENTS` before using the remaining text as the project description.
+
 ## Feedback Loop — Bugs and New Features from Testing
 
 When the product is already built and the user reports a bug or requests a feature discovered during testing:
@@ -183,8 +191,8 @@ In this mode, the orchestrator:
 
 3. **PAUSE — Present the plan to the user for approval.**
    - Show the epic/story breakdown clearly
-   - Ask: "Approve this plan? Or modify?"
-   - Do NOT proceed until the user approves
+   - If `--auto`: log "Auto-approving plan" and proceed immediately
+   - Otherwise: Ask "Approve this plan? Or modify?" — do NOT proceed until the user approves
 
 ## Phase 2: Jira Ticket Creation
 
@@ -250,8 +258,8 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
 
 4. **PAUSE — Present the design to the user for approval.**
    - Show the design spec (or summarize key decisions)
-   - Ask: "Approve this design? Or modify?"
-   - Do NOT proceed to development until the user approves
+   - If `--auto`: log "Auto-approving design" and proceed immediately
+   - Otherwise: Ask "Approve this design? Or modify?" — do NOT proceed until the user approves
    - If rejected, re-spawn the designer with the user's feedback
 
 5. Stories that don't need design proceed directly to Phase 4.
@@ -322,7 +330,8 @@ For each story that is "Ready for Dev":
 
 3. **If dev/prod model (PR Target is `dev`):**
    - Merge all story PRs into `dev` (if not already merged)
-   - **PAUSE — Ask the user:** "All stories are done on `dev`. Promote to `main`?"
+   - If `--auto`: log "Auto-approving promotion" and promote immediately
+   - Otherwise: **PAUSE — Ask the user:** "All stories are done on `dev`. Promote to `main`?"
    - If approved, promote:
      ```bash
      cd {repo_path}
