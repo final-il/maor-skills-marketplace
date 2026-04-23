@@ -12,11 +12,13 @@ The orchestrator passes a standardized context block to every agent:
 
 ```
 ## SDLC Context
+- Project Name: {product_name}
 - Project Key: {projectKey}
 - Cloud ID: {cloudId}
 - Repo Path: {absolute_path_to_working_directory}
 - Base Branch: {branch_agents_branch_from}
 - PR Target: {branch_PRs_merge_into}
+- QBV Key: {qbv_issue_key}
 - Issue Keys: {comma-separated list of relevant Jira issue keys}
 - Transition Map: To Do={id}, Planning={id}, Ready for Dev={id}, In Progress={id}, In Review={id}, Testing={id}, Done={id}, Bug={id}
 ```

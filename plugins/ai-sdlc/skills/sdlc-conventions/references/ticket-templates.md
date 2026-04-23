@@ -1,5 +1,25 @@
 # AI-SDLC Ticket Templates
 
+## QBV Template (Project Container)
+
+```markdown
+# {Project Name} — {Short Description}
+
+## Overview
+{1-2 paragraph description of the product/project}
+
+## Tech Stack
+{Languages, frameworks, key libraries}
+
+## Repo
+{GitHub repo URL or path}
+
+## Epics
+- [ ] {Epic 1 title}
+- [ ] {Epic 2 title}
+- [ ] ...
+```
+
 ## Epic Template
 
 ```markdown

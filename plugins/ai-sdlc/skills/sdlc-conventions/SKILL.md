@@ -33,10 +33,11 @@ All tickets created by the AI-SDLC system carry these labels:
 
 ## Ticket Structure
 
-The system creates tickets in this hierarchy:
-- **Epic** — Major functional area (e.g., "Core Engine", "Visualization")
-- **Story** — Implementable unit (1-3 days of work)
-- **Sub-task** — Optional fine-grained steps
+The system creates tickets in a 3-tier hierarchy:
+- **QBV** (level 2) — One per product/project (e.g., "2c — Agent Conversation Visualizer")
+- **Epic** (level 1) — Major functional area, parented to the QBV
+- **Story** (level 0) — Implementable unit (1-3 days of work), parented to an Epic
+- **Sub-task** — Optional fine-grained steps under a Story
 - **Bug** — Created as sub-task of a Story when tests/QA fail
 
 See `references/ticket-templates.md` for description templates.
@@ -82,6 +83,8 @@ Agents never need to know which model is active — they use `{base_branch}` and
 The AI-SDLC pipeline requires the standalone `mcp-atlassian` MCP server (configured via `/mcp`). All Jira operations use `mcp__mcp-atlassian__jira_*` tools.
 
 **IMPORTANT:** MCP tools are deferred — agents MUST use `ToolSearch` to load tool schemas before calling them.
+
+**IMPORTANT:** Plugin subagents cannot access MCP tools (Claude Code limitation #25200, #38920). The orchestrator MUST spawn Jira-needing agents as general-purpose `Agent()` calls (no `subagent_type`) with the agent file body as the prompt. Only the planner (no Jira) can use typed subagent spawning.
 
 | Operation | MCP Tool |
 |-----------|----------|
