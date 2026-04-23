@@ -193,10 +193,12 @@ The Jira project uses a 3-tier hierarchy:
 - **Epic** (level 1) — functional area within the project, parented to the QBV
 - **Story** (level 0) — individual work item, parented to an Epic
 
-1. Spawn the `sdlc-jira-creator` agent with:
+1. **Read** the `sdlc-jira-creator.md` agent file and **spawn as general-purpose Agent()** (see "How to Spawn Agents" above) with:
+   - The agent file body as the system prompt
    - The approved plan text
    - The SDLC context block (cloudId, projectKey, issue types)
    - **The project name** (for QBV title and epic prefix)
+   - `model: "sonnet"` (from the agent frontmatter)
 
 2. The agent creates:
    - A **QBV** issue: `"{project_name} — {short description}"` with labels `["ai-sdlc", "{project_name}"]`
@@ -212,10 +214,12 @@ The Jira project uses a 3-tier hierarchy:
 
 ## Phase 3: Architecture
 
-1. Spawn the `sdlc-architect` agent with:
+1. **Read** the `sdlc-architect.md` agent file and **spawn as general-purpose Agent()** (see "How to Spawn Agents") with:
+   - The agent file body as the system prompt
    - The SDLC context block
    - All story keys that are in "To Do" status
    - The repo path
+   - `model: "opus"` (from the agent frontmatter)
 
 2. The architect reads each story from Jira, writes tech specs as comments, and transitions to "Ready for Dev"
 
@@ -234,9 +238,11 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
    - User prompts or interactive flows
    Then the story needs design.
 
-2. **Spawn the `sdlc-designer` agent** with:
+2. **Read** the `sdlc-designer.md` agent file and **spawn as general-purpose Agent()** with:
+   - The agent file body as the system prompt
    - SDLC context block
    - The story key (has tech spec in comments)
+   - `model: "opus"` (from the agent frontmatter)
 
 3. The designer reads the tech spec, analyzes existing UI patterns in the codebase, and posts a "## Design Specification" comment on the story (wireframes, colors, UX flow, output examples).
 
@@ -255,35 +261,43 @@ Process stories in dependency order (stories with no blockers first).
 For each story that is "Ready for Dev":
 
 ### Step 4: Develop
-- Spawn `sdlc-developer` agent with:
+- **Read** `sdlc-developer.md` and **spawn as general-purpose Agent()** with:
+  - The agent file body as the system prompt
   - SDLC context block
   - Single story key
   - Base branch name
+  - `model: "opus"`
 - Developer writes code, commits, opens PR, transitions to "In Review"
 
 ### Step 5: Test
-- Spawn `sdlc-tester` agent with:
+- **Read** `sdlc-tester.md` and **spawn as general-purpose Agent()** with:
+  - The agent file body as the system prompt
   - SDLC context block
   - The story key (now "In Review")
   - The PR branch name
+  - `model: "sonnet"`
 - Tester writes tests, runs them
 - If pass: transitions to "Testing"
 - If fail: creates Bug sub-task, transitions to "Bug"
 
 ### Step 6: QA Review
-- Spawn `sdlc-qa-reviewer` agent with:
+- **Read** `sdlc-qa-reviewer.md` and **spawn as general-purpose Agent()** with:
+  - The agent file body as the system prompt
   - SDLC context block
   - The story key (now "Testing")
+  - `model: "opus"`
 - QA reviews code and requirements
 - If pass: transitions to "Done"
 - If issues: creates Bug sub-task, transitions to "Bug"
 
 ### Step 7: Bug Fix (if needed)
 - If story is in "Bug" status:
-  - Spawn `sdlc-bug-fixer` agent with:
+  - **Read** `sdlc-bug-fixer.md` and **spawn as general-purpose Agent()** with:
+    - The agent file body as the system prompt
     - SDLC context block
     - The Bug sub-task key
     - The parent story key
+    - `model: "sonnet"`
   - Bug fixer fixes the issue, transitions bug to "Done", story back to "In Review"
   - **Loop back to Step 5** (re-test)
   - **Maximum 3 bug-fix loops per story.** After that, add a Jira comment and move on.
