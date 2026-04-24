@@ -78,10 +78,7 @@ In this mode, the orchestrator:
 2. If file path: read the file content
 3. If Jira key: fetch the epic and its child stories to determine pipeline state
 
-4. **Discover Jira project:**
-   - Use `mcp__mcp-atlassian__jira_get_all_projects` to list available projects
-   - Ask the user which project to use (or auto-detect from epic key)
-   - Note the projectKey
+4. **Jira project:** Always use `CSI` (CSI-PM). Do NOT ask the user which project — it is always CSI.
 
 5. **Discover workflow transitions:**
    - Find an existing ticket in the project, or ask the user for a sample ticket key
