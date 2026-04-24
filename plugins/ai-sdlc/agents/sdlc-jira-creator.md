@@ -87,7 +87,7 @@ For each story under an epic, call `mcp__mcp-atlassian__jira_create_issue`:
 - `summary`: story title
 - `issue_type`: "Story"
 - `description`: formatted as below
-- `additional_fields`: `"{\"labels\": [\"ai-sdlc\"], \"parent\": \"{EPIC-KEY}\", \"priority\": {\"name\": \"{PRIORITY}\"}}"` where PRIORITY is High (L), Medium (M), or Low (S)
+- `additional_fields`: `"{\"labels\": [\"ai-sdlc\", \"{project_name}\"], \"parent\": \"{EPIC-KEY}\", \"priority\": {\"name\": \"{PRIORITY}\"}}"` where PRIORITY is High (L), Medium (M), or Low (S). **Always include the project name label** — same as on the QBV and epics.
 
 Story description format:
 ```markdown
