@@ -69,8 +69,8 @@ Create a QBV issue as the top-level container for the project:
 
 Record the returned QBV key — all epics will be parented to it.
 
-### Step 4: Create ALL Epics in parallel
-Call `mcp__mcp-atlassian__jira_create_issue` for ALL epics **in a single message with parallel tool calls**:
+### Step 4: Create Epics in batches
+Create epics in parallel batches of **up to 5 per message** to avoid timeouts:
 - `project_key`: from context block
 - `summary`: **`"{project_name} — {epic title}"`** (always prefix with the project name and em dash)
 - `issue_type`: "Epic"
@@ -79,10 +79,10 @@ Call `mcp__mcp-atlassian__jira_create_issue` for ALL epics **in a single message
 
 **Example:** If project_name is "Jiralyzer" and the epic is "Data Processing Pipeline", the summary must be: `"Jiralyzer — Data Processing Pipeline"`
 
-**IMPORTANT: Create all epics in ONE parallel batch.** If you have 4 epics, make 4 tool calls in a single message. Wait for all to return, then record all keys.
+**Batching rule:** If you have 8 epics, send batch 1 (epics 1-5) as 5 parallel calls, wait for results, then batch 2 (epics 6-8) as 3 parallel calls. Record all keys before proceeding to stories.
 
-### Step 5: Create ALL Stories in parallel (per epic batch)
-Once you have all epic keys, create ALL stories across ALL epics **in a single message with parallel tool calls**:
+### Step 5: Create Stories in batches (max 5 per message)
+Once you have all epic keys, create stories in parallel batches of **up to 5 per message**:
 - `project_key`: from context block
 - `summary`: story title
 - `issue_type`: "Story"
@@ -105,18 +105,18 @@ _To be filled by the Architect agent_
 {S/M/L}
 ```
 
-**IMPORTANT: Create ALL stories in ONE parallel batch.** If you have 9 stories across 4 epics, make 9 tool calls in a single message. Wait for all to return, then record all keys for dependency linking.
+**Batching rule:** If you have 34 stories, send them in batches of 5: batch 1 (stories 1-5), wait, batch 2 (stories 6-10), wait, etc. Record all keys progressively. After ALL stories are created, proceed to dependency linking.
 
-### Step 6: Create ALL dependency links in parallel
-Once you have all story keys, create ALL dependency links **in a single message with parallel tool calls**:
+### Step 6: Create dependency links in batches (max 5 per message)
+Once you have all story keys, create dependency links in parallel batches of **up to 5 per message**:
 - `link_type`: "Blocks"
 - `outward_issue_key`: the blocking story key
 - `inward_issue_key`: the blocked story key
 
-**IMPORTANT: Create all links in ONE parallel batch.** If you have 8 dependency links, make 8 tool calls in a single message.
+**Batching rule:** Same as above — max 5 link calls per message.
 
-### Step 7: Add ALL summary comments in parallel
-For each epic, call `mcp__mcp-atlassian__jira_add_comment` with a summary of all stories created under it. **Make all comment calls in ONE parallel batch.**
+### Step 7: Add summary comments in batches (max 5 per message)
+For each epic, call `mcp__mcp-atlassian__jira_add_comment` with a summary of all stories created under it. **Max 5 comment calls per message.**
 
 ## Output
 
