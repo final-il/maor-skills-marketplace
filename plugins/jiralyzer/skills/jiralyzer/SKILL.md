@@ -83,12 +83,12 @@ cd "$JIRALYZER_PROJECT_DIR" && SSL_CERT_FILE="$REQUESTS_CA_BUNDLE" uv sync
 **All commands follow this pattern:**
 
 ```bash
-set -a && source "$JIRALYZER_PROJECT_DIR/.env" && set +a && cd "$JIRALYZER_PROJECT_DIR" && uv run jiralyzer <command> --db "$JIRALYZER_DB_PATH" [args...]
+set -a && source "$JIRALYZER_PROJECT_DIR/.env" && set +a && cd "$JIRALYZER_PROJECT_DIR" && uv run jiralyzer --db "$JIRALYZER_DB_PATH" <command> [args...]
 ```
 
 For brevity, the rest of this document shows commands as:
 ```bash
-jiralyzer <command> --db "$JIRALYZER_DB_PATH" [args...]
+jiralyzer --db "$JIRALYZER_DB_PATH" <command> [args...]
 ```
 
 But **every invocation** must be wrapped with the source + cd prefix above.
@@ -105,12 +105,12 @@ When the user asks an analytics question:
 
 2. **Check which projects are in the database:**
    ```bash
-   jiralyzer query "SELECT project, COUNT(*) as count FROM tickets GROUP BY project ORDER BY count DESC" --db "$JIRALYZER_DB_PATH"
+   jiralyzer --db "$JIRALYZER_DB_PATH" query "SELECT project, COUNT(*) as count FROM tickets GROUP BY project ORDER BY count DESC"
    ```
 
 3. **If the requested project is NOT in the results, sync it first:**
    ```bash
-   jiralyzer sync --project <KEY> --db "$JIRALYZER_DB_PATH"
+   jiralyzer --db "$JIRALYZER_DB_PATH" sync --project <KEY>
    ```
    If sync fails, stop and report the error to the user. Do not attempt alternative data loading methods.
 
@@ -120,7 +120,7 @@ When the user asks an analytics question:
 
 ### 2. Understand the schema
 
-Run `jiralyzer schema --db "$JIRALYZER_DB_PATH"` to get the current table structure. The database has 6 tables:
+Run `jiralyzer --db "$JIRALYZER_DB_PATH" schema` to get the current table structure. The database has 6 tables:
 
 - **tickets** — One row per Jira issue (key, status, assignee, priority, resolution_days, etc.)
 - **status_changes** — Status transition history from changelog
@@ -144,10 +144,10 @@ Translate the user's question into DuckDB SQL. Key considerations:
 
 ```bash
 # For data analysis
-jiralyzer query "<sql>" --db "$JIRALYZER_DB_PATH" --format json
+jiralyzer --db "$JIRALYZER_DB_PATH" query "<sql>" --format json
 
 # For display to user
-jiralyzer query "<sql>" --db "$JIRALYZER_DB_PATH" --format table
+jiralyzer --db "$JIRALYZER_DB_PATH" query "<sql>" --format table
 ```
 
 Always explain what the results mean in context. Don't just show numbers — provide insights.
@@ -157,7 +157,7 @@ Always explain what the results mean in context. Don't just show numbers — pro
 If the results benefit from a chart, generate one:
 
 ```bash
-jiralyzer chart "<sql>" --db "$JIRALYZER_DB_PATH" --type <chart_type> --x <col> --y <col> --output "$JIRALYZER_CHART_DIR/chart.png"
+jiralyzer --db "$JIRALYZER_DB_PATH" chart "<sql>" --type <chart_type> --x <col> --y <col> --output "$JIRALYZER_CHART_DIR/chart.png"
 ```
 
 See `references/visualization-guide.md` for chart type selection guidance.
@@ -181,7 +181,7 @@ When the user asks to **categorize**, **classify**, **segment**, or **understand
 
 1. **Sample first, don't dump everything.** Query a representative batch (50-100 tickets) with summaries:
    ```bash
-   jiralyzer query "SELECT key, summary, issue_type, priority, status, assignee FROM tickets WHERE project = '<KEY>' ORDER BY key LIMIT 100" --db "$JIRALYZER_DB_PATH" --format json
+   jiralyzer --db "$JIRALYZER_DB_PATH" query "SELECT key, summary, issue_type, priority, status, assignee FROM tickets WHERE project = '<KEY>' ORDER BY key LIMIT 100" --format json
    ```
 
 2. **Read and understand the summaries yourself.** Look for themes, patterns, team names, work types, naming conventions, repeated structures. You are the classifier — not SQL.
@@ -209,7 +209,7 @@ When the user asks to **categorize**, **classify**, **segment**, or **understand
 **Always prefer the `jiralyzer chart` CLI** for visualizations. It produces professional styled PNG charts automatically.
 
 ```bash
-jiralyzer chart "<sql>" --db "$JIRALYZER_DB_PATH" --type bar --x <col> --y <col> --output "$JIRALYZER_CHART_DIR/chart.png"
+jiralyzer --db "$JIRALYZER_DB_PATH" chart "<sql>" --type bar --x <col> --y <col> --output "$JIRALYZER_CHART_DIR/chart.png"
 ```
 
 If you need a custom visualization that the CLI can't produce:
@@ -244,8 +244,8 @@ If you need a custom visualization that the CLI can't produce:
 For a quick overview, run:
 
 ```bash
-jiralyzer stats --db "$JIRALYZER_DB_PATH"              # Text summary
-jiralyzer stats --db "$JIRALYZER_DB_PATH" --format json  # Machine-readable
+jiralyzer --db "$JIRALYZER_DB_PATH" stats              # Text summary
+jiralyzer --db "$JIRALYZER_DB_PATH" stats --format json  # Machine-readable
 ```
 
 This shows: table row counts, date ranges, status distribution, top assignees, resolution metrics.
@@ -255,14 +255,14 @@ This shows: table row counts, date ranges, status distribution, top assignees, r
 For downstream analysis (Snowflake, BigQuery, etc.):
 
 ```bash
-jiralyzer export-parquet ./exports/ --db "$JIRALYZER_DB_PATH"                    # All tables
-jiralyzer export-parquet ./exports/ --db "$JIRALYZER_DB_PATH" --tables tickets    # Specific tables
-jiralyzer export-parquet ./exports/ --db "$JIRALYZER_DB_PATH" --compression zstd  # Better compression
+jiralyzer --db "$JIRALYZER_DB_PATH" export-parquet ./exports/                    # All tables
+jiralyzer --db "$JIRALYZER_DB_PATH" export-parquet ./exports/ --tables tickets    # Specific tables
+jiralyzer --db "$JIRALYZER_DB_PATH" export-parquet ./exports/ --compression zstd  # Better compression
 ```
 
 ## Rules
 
-- **Source `.env` before every command.** Every bash invocation must start with: `set -a && source "$JIRALYZER_PROJECT_DIR/.env" && set +a && cd "$JIRALYZER_PROJECT_DIR" && uv run jiralyzer <command> --db "$JIRALYZER_DB_PATH"`
+- **Source `.env` before every command.** Every bash invocation must start with: `set -a && source "$JIRALYZER_PROJECT_DIR/.env" && set +a && cd "$JIRALYZER_PROJECT_DIR" && uv run jiralyzer --db "$JIRALYZER_DB_PATH" <command>`
 - Never access the database directly — always use the CLI
 - **If `.env` is missing or sync fails, stop and ask the user.** Do not attempt workarounds.
 - **Always identify the target project first.** Check which projects are loaded, sync if needed, and filter all queries with `WHERE project = '<KEY>'` when multiple projects exist
