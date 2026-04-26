@@ -16,67 +16,66 @@ You help users analyze Jira ticket data using the `jiralyzer` CLI tool. You tran
 
 ## First-Time Setup
 
-Before doing anything else, verify the environment is ready. **If any check fails, stop and ask the user to fix it. Do not attempt workarounds.**
+Before doing anything else, walk through these steps in order. **If any step fails, stop and tell the user what's wrong. Do not skip steps or attempt workarounds.**
 
-### 1. Check for `.env` file
-
-Read the `.env` file from the jiralyzer project directory:
+### Step 1: Install `uv` if missing
 
 ```bash
-cat "$JIRALYZER_PROJECT_DIR/.env" 2>/dev/null || cat /Users/maorb/git-dev/jiralyzer/.env 2>/dev/null
-```
-
-If it does not exist, tell the user:
-> Jiralyzer requires a `.env` file. Copy the example and fill in your values:
-> ```
-> cp .env.example .env
-> ```
-> Then edit `.env` with your Jira credentials and paths.
-
-**Do not proceed until `.env` exists and is populated.**
-
-### 2. Load environment variables
-
-Source the `.env` file to get all variables into the shell:
-
-```bash
-set -a && source "$JIRALYZER_PROJECT_DIR/.env" && set +a
-```
-
-The `.env` file must contain these variables:
-
-| Variable | Required | Purpose |
-|---|---|---|
-| `JIRA_URL` | Yes | Jira instance URL (e.g., `https://your-site.atlassian.net`) |
-| `JIRA_EMAIL` | Yes | Jira API user email |
-| `JIRA_API_TOKEN` | Yes | Jira API token |
-| `REQUESTS_CA_BUNDLE` | Yes | CA certificate bundle path (for corporate proxy / Zscaler) |
-| `JIRALYZER_PROJECT_DIR` | Yes | Directory where jiralyzer is installed (where `uv run` executes) |
-| `JIRALYZER_DB_PATH` | Yes | Full path to the DuckDB database file |
-| `JIRALYZER_CHART_DIR` | Yes | Directory where chart images are saved |
-
-### 3. Verify prerequisites
-
-Run these checks. **All must pass:**
-
-```bash
-# uv is installed
 which uv
+```
 
-# .venv exists (uv sync has been run)
-ls "$JIRALYZER_PROJECT_DIR/.venv/bin/python3"
+If `uv` is not found, install it:
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-# jiralyzer CLI works
+Verify it works:
+```bash
+uv --version
+```
+
+### Step 2: Check for `.env` file
+
+```bash
+cat /Users/maorb/git-dev/jiralyzer/.env 2>/dev/null
+```
+
+If the file does not exist, **stop and ask the user to provide values for these variables:**
+
+| Variable | Purpose | Example |
+|---|---|---|
+| `JIRA_URL` | Jira instance URL | `https://your-site.atlassian.net` |
+| `JIRA_EMAIL` | Jira API user email | `you@company.com` |
+| `JIRA_API_TOKEN` | Jira API token | (from Atlassian account settings) |
+| `REQUESTS_CA_BUNDLE` | CA certificate bundle path (for corporate proxy / Zscaler) | `/Library/CompanyCA/zscaler-root.pem` |
+| `JIRALYZER_PROJECT_DIR` | Directory where jiralyzer is installed | `/Users/you/git-dev/jiralyzer` |
+| `JIRALYZER_DB_PATH` | Full path to the DuckDB database file | `/Users/you/git-dev/jiralyzer/jiralyzer.db` |
+| `JIRALYZER_CHART_DIR` | Directory where chart images are saved | `/Users/you/git-dev/jiralyzer/charts` |
+
+Once the user provides the values, create the `.env` file at `$JIRALYZER_PROJECT_DIR/.env` with the values filled in. **Do not proceed until the file exists and all variables are populated.**
+
+### Step 3: Load environment and install dependencies
+
+Source the `.env` file, then run `uv sync` to install all Python dependencies (including DuckDB, Click, Matplotlib, etc.) into the project `.venv`:
+
+```bash
+set -a && source /Users/maorb/git-dev/jiralyzer/.env && set +a
+cd "$JIRALYZER_PROJECT_DIR" && SSL_CERT_FILE="$REQUESTS_CA_BUNDLE" uv sync
+```
+
+### Step 4: Verify everything works
+
+```bash
+set -a && source /Users/maorb/git-dev/jiralyzer/.env && set +a
+
+# jiralyzer CLI responds
 cd "$JIRALYZER_PROJECT_DIR" && uv run jiralyzer --version
 
 # chart output directory exists
 mkdir -p "$JIRALYZER_CHART_DIR"
 ```
 
-If `.venv` is missing, run:
-```bash
-cd "$JIRALYZER_PROJECT_DIR" && SSL_CERT_FILE="$REQUESTS_CA_BUNDLE" uv sync
-```
+If `jiralyzer --version` fails, stop and report the error. Do not proceed.
 
 ## How to Run Commands
 
