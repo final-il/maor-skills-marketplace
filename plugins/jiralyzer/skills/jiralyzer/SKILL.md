@@ -14,41 +14,84 @@ description: |
 
 You help users analyze Jira ticket data using the `jiralyzer` CLI tool. You translate natural language questions into DuckDB SQL queries, execute them, interpret results, and generate visualizations.
 
+## First-Time Setup
+
+Before doing anything else, verify the environment is ready. **If any check fails, stop and ask the user to fix it. Do not attempt workarounds.**
+
+### 1. Check for `.env` file
+
+Read the `.env` file from the jiralyzer project directory:
+
+```bash
+cat "$JIRALYZER_PROJECT_DIR/.env" 2>/dev/null || cat /Users/maorb/git-dev/jiralyzer/.env 2>/dev/null
+```
+
+If it does not exist, tell the user:
+> Jiralyzer requires a `.env` file. Copy the example and fill in your values:
+> ```
+> cp .env.example .env
+> ```
+> Then edit `.env` with your Jira credentials and paths.
+
+**Do not proceed until `.env` exists and is populated.**
+
+### 2. Load environment variables
+
+Source the `.env` file to get all variables into the shell:
+
+```bash
+set -a && source "$JIRALYZER_PROJECT_DIR/.env" && set +a
+```
+
+The `.env` file must contain these variables:
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `JIRA_URL` | Yes | Jira instance URL (e.g., `https://your-site.atlassian.net`) |
+| `JIRA_EMAIL` | Yes | Jira API user email |
+| `JIRA_API_TOKEN` | Yes | Jira API token |
+| `REQUESTS_CA_BUNDLE` | Yes | CA certificate bundle path (for corporate proxy / Zscaler) |
+| `JIRALYZER_PROJECT_DIR` | Yes | Directory where jiralyzer is installed (where `uv run` executes) |
+| `JIRALYZER_DB_PATH` | Yes | Full path to the DuckDB database file |
+| `JIRALYZER_CHART_DIR` | Yes | Directory where chart images are saved |
+
+### 3. Verify prerequisites
+
+Run these checks. **All must pass:**
+
+```bash
+# uv is installed
+which uv
+
+# .venv exists (uv sync has been run)
+ls "$JIRALYZER_PROJECT_DIR/.venv/bin/python3"
+
+# jiralyzer CLI works
+cd "$JIRALYZER_PROJECT_DIR" && uv run jiralyzer --version
+
+# chart output directory exists
+mkdir -p "$JIRALYZER_CHART_DIR"
+```
+
+If `.venv` is missing, run:
+```bash
+cd "$JIRALYZER_PROJECT_DIR" && SSL_CERT_FILE="$REQUESTS_CA_BUNDLE" uv sync
+```
+
 ## How to Run Commands
 
-Jiralyzer is a Python package managed with `uv`. **All commands must be run from the jiralyzer project directory using `uv run`:**
+**All commands follow this pattern:**
 
 ```bash
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer <command> [args...]
+set -a && source "$JIRALYZER_PROJECT_DIR/.env" && set +a && cd "$JIRALYZER_PROJECT_DIR" && uv run jiralyzer <command> --db "$JIRALYZER_DB_PATH" [args...]
 ```
 
-Every `jiralyzer` command shown in this skill should be run this way. For example:
-- `jiralyzer stats` → `cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer stats`
-- `jiralyzer query "SELECT ..."` → `cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer query "SELECT ..."`
-
-The default database path is `jiralyzer.db` in the current directory (`/Users/maorb/git-dev/jiralyzer/jiralyzer.db`). Use `--db <path>` to override.
-
-## Data Loading
-
-Before querying, ensure data is in the database. The `sync` command pulls directly from Jira REST API:
-
+For brevity, the rest of this document shows commands as:
 ```bash
-# Set Jira credentials (one-time setup)
-export JIRA_URL=https://your-site.atlassian.net
-export JIRA_EMAIL=your-email@example.com
-export JIRA_API_TOKEN=your-api-token
-
-# Full sync — all issues in a project
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer sync --project <KEY>
-
-# Incremental sync — only issues updated since a date
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer sync --project <KEY> --since 2026-04-01
-
-# Optionally save raw JSON export
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer sync --project <KEY> --output export.json
+jiralyzer <command> --db "$JIRALYZER_DB_PATH" [args...]
 ```
 
-The sync command fetches all issues with `expand=changelog` (full history including status changes, assignments, worklogs) and automatically ingests them into DuckDB.
+But **every invocation** must be wrapped with the source + cd prefix above.
 
 ## Workflow
 
@@ -62,14 +105,14 @@ When the user asks an analytics question:
 
 2. **Check which projects are in the database:**
    ```bash
-   cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer query "SELECT project, COUNT(*) as count FROM tickets GROUP BY project ORDER BY count DESC"
+   jiralyzer query "SELECT project, COUNT(*) as count FROM tickets GROUP BY project ORDER BY count DESC" --db "$JIRALYZER_DB_PATH"
    ```
 
 3. **If the requested project is NOT in the results, sync it first:**
    ```bash
-   cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer sync --project <KEY>
+   jiralyzer sync --project <KEY> --db "$JIRALYZER_DB_PATH"
    ```
-   This requires JIRA_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables. If they're not set, ask the user to set them.
+   If sync fails, stop and report the error to the user. Do not attempt alternative data loading methods.
 
 4. **If the database has no data at all**, ask the user for their Jira project key and run sync.
 
@@ -77,7 +120,7 @@ When the user asks an analytics question:
 
 ### 2. Understand the schema
 
-Run `cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer schema` to get the current table structure. The database has 6 tables:
+Run `jiralyzer schema --db "$JIRALYZER_DB_PATH"` to get the current table structure. The database has 6 tables:
 
 - **tickets** — One row per Jira issue (key, status, assignee, priority, resolution_days, etc.)
 - **status_changes** — Status transition history from changelog
@@ -101,10 +144,10 @@ Translate the user's question into DuckDB SQL. Key considerations:
 
 ```bash
 # For data analysis
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer query "<sql>" --format json
+jiralyzer query "<sql>" --db "$JIRALYZER_DB_PATH" --format json
 
 # For display to user
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer query "<sql>" --format table
+jiralyzer query "<sql>" --db "$JIRALYZER_DB_PATH" --format table
 ```
 
 Always explain what the results mean in context. Don't just show numbers — provide insights.
@@ -114,7 +157,7 @@ Always explain what the results mean in context. Don't just show numbers — pro
 If the results benefit from a chart, generate one:
 
 ```bash
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer chart "<sql>" --type <chart_type> --x <col> --y <col> --output chart.png
+jiralyzer chart "<sql>" --db "$JIRALYZER_DB_PATH" --type <chart_type> --x <col> --y <col> --output "$JIRALYZER_CHART_DIR/chart.png"
 ```
 
 See `references/visualization-guide.md` for chart type selection guidance.
@@ -138,7 +181,7 @@ When the user asks to **categorize**, **classify**, **segment**, or **understand
 
 1. **Sample first, don't dump everything.** Query a representative batch (50-100 tickets) with summaries:
    ```bash
-   cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer query "SELECT key, summary, issue_type, priority, status, assignee FROM tickets WHERE project = '<KEY>' ORDER BY key LIMIT 100" --format json
+   jiralyzer query "SELECT key, summary, issue_type, priority, status, assignee FROM tickets WHERE project = '<KEY>' ORDER BY key LIMIT 100" --db "$JIRALYZER_DB_PATH" --format json
    ```
 
 2. **Read and understand the summaries yourself.** Look for themes, patterns, team names, work types, naming conventions, repeated structures. You are the classifier — not SQL.
@@ -166,7 +209,7 @@ When the user asks to **categorize**, **classify**, **segment**, or **understand
 **Always prefer the `jiralyzer chart` CLI** for visualizations. It produces professional styled PNG charts automatically.
 
 ```bash
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer chart "<sql>" --type bar --x <col> --y <col> --output chart.png
+jiralyzer chart "<sql>" --db "$JIRALYZER_DB_PATH" --type bar --x <col> --y <col> --output "$JIRALYZER_CHART_DIR/chart.png"
 ```
 
 If you need a custom visualization that the CLI can't produce:
@@ -176,7 +219,7 @@ If you need a custom visualization that the CLI can't produce:
    import matplotlib.pyplot as plt
    # ... your code ...
    PYEOF
-   cd /Users/maorb/git-dev/jiralyzer && .venv/bin/python3 /tmp/chart_script.py
+   cd "$JIRALYZER_PROJECT_DIR" && .venv/bin/python3 /tmp/chart_script.py
    ```
 2. Keep scripts short — one chart per script, not six.
 3. Use the jiralyzer `.venv` Python so matplotlib is available.
@@ -201,8 +244,8 @@ If you need a custom visualization that the CLI can't produce:
 For a quick overview, run:
 
 ```bash
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer stats              # Text summary
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer stats --format json  # Machine-readable
+jiralyzer stats --db "$JIRALYZER_DB_PATH"              # Text summary
+jiralyzer stats --db "$JIRALYZER_DB_PATH" --format json  # Machine-readable
 ```
 
 This shows: table row counts, date ranges, status distribution, top assignees, resolution metrics.
@@ -212,16 +255,16 @@ This shows: table row counts, date ranges, status distribution, top assignees, r
 For downstream analysis (Snowflake, BigQuery, etc.):
 
 ```bash
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer export-parquet ./exports/                    # All tables
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer export-parquet ./exports/ --tables tickets    # Specific tables
-cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer export-parquet ./exports/ --compression zstd  # Better compression
+jiralyzer export-parquet ./exports/ --db "$JIRALYZER_DB_PATH"                    # All tables
+jiralyzer export-parquet ./exports/ --db "$JIRALYZER_DB_PATH" --tables tickets    # Specific tables
+jiralyzer export-parquet ./exports/ --db "$JIRALYZER_DB_PATH" --compression zstd  # Better compression
 ```
 
 ## Rules
 
-- Always run commands via `cd /Users/maorb/git-dev/jiralyzer && uv run jiralyzer <command>` — never use bare `jiralyzer`
+- **Source `.env` before every command.** Every bash invocation must start with: `set -a && source "$JIRALYZER_PROJECT_DIR/.env" && set +a && cd "$JIRALYZER_PROJECT_DIR" && uv run jiralyzer <command> --db "$JIRALYZER_DB_PATH"`
 - Never access the database directly — always use the CLI
-- Default DB path is `jiralyzer.db` in the jiralyzer project directory; use `--db <path>` to override
+- **If `.env` is missing or sync fails, stop and ask the user.** Do not attempt workarounds.
 - **Always identify the target project first.** Check which projects are loaded, sync if needed, and filter all queries with `WHERE project = '<KEY>'` when multiple projects exist
 - When generating SQL, prefer CTEs over subqueries for readability
 - Always LIMIT results for exploratory queries (LIMIT 20 default)
