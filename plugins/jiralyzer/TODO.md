@@ -12,4 +12,7 @@
 - [x] SKILL.md now uses env vars instead of hardcoded paths
 - [x] SKILL.md now has "First-Time Setup" section with prerequisite checks
 
+## Notes
+- SKILL.md has hardcoded path to jiralyzer repo — this is expected. Dev/prod path difference is handled outside the skill (part of dev/prod workflow, not a skill concern)
+
 ## Ideas
