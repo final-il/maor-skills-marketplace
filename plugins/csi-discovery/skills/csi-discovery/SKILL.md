@@ -22,10 +22,12 @@ All data lives in the `csi-discovery` git repo:
 REPO=/path/to/csi-discovery
 ```
 
-**Finding the repo:** On first use, locate the repo by searching common locations:
-1. Check if the current directory is the repo (look for `config/teams.yaml`)
-2. Check `~/git/csi-discovery/` and `~/git-dev/csi-discovery/`
-3. If not found → run first-time setup
+**Finding the repo:** Determine context from the working directory path:
+1. If current directory contains `config/teams.yaml` — use it directly
+2. If working dir is under `~/git-dev/` — use `~/git-dev/csi-discovery/` (dev context)
+3. If working dir is under `~/git/` — use `~/git/csi-discovery/` (prod context)
+4. Otherwise, check `~/git-dev/csi-discovery/` first, then `~/git/csi-discovery/`
+5. If not found → run first-time setup
 
 ## Prerequisites
 
@@ -34,13 +36,12 @@ The following must be in place before this skill can function. Check ALL on firs
 ### 1. Git repo cloned
 
 ```bash
-ls ~/git/csi-discovery/config/teams.yaml 2>/dev/null || ls ~/git-dev/csi-discovery/config/teams.yaml 2>/dev/null
+ls ~/git-dev/csi-discovery/config/teams.yaml 2>/dev/null || ls ~/git/csi-discovery/config/teams.yaml 2>/dev/null
 ```
 
-If not found, tell the user:
-```
-! git clone https://github.com/final-il/csi-discovery ~/git/csi-discovery
-```
+If not found, tell the user to clone into the appropriate context directory:
+- Dev: `! git clone https://github.com/final-il/csi-discovery ~/git-dev/csi-discovery`
+- Prod: `! git clone https://github.com/final-il/csi-discovery ~/git/csi-discovery`
 
 Then configure git identity:
 ```bash
