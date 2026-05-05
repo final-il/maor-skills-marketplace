@@ -27,51 +27,73 @@ REPO=/path/to/csi-discovery
 2. Check `~/git/csi-discovery/` and `~/git-dev/csi-discovery/`
 3. If not found → run first-time setup
 
-## First-Time Setup
+## Prerequisites
 
-Before doing anything else, verify the environment is ready:
+The following must be in place before this skill can function. Check ALL on first use — if any are missing, guide the user through setup before proceeding.
 
-### 1. Check repo exists
+### 1. Git repo cloned
 
 ```bash
 ls ~/git/csi-discovery/config/teams.yaml 2>/dev/null || ls ~/git-dev/csi-discovery/config/teams.yaml 2>/dev/null
 ```
 
-If not found, tell the user to clone it:
-
+If not found, tell the user:
 ```
 ! git clone https://github.com/final-il/csi-discovery ~/git/csi-discovery
 ```
 
-Tell the user to type `! git clone https://github.com/final-il/csi-discovery ~/git/csi-discovery` in the prompt — the `!` prefix runs it interactively.
+Then configure git identity:
+```bash
+cd $REPO && git config user.email "USER@final.co.il" && git config user.name "User Name"
+```
 
-### 2. Identify the user
+### 2. MCP Atlassian — Jira configured
 
-Read git config email from the user's environment:
+Verify `mcp__mcp-atlassian__jira_search` tool is available. If not:
+- The user needs `mcp-atlassian` configured in `~/.claude/.mcp.json`
+- Required env vars: `JIRA_URL`, `JIRA_USERNAME`, `JIRA_API_TOKEN`
+- After config change: restart Claude Code or run `/mcp`
+
+### 3. MCP Atlassian — Confluence configured
+
+Verify `mcp__mcp-atlassian__confluence_create_page` tool is available. If not:
+- Add to the same `mcp-atlassian` server in `~/.claude/.mcp.json`:
+  - `CONFLUENCE_URL` — e.g., `https://yoursite.atlassian.net/wiki`
+  - `CONFLUENCE_USERNAME` — same email as Jira
+  - `CONFLUENCE_API_TOKEN` — Atlassian API token (can be same or different from Jira)
+- After config change: restart Claude Code or run `/mcp`
+
+### 4. GitHub MCP or CLI
+
+For scanning git repos, verify either:
+- `mcp__plugin_github_github__get_file_contents` tool is available, OR
+- `gh` CLI is authenticated (`gh auth status`)
+
+If neither: tell user to install the GitHub plugin from the official marketplace.
+
+### 5. User identified in teams.yaml
+
+Read git config email:
 ```bash
 git config user.email
 ```
 
-Then look up the email in `$REPO/config/teams.yaml` to determine their team.
-
-If the email is NOT in `teams.yaml`:
+Look up in `$REPO/config/teams.yaml`. If NOT found:
 - Tell the user: "Your email (X) isn't registered yet. Which team are you on?"
 - Once they answer, add them to `teams.yaml`, commit, and push
 
-### 3. Pull latest
+## Session Startup
 
-```bash
-cd $REPO && git pull
-```
+**Every time the skill is invoked, run these steps IN ORDER:**
 
-If conflicts exist, present them clearly and ask the user to resolve before continuing.
-
-### 4. Report status
-
-Inform the user:
-- Their team and role
-- Recent changes relevant to their team (from `git log --since="7 days ago" -- teams/<team>/`)
-- Current discovery status for their team (systems documented, gaps remaining)
+1. **Check prerequisites** — verify repo exists and MCP tools are available. If any missing, stop and guide setup.
+2. **Pull latest** — `cd $REPO && git pull`. If conflicts, present clearly and resolve before continuing.
+3. **Identify user** — git email → teams.yaml lookup → determine team and role.
+4. **Report context:**
+   - Their team and role (member vs lead)
+   - Recent changes relevant to their team (`git log --since="7 days ago" -- teams/<team>/`)
+   - Current discovery status (form filled? sources scanned? gaps remaining?)
+5. **Proceed** with the user's request.
 
 **All checks must pass before proceeding with any work.**
 
@@ -246,6 +268,92 @@ After discovery + scanning, produce `$REPO/teams/<team>/discovery.md`:
 - **Top quick wins:** [list]
 - **Key risks:** [list]
 ```
+
+## Source Scanning — How the Agent Investigates
+
+When a team lists external sources (repos, Confluence pages, server paths), the agent scans them systematically.
+
+### Git Repositories
+
+For each repo URL provided:
+
+1. **Clone or read via GitHub MCP:**
+   - Use `mcp__plugin_github_github__get_file_contents` for specific files
+   - Use `mcp__plugin_github_github__search_code` to find relevant files
+   - Look in the org `final-il` by default
+
+2. **What to look for:**
+   - `README.md` — purpose, setup instructions, architecture
+   - `*.tf`, `*.tfvars` — Terraform IaC (note modules, providers, state backend)
+   - `*.yaml`, `*.yml` — Ansible playbooks, Kubernetes manifests, CI/CD pipelines
+   - `Jenkinsfile`, `.github/workflows/`, `.gitlab-ci.yml` — CI/CD definitions
+   - `scripts/`, `bin/` — Shell scripts, Python automation
+   - `Dockerfile`, `docker-compose.yml` — Containerization
+   - `Makefile` — Build/deploy automation
+   - `.env.example`, `config/` — Configuration patterns
+   - Commit frequency and recency (`git log --oneline -10`)
+
+3. **Classify each finding:**
+   - **State:** Manual (no code) / Script (bash/python) / IaC (Terraform/Ansible/K8s)
+   - **Maturity:** Prototype / Working / Production / Maintained
+   - **Coverage:** Does the code cover the full system or just parts?
+
+### Confluence Pages
+
+For each Confluence link provided:
+
+1. **Read via MCP Atlassian:**
+   - Use `mcp__mcp-atlassian__confluence_get_page` with the page ID or space+title
+   - Use `mcp__mcp-atlassian__confluence_search` to find related pages
+
+2. **What to look for:**
+   - Architecture diagrams, network diagrams
+   - Runbooks and operational procedures
+   - System inventories and IP lists
+   - Change management records
+   - Onboarding/handover docs
+   - Last updated date (is it stale?)
+
+3. **Classify:**
+   - **Current:** Updated within 6 months
+   - **Stale:** 6-12 months without update
+   - **Outdated:** 12+ months, likely inaccurate
+
+### Server Paths / Shared Drives
+
+The agent CANNOT directly access servers or shared drives. When a team says "scripts are on server X at /path/":
+
+1. **Record the location** in discovery.md as-is
+2. **Ask the team member** to paste the file listing or key scripts into the conversation
+3. **Mark as "not scanned"** with reason: "requires direct server access"
+4. **Suggest:** Move to git repo for version control and visibility
+
+### What the Agent Records Per Source
+
+For every source scanned, write to `$REPO/teams/<team>/sources/`:
+
+```markdown
+# Source: [name]
+
+- **Type:** git-repo / confluence / server-path / shared-drive
+- **Location:** [URL or path]
+- **Scanned:** YYYY-MM-DD
+- **Access:** OK / Requires auth / Inaccessible
+- **Findings:**
+  - [list of what was found: files, docs, scripts, configs]
+- **State:** Manual / Script / IaC
+- **Gaps:**
+  - [what's missing, unclear, or outdated]
+- **Recommendation:**
+  - [e.g., "move to git", "update docs", "add CI/CD"]
+```
+
+### Scanning Strategy
+
+1. **Breadth first:** Quickly scan all listed sources, record what exists
+2. **Depth second:** For key systems, dive deep into code structure and docs
+3. **Flag gaps immediately:** If a source is inaccessible or empty, record it and move on
+4. **Cross-reference:** If multiple teams point to the same repo/page, note the overlap in `cross-team/dependencies.md`
 
 ## Interaction Modes
 
