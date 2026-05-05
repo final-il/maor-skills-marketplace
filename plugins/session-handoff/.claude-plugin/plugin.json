@@ -1,0 +1,5 @@
+{
+  "name": "session-handoff",
+  "description": "Capture session progress and create structured handoff notes so the next session can resume without rediscovery. Updates memory, CLAUDE.md, and optionally commits a checkpoint.",
+  "author": { "name": "Maor B", "email": "maorb@final.co.il" }
+}

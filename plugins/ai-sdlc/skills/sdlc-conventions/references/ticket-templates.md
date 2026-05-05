@@ -1,9 +1,31 @@
 # AI-SDLC Ticket Templates
 
-## Epic Template
+## QBV Template (Project Container)
 
 ```markdown
-# {Epic Title}
+# {Project Name} — {Short Description}
+
+## Overview
+{1-2 paragraph description of the product/project}
+
+## Tech Stack
+{Languages, frameworks, key libraries}
+
+## Repo
+{GitHub repo URL or path}
+
+## Epics
+- [ ] {Epic 1 title}
+- [ ] {Epic 2 title}
+- [ ] ...
+```
+
+## Epic Template
+
+**Naming convention:** Epic summaries MUST be prefixed with the project name and an em dash: `"{Project Name} — {Epic Title}"`. Example: `"Jiralyzer — Data Processing Pipeline"`.
+
+```markdown
+# {Project Name} — {Epic Title}
 
 ## Overview
 {1-2 paragraph description of the functional area}

@@ -11,6 +11,7 @@ A collection of custom skills, agents, and plugins for Claude Code.
 | [architecture-diagrams](plugins/architecture-diagrams/) | Generate architecture diagrams in Mermaid, PlantUML, and Draw.io formats |
 | [mac-expert](plugins/mac-expert/) | Apple macOS expert — system config, diagnostics, shell, networking, Homebrew, security, performance, troubleshooting |
 | [jiralyzer](plugins/jiralyzer/) | Jira ticket analytics — natural language queries, SQL generation, DuckDB, interactive Plotly charts |
+| [csi-discovery](plugins/csi-discovery/) | CSI Department discovery agent — maps teams' systems, processes, tooling, and pain points through structured forms, source scanning, and Confluence integration |
 
 ## Plugins
 
@@ -25,12 +26,15 @@ A collection of custom skills, agents, and plugins for Claude Code.
 | sdlc-planner | Breaks projects into epics/stories with acceptance criteria | opus |
 | sdlc-jira-creator | Creates Jira tickets with hierarchy and links | sonnet |
 | sdlc-architect | Designs technical specs per story | opus |
+| sdlc-designer | UI/UX design specs — layouts, colors, wireframes (optional, user-facing stories only) | opus |
 | sdlc-developer | Implements code, commits, opens PRs | opus |
 | sdlc-tester | Writes and runs tests | sonnet |
 | sdlc-qa-reviewer | Reviews code quality and requirement compliance | opus |
 | sdlc-bug-fixer | Fixes bugs found by tester/QA | sonnet |
 
-**Usage:** `/sdlc "project description"` or `/sdlc /path/to/plan.md`
+**Usage:** `/sdlc "project description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KEY` (resume)
+
+**Branching:** Auto-detects dev/prod model (dev + main branches) or single-branch. PRs target the correct branch automatically. Promotion (dev → main) offered at completion with user approval.
 
 ## Structure
 

@@ -14,41 +14,47 @@ description: |
 
 You help users analyze Jira ticket data using the `jiralyzer` CLI tool. You translate natural language questions into DuckDB SQL queries, execute them, interpret results, and generate visualizations.
 
+## First-Time Setup
+
+Before doing anything else, verify the environment is ready by running the setup script. **Tell the user to run it interactively** — it prompts for credentials and configures everything:
+
+```
+! /Users/maorb/git-dev/jiralyzer/setup.sh
+```
+
+Tell the user to type `! /Users/maorb/git-dev/jiralyzer/setup.sh` in the Claude Code prompt — the `!` prefix runs it interactively so the user can provide input.
+
+The script handles:
+1. Installs `uv` if missing
+2. Prompts for Jira credentials and paths, creates `.env`
+3. Runs `uv sync` with SSL cert for corporate proxy
+4. Verifies `jiralyzer` CLI works
+5. Creates chart output directory
+6. Tests Jira API connectivity
+
+**All checks must pass (green).** If any fail (red), the script tells the user what to fix and they re-run it. **Do not proceed with any analysis until setup reports all green.**
+
 ## How to Run Commands
 
-Jiralyzer is a Python package managed with `uv`. **All commands must be run from the jiralyzer project directory using `uv run`:**
+**All commands use the `run.sh` wrapper.** It sources `.env`, sets the working directory, and passes arguments to `jiralyzer`:
 
 ```bash
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer <command> [args...]
+/Users/maorb/git-dev/jiralyzer/run.sh <command> [args...]
 ```
 
-Every `jiralyzer` command shown in this skill should be run this way. For example:
-- `jiralyzer stats` → `cd /Users/maorb/git/jiralyzer && uv run jiralyzer stats`
-- `jiralyzer query "SELECT ..."` → `cd /Users/maorb/git/jiralyzer && uv run jiralyzer query "SELECT ..."`
-
-The default database path is `jiralyzer.db` in the current directory (`/Users/maorb/git/jiralyzer/jiralyzer.db`). Use `--db <path>` to override.
-
-## Data Loading
-
-Before querying, ensure data is in the database. The `sync` command pulls directly from Jira REST API:
-
+Examples:
 ```bash
-# Set Jira credentials (one-time setup)
-export JIRA_URL=https://your-site.atlassian.net
-export JIRA_EMAIL=your-email@example.com
-export JIRA_API_TOKEN=your-api-token
-
-# Full sync — all issues in a project
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer sync --project <KEY>
-
-# Incremental sync — only issues updated since a date
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer sync --project <KEY> --since 2026-04-01
-
-# Optionally save raw JSON export
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer sync --project <KEY> --output export.json
+/Users/maorb/git-dev/jiralyzer/run.sh stats
+/Users/maorb/git-dev/jiralyzer/run.sh query "SELECT * FROM tickets LIMIT 5"
+/Users/maorb/git-dev/jiralyzer/run.sh sync --project CREQ
 ```
 
-The sync command fetches all issues with `expand=changelog` (full history including status changes, assignments, worklogs) and automatically ingests them into DuckDB.
+For brevity, the rest of this document shows commands as:
+```bash
+run.sh <command> [args...]
+```
+
+But **every invocation** must use the full path `/Users/maorb/git-dev/jiralyzer/run.sh`.
 
 ## Workflow
 
@@ -62,14 +68,14 @@ When the user asks an analytics question:
 
 2. **Check which projects are in the database:**
    ```bash
-   cd /Users/maorb/git/jiralyzer && uv run jiralyzer query "SELECT project, COUNT(*) as count FROM tickets GROUP BY project ORDER BY count DESC"
+   run.sh query "SELECT project, COUNT(*) as count FROM tickets GROUP BY project ORDER BY count DESC"
    ```
 
 3. **If the requested project is NOT in the results, sync it first:**
    ```bash
-   cd /Users/maorb/git/jiralyzer && uv run jiralyzer sync --project <KEY>
+   run.sh sync --project <KEY>
    ```
-   This requires JIRA_URL, JIRA_EMAIL, and JIRA_API_TOKEN environment variables. If they're not set, ask the user to set them.
+   If sync fails, stop and report the error to the user. Do not attempt alternative data loading methods.
 
 4. **If the database has no data at all**, ask the user for their Jira project key and run sync.
 
@@ -77,7 +83,7 @@ When the user asks an analytics question:
 
 ### 2. Understand the schema
 
-Run `cd /Users/maorb/git/jiralyzer && uv run jiralyzer schema` to get the current table structure. The database has 6 tables:
+Run `run.sh schema` to get the current table structure. The database has 6 tables:
 
 - **tickets** — One row per Jira issue (key, status, assignee, priority, resolution_days, etc.)
 - **status_changes** — Status transition history from changelog
@@ -101,10 +107,10 @@ Translate the user's question into DuckDB SQL. Key considerations:
 
 ```bash
 # For data analysis
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer query "<sql>" --format json
+run.sh query "<sql>" --format json
 
 # For display to user
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer query "<sql>" --format table
+run.sh query "<sql>" --format table
 ```
 
 Always explain what the results mean in context. Don't just show numbers — provide insights.
@@ -114,7 +120,7 @@ Always explain what the results mean in context. Don't just show numbers — pro
 If the results benefit from a chart, generate one:
 
 ```bash
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer chart "<sql>" --type <chart_type> --x <col> --y <col> --output chart.png
+run.sh chart "<sql>" --type <chart_type> --x <col> --y <col> --output /Users/maorb/git-dev/jiralyzer/charts/<name>.png
 ```
 
 See `references/visualization-guide.md` for chart type selection guidance.
@@ -138,7 +144,7 @@ When the user asks to **categorize**, **classify**, **segment**, or **understand
 
 1. **Sample first, don't dump everything.** Query a representative batch (50-100 tickets) with summaries:
    ```bash
-   cd /Users/maorb/git/jiralyzer && uv run jiralyzer query "SELECT key, summary, issue_type, priority, status, assignee FROM tickets WHERE project = '<KEY>' ORDER BY key LIMIT 100" --format json
+   run.sh query "SELECT key, summary, issue_type, priority, status, assignee FROM tickets WHERE project = '<KEY>' ORDER BY key LIMIT 100" --format json
    ```
 
 2. **Read and understand the summaries yourself.** Look for themes, patterns, team names, work types, naming conventions, repeated structures. You are the classifier — not SQL.
@@ -166,7 +172,7 @@ When the user asks to **categorize**, **classify**, **segment**, or **understand
 **Always prefer the `jiralyzer chart` CLI** for visualizations. It produces professional styled PNG charts automatically.
 
 ```bash
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer chart "<sql>" --type bar --x <col> --y <col> --output chart.png
+run.sh chart "<sql>" --type bar --x <col> --y <col> --output /Users/maorb/git-dev/jiralyzer/charts/<name>.png
 ```
 
 If you need a custom visualization that the CLI can't produce:
@@ -176,7 +182,7 @@ If you need a custom visualization that the CLI can't produce:
    import matplotlib.pyplot as plt
    # ... your code ...
    PYEOF
-   cd /Users/maorb/git/jiralyzer && .venv/bin/python3 /tmp/chart_script.py
+   /Users/maorb/git-dev/jiralyzer/.venv/bin/python3 /tmp/chart_script.py
    ```
 2. Keep scripts short — one chart per script, not six.
 3. Use the jiralyzer `.venv` Python so matplotlib is available.
@@ -201,8 +207,8 @@ If you need a custom visualization that the CLI can't produce:
 For a quick overview, run:
 
 ```bash
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer stats              # Text summary
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer stats --format json  # Machine-readable
+run.sh stats              # Text summary
+run.sh stats --format json  # Machine-readable
 ```
 
 This shows: table row counts, date ranges, status distribution, top assignees, resolution metrics.
@@ -212,16 +218,16 @@ This shows: table row counts, date ranges, status distribution, top assignees, r
 For downstream analysis (Snowflake, BigQuery, etc.):
 
 ```bash
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer export-parquet ./exports/                    # All tables
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer export-parquet ./exports/ --tables tickets    # Specific tables
-cd /Users/maorb/git/jiralyzer && uv run jiralyzer export-parquet ./exports/ --compression zstd  # Better compression
+run.sh export-parquet ./exports/                    # All tables
+run.sh export-parquet ./exports/ --tables tickets    # Specific tables
+run.sh export-parquet ./exports/ --compression zstd  # Better compression
 ```
 
 ## Rules
 
-- Always run commands via `cd /Users/maorb/git/jiralyzer && uv run jiralyzer <command>` — never use bare `jiralyzer`
-- Never access the database directly — always use the CLI
-- Default DB path is `jiralyzer.db` in the jiralyzer project directory; use `--db <path>` to override
+- **Always use `run.sh` to invoke commands.** Full path: `/Users/maorb/git-dev/jiralyzer/run.sh <command>`. Never call `jiralyzer` directly or source `.env` manually.
+- Never access the database directly — always use the CLI via `run.sh`
+- **If `run.sh` fails with ".env not found", tell the user to run `setup.sh` first.** Do not attempt workarounds.
 - **Always identify the target project first.** Check which projects are loaded, sync if needed, and filter all queries with `WHERE project = '<KEY>'` when multiple projects exist
 - When generating SQL, prefer CTEs over subqueries for readability
 - Always LIMIT results for exploratory queries (LIMIT 20 default)
