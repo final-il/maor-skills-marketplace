@@ -1,0 +1,5 @@
+{
+  "name": "csi-discovery",
+  "description": "CSI Department discovery and documentation agent. Guides structured discovery of teams' systems, processes, tooling, and pain points. Creates Confluence forms, ingests responses, scans sources, enriches data, and publishes structured output.",
+  "author": { "name": "Maor B", "email": "maorb@final.co.il" }
+}

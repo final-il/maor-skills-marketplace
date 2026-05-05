@@ -11,6 +11,7 @@ A collection of custom skills, agents, and plugins for Claude Code.
 | [architecture-diagrams](plugins/architecture-diagrams/) | Generate architecture diagrams in Mermaid, PlantUML, and Draw.io formats |
 | [mac-expert](plugins/mac-expert/) | Apple macOS expert — system config, diagnostics, shell, networking, Homebrew, security, performance, troubleshooting |
 | [jiralyzer](plugins/jiralyzer/) | Jira ticket analytics — natural language queries, SQL generation, DuckDB, interactive Plotly charts |
+| [csi-discovery](plugins/csi-discovery/) | CSI Department discovery agent — maps teams' systems, processes, tooling, and pain points through structured forms, source scanning, and Confluence integration |
 
 ## Plugins
 
