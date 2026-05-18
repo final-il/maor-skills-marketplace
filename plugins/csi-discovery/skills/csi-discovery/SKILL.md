@@ -158,22 +158,29 @@ The dev branch is the working branch. Promote `dev` → `main` only when explici
 
 ## Jira Structure (CSI Velocity)
 
-The CSI Velocity project lives in the `CSI` Jira project. Hierarchy:
+The CSI Velocity project lives in the **`CSIPLN`** Jira project (CSI Plans). Hierarchy:
 
 ```
-QBV: CSI-265 — CSI Velocity
-├── Epic: CSI-266 — VSO Discovery & Improvements
-├── Epic: CSI-267 — Network Discovery & Improvements
-├── Epic: CSI-268 — DC Ops Discovery & Improvements
-├── Epic: CSI-269 — Helpdesk Discovery & Improvements
-├── Epic: CSI-270 — DevOps Discovery & Improvements
-├── Epic: CSI-271 — Security Discovery & Improvements
-├── Epic: CSI-272 — SOS Discovery & Improvements
-├── Epic: CSI-273 — IT Architecture Discovery & Improvements
-├── Epic: CSI-274 — FinOps Discovery & Improvements
-├── Epic: CSI-275 — CISO Discovery & Improvements
-└── Epic: CSI-276 — Cross-Team Initiatives
+QBV: CSIPLN-1377 — CSI Velocity
+├── Epic: CSIPLN-1217 — VSO Discovery & Improvements
+├── Epic: CSIPLN-1215 — Network Discovery & Improvements
+├── Epic: CSIPLN-1216 — DC Ops Discovery & Improvements
+├── Epic: CSIPLN-1213 — Helpdesk Discovery & Improvements
+├── Epic: CSIPLN-1223 — DevOps Discovery & Improvements
+├── Epic: CSIPLN-1221 — Security Discovery & Improvements
+├── Epic: CSIPLN-1220 — SOS Discovery & Improvements
+├── Epic: CSIPLN-1222 — IT Architecture Discovery & Improvements
+├── Epic: CSIPLN-1219 — FinOps Discovery & Improvements
+├── Epic: CSIPLN-1218 — CISO Discovery & Improvements
+└── Epic: CSIPLN-1214 — Cross-Team Initiatives
 ```
+
+**Discovery meeting & summary stories (per team):**
+- VSO: CSIPLN-1226 · Network: CSIPLN-1232 · DC Ops: CSIPLN-1239 · Helpdesk: CSIPLN-1243
+- DevOps: CSIPLN-1247 · Security: CSIPLN-1248 · SOS: CSIPLN-1249
+- IT Architecture: CSIPLN-1250 · FinOps: CSIPLN-1251 · CISO: CSIPLN-1252
+
+**Migration note (2026-05-18):** the project was migrated from the `CSI` Jira project to `CSIPLN`. Old keys (CSI-253..CSI-293, CSI-396..CSI-416) are retired; use the new CSIPLN keys above.
 
 **Per team epic:**
 - One `Discovery meeting & summary — <Team>` story (the meeting itself)
@@ -197,7 +204,7 @@ After the decision gate, if `proceed`, additional implementation subtasks are ad
 - Quick-win stories: `quick-win`
 - Cross-team stories: `cross-team`
 
-**Cross-team dependencies:** use Jira `Blocks` links between QW stories (not subtasks). Example: `CSI-291` (auto-approve rules engine) blocks `CSI-282` (firewall rule automation).
+**Cross-team dependencies:** use Jira `Blocks` links between QW stories (not subtasks). Example: `CSIPLN-1254` (auto-approve rules engine) blocks `CSIPLN-1233` (firewall rule automation).
 
 ## Confluence Pages — Key IDs
 
@@ -276,18 +283,20 @@ Inputs the user typically provides: the meeting summary text (often the email se
    b. **Quick Win Tracker** → append one row per quick win (number / team / title / effort / value / dependencies / status `Investigating`)
    c. **Cross-Team Dependencies** → append rows for any cross-team items, with links to the affected teams' meeting Jira tickets
 
-4. **Jira** — under the team's epic (CSI-266..CSI-276):
+4. **Jira** — under the team's epic in **CSIPLN** (CSIPLN-1213..CSIPLN-1223, see Jira Structure section above):
    - Create one `QW — <title>` story per quick win. Set parent to the team epic, labels `["csi-velocity", "team-<slug>", "quick-win"]`. Description should include effort/value/dependencies and link to the meeting summary page.
    - For each QW story, create the **6 standard subtasks** (issue type `Sub-task`, parent set to the QW story, labels matching the parent except `quick-win` is dropped from subtasks). **Do NOT set `customfield_10001` on subtasks** — Jira rejects it ("subtask inherits team from parent"); team is inherited from the parent QW story.
-   - For cross-team quick wins, create the QW story under `CSI-276` with labels `["csi-velocity", "cross-team", "quick-win"]` and add `Blocks` issue links per the dependency table.
+   - For cross-team quick wins, create the QW story under `CSIPLN-1214` (Cross-Team Initiatives epic) with labels `["csi-velocity", "cross-team", "quick-win"]` and add `Blocks` issue links per the dependency table.
 
-5. **Close the discovery story** — transition the team's `Discovery meeting & summary — <Team>` story (CSI-254..CSI-263, e.g. CSI-256 for Helpdesk) to **Done** using `jira_transition_issue` with `transition_id: 41`. Then add a comment listing the outputs: discovery doc URL (raw github.com link to the file on `dev`), meeting summary page URL, discovery form URL, project tracker URL, the new QW story keys + sub-task range, any cross-team `Blocks` links created. **Note:** the `comment` parameter on `jira_transition_issue` rejects markdown — pass an empty/no comment on the transition and use `jira_add_comment` (markdown-friendly) immediately after.
+5. **Close the discovery story** — transition the team's `Discovery meeting & summary — <Team>` story (CSIPLN-1226 VSO, CSIPLN-1232 Network, CSIPLN-1239 DC Ops, CSIPLN-1243 Helpdesk, CSIPLN-1247 DevOps, CSIPLN-1248 Security, CSIPLN-1249 SOS, CSIPLN-1250 IT-Arch, CSIPLN-1251 FinOps, CSIPLN-1252 CISO) to **Done** using `jira_transition_issue` with `transition_id: 41`. Then add a comment listing the outputs: discovery doc URL (raw github.com link to the file on `dev`), meeting summary page URL, discovery form URL, project tracker URL, the new QW story keys + sub-task range, any cross-team `Blocks` links created. **Note:** the `comment` parameter on `jira_transition_issue` rejects markdown — pass an empty/no comment on the transition and use `jira_add_comment` (markdown-friendly) immediately after.
 
-**Comment formatting — write URLs as plain bare URLs and ALWAYS add a trailing space after each URL.** Both `[label](url)` markdown and `[label|url]` wiki-link syntax render as literal text in this Jira instance (the MCP→ADF conversion strips the link mark). Bare URLs work, but only if followed by whitespace before the newline — `URL\n` does NOT auto-linkify, while `URL \n` (space then newline) does. Pattern: `Label: https://... ` (note the trailing space) on its own line, blank line between entries. Jira auto-linkifies issue keys (`CSI-396`) without any special treatment.
+**Comment formatting — write URLs as plain bare URLs and ALWAYS add a trailing space after each URL.** Both `[label](url)` markdown and `[label|url]` wiki-link syntax render as literal text in this Jira instance (the MCP→ADF conversion strips the link mark). Bare URLs work, but only if followed by whitespace before the newline — `URL\n` does NOT auto-linkify, while `URL \n` (space then newline) does. Pattern: `Label: https://... ` (note the trailing space) on its own line, blank line between entries. Jira auto-linkifies issue keys (`CSIPLN-1244`) without any special treatment.
 
 **Parallelism:** the Jira step can fire epic / story / subtask creates in parallel groups of 6–10. Subtasks need their parent story key, so create stories first, then subtasks. The `jira_batch_create_issues` endpoint does NOT accept `parent` for subtasks — use `jira_create_issue` for subtasks one-by-one (parallel calls work fine).
 
-**Parent linking:** in `additional_fields`, set `parent` as a **string** (`"parent": "CSI-269"`), not an object — the MCP create-issue tool rejects `{"key": "..."}`.
+**Parent linking:** in `additional_fields`, set `parent` as a **string** (`"parent": "CSIPLN-1213"`), not an object — the MCP create-issue tool rejects `{"key": "..."}`.
+
+**Project key for `jira_create_issue` calls: `CSIPLN`** (was previously `CSI`).
 
 ### `/scan <team>`
 Scan the external sources listed in a team's form response. Access repos, Confluence pages, shared docs — and enrich the discovery output with what's found. Report findings and gaps.
