@@ -116,7 +116,12 @@ In this mode, the orchestrator:
 
 1. Parse `$ARGUMENTS` to determine input type
 2. If file path: read the file content
-3. If Jira key: fetch the epic and its child stories to determine pipeline state
+3. If Jira key (resume): use **one** `mcp__mcp-atlassian__jira_search` call to get the epic + all child stories with routing fields only:
+   ```
+   JQL: key = {EPIC-KEY} OR parent = {EPIC-KEY}
+   fields: ["summary", "status", "issuetype", "parent", "labels"]
+   ```
+   The orchestrator routes by status. Descriptions and comments are read by the spawned agent under its artifact-discipline contract.
 
 4. **Jira project:** Always use `CSI` (CSI-PM). Do NOT ask the user which project — it is always CSI.
 
@@ -480,9 +485,8 @@ This applies to all phases that run shell commands (Phase 4–7). Pass this envi
 ## Resume Support
 
 When `$ARGUMENTS` is a Jira epic key:
-1. Fetch the epic and all child stories
-2. Check each story's status
-3. Resume from where the pipeline left off, by Story status:
+1. Fetch the epic + child stories with one `jira_search` call, fields: `["summary", "status", "issuetype", "parent", "labels"]`. Do NOT pull descriptions or comments — agents fetch their own story when spawned.
+2. For each story, route by status:
    - "Backlog" / "To Do" → Phase 3 (Architecture)
    - "Selected for Development" / "Ready for Dev" → Phase 4 (Develop)
    - "In Progress" → check for open child Bugs (`parent = X AND issuetype = Bug AND status != Done`):
