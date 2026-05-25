@@ -59,6 +59,37 @@ Parse these flags from `$ARGUMENTS` before processing:
 
 Strip flags from `$ARGUMENTS` before using the remaining text as the project description.
 
+## User-Reported Bugs
+
+When the user (not an agent) reports a bug — typically while testing a Done story — file it as a `Bug` sub-task and route it through the standard Phase 7 fixer flow. CSI supports the `Bug` issuetype natively; never use `Subtask` as a fallback.
+
+**Trigger:** the user says something like "this story is broken", "PROJ-105 has a bug", or "when I run X I get Y error" while a story is in `Done` (or anywhere downstream of the developer phase).
+
+**Flow:**
+
+1. **Identify the parent Story.** If the user gave a story key, use it. Otherwise ask one clarifying question to pin down which story owns the broken behavior.
+2. **Create the Bug** with `mcp__mcp-atlassian__jira_create_issue`:
+   - `issue_type: "Bug"`
+   - `additional_fields.parent`: the parent story key
+   - `additional_fields.labels`: `["ai-sdlc", "{project_name}", "user-reported"]`
+   - Description follows the Bug template in `sdlc-conventions` ticket-templates: one-line root-cause hypothesis (or "unknown"), steps to reproduce as the user described them, expected vs actual.
+3. **Reopen the parent Story** if it was `Done`: transition it to `Bug` (uses the Transition Map).
+4. **Ensure the worktree exists** for the parent story:
+   ```bash
+   if [ ! -d "{repo_path}.worktrees/{STORY-KEY}" ]; then
+     git -C {repo_path} fetch origin
+     git -C {repo_path} worktree add "{repo_path}.worktrees/{STORY-KEY}" "{STORY-KEY}/{slug}"
+   fi
+   ```
+   If the original feature branch was deleted post-merge, branch the fix from `{base_branch}` with a new slug like `{BUG-KEY}/fix-{short-desc}` instead.
+5. **Spawn `sdlc-bug-fixer` as a general-purpose `Agent()`** (per "How to Spawn Agents") with the standard context block, the Bug key, and the parent story key. The bug fixer treats user-reported bugs identically to agent-reported ones.
+6. **Run Phase 5 (Test) → Phase 6 (QA)** on the parent story when the bug fixer finishes. Same loop as a normal failure — up to 3 bug-fix iterations before flagging for human review.
+
+**Do NOT:**
+- ❌ Fix the bug yourself in the orchestrator — always delegate to `sdlc-bug-fixer`.
+- ❌ Skip the test/QA phases after the fix — even small fixes go through the full loop.
+- ❌ File the Bug as a top-level issue without a parent — the bug-fixer needs the parent story for context.
+
 ## Feedback Loop — Bugs and New Features from Testing
 
 When the product is already built and the user reports a bug or requests a feature discovered during testing:

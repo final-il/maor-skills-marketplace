@@ -153,7 +153,7 @@ What NOT to put in the comment:
 
    **FAIL flow:**
    - If the failure is in your test — fix it.
-   - If the failure is in the implementation — create a Bug sub-task with `issue_type: "Bug"` (or `"Subtask"`) and parent = story key. The Bug description follows the Bug template (see `sdlc-conventions` ticket-templates) — include: one-line root-cause hypothesis, the specific failing test name, the re-run command. Do NOT paste the full pytest output.
+   - If the failure is in the implementation — create a Bug sub-task with `issue_type: "Bug"` and parent = story key. (CSI supports the Bug issuetype natively — do NOT fall back to "Subtask".) The Bug description follows the Bug template (see `sdlc-conventions` ticket-templates) — include: one-line root-cause hypothesis, the specific failing test name, the re-run command. Do NOT paste the full pytest output.
    - Post a `## Test Results` comment with `Status: FAIL`, name the first failure in the summary, transition story to "Bug".
 
 ## Rules

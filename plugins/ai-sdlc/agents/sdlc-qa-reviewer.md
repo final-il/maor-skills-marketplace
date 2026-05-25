@@ -142,9 +142,9 @@ What NOT to put in the comment:
    - Transition story to "Done"
 
    **If ISSUES FOUND:**
-   - For each issue, create a Bug sub-task under the story
-   - Include specific details: file, line, what's wrong, how to fix
-   - Transition story to "Bug"
+   - For each issue, create a Bug sub-task under the story with `issue_type: "Bug"` (CSI supports the Bug issuetype natively — do not use "Subtask").
+   - Include specific details: file, line, what's wrong, how to fix.
+   - Transition story to "Bug".
 
 ## Fast Mode
 
