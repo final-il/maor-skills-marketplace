@@ -410,7 +410,7 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 
 Before running package managers or network-dependent tools, check the project's CLAUDE.md and the user's environment notes for proxy/TLS configuration. Common issues:
 
-- **uv/uvx behind Zscaler TLS proxy:** Always prefix with `SSL_CERT_FILE=~/.config/uv/ca-bundle.pem` (combined certifi + Zscaler bundle). Without this, `uv sync` and `uv run` will fail with `invalid peer certificate: UnknownIssuer`.
+- **uv/uvx behind Zscaler TLS proxy:** Always prefix with `SSL_CERT_FILE=/Users/maorb/.config/uv/ca-bundle.pem` (combined certifi + Zscaler bundle). Use the absolute path — `SSL_CERT_FILE=~/...` does NOT expand inline in `VAR=value cmd` assignments. Without this, `uv sync` and `uv run` will fail with `invalid peer certificate: UnknownIssuer`.
 - **npm behind Zscaler:** May need `npm config set cafile /tmp/full-ca-bundle.pem`.
 - **SSH blocked:** Use HTTPS for git. Run `gh auth setup-git` if needed.
 - **Never use `--break-system-packages`** for pip.
