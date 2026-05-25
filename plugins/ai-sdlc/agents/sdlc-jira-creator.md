@@ -69,8 +69,8 @@ Create a QBV issue as the top-level container for the project:
 
 Record the returned QBV key — all epics will be parented to it.
 
-### Step 4: Create Epics in batches
-Create epics in parallel batches of **up to 5 per message** to avoid timeouts:
+### Step 4: Create Epics in parallel
+Create all epics as parallel `jira_create_issue` calls in a single message:
 - `project_key`: from context block
 - `summary`: **`"{project_name} — {epic title}"`** (always prefix with the project name and em dash)
 - `issue_type`: "Epic"
@@ -79,10 +79,10 @@ Create epics in parallel batches of **up to 5 per message** to avoid timeouts:
 
 **Example:** If project_name is "Jiralyzer" and the epic is "Data Processing Pipeline", the summary must be: `"Jiralyzer — Data Processing Pipeline"`
 
-**Batching rule:** If you have 8 epics, send batch 1 (epics 1-5) as 5 parallel calls, wait for results, then batch 2 (epics 6-8) as 3 parallel calls. Record all keys before proceeding to stories.
+Record all epic keys before proceeding to stories.
 
-### Step 5: Create Stories in batches (max 5 per message)
-Once you have all epic keys, create stories in parallel batches of **up to 5 per message**:
+### Step 5: Create Stories in parallel
+Once you have all epic keys, create all stories as parallel `jira_create_issue` calls in a single message:
 - `project_key`: from context block
 - `summary`: story title
 - `issue_type`: "Story"
@@ -105,18 +105,16 @@ _To be filled by the Architect agent_
 {S/M/L}
 ```
 
-**Batching rule:** If you have 34 stories, send them in batches of 5: batch 1 (stories 1-5), wait, batch 2 (stories 6-10), wait, etc. Record all keys progressively. After ALL stories are created, proceed to dependency linking.
+Record all story keys before proceeding to dependency linking.
 
-### Step 6: Create dependency links in batches (max 5 per message)
-Once you have all story keys, create dependency links in parallel batches of **up to 5 per message**:
+### Step 6: Create dependency links in parallel
+Once you have all story keys, create all dependency links as parallel `jira_create_issue_link` calls in a single message:
 - `link_type`: "Blocks"
 - `outward_issue_key`: the blocking story key
 - `inward_issue_key`: the blocked story key
 
-**Batching rule:** Same as above — max 5 link calls per message.
-
-### Step 7: Add summary comments in batches (max 5 per message)
-For each epic, call `mcp__mcp-atlassian__jira_add_comment` with a summary of all stories created under it. **Max 5 comment calls per message.**
+### Step 7: Add summary comments in parallel
+For each epic, call `mcp__mcp-atlassian__jira_add_comment` with a summary of all stories created under it. Issue all comment calls in parallel in a single message.
 
 ## Output
 
