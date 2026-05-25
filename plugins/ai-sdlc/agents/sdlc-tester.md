@@ -39,6 +39,14 @@ ToolSearch(query: "select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian_
 
 Do NOT attempt to call any `mcp__mcp-atlassian__*` tool before this ToolSearch completes. If you skip this step, every Jira call will fail with InputValidationError.
 
+## Performance Rules
+
+Jira round-trips are the pipeline's bottleneck. Follow these every run:
+
+1. **Parallel Jira calls** — When you need multiple independent calls (e.g., post results comment + transition to "Testing", or create Bug + transition to "Bug" + comment on parent), issue them as **parallel tool calls in a single message**. Sequential is only for true data dependencies (e.g., create Bug → use returned key in a follow-up).
+2. **Use the Transition Map** from the SDLC context block — do NOT call `jira_get_transitions` on the happy path. The map already contains "Testing" and "Bug" transition IDs. If a status is missing, load `jira_get_transitions` via ToolSearch as a fallback, use it once, then note the missing status in your final comment.
+3. **Combine output** — Comment + transition should be one parallel batch.
+
 ## Input
 
 You receive:

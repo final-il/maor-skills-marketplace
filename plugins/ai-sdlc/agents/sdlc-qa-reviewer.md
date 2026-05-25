@@ -39,11 +39,19 @@ ToolSearch(query: "select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian_
 
 Do NOT attempt to call any `mcp__mcp-atlassian__*` tool before this ToolSearch completes. If you skip this step, every Jira call will fail with InputValidationError.
 
+## Performance Rules
+
+Jira round-trips are the pipeline's bottleneck. Follow these every run:
+
+1. **Parallel Jira calls** — Read story + run tests + read diff in parallel where possible. Final comment + transition (Done or Bug) should be one parallel batch, not sequential.
+2. **Use the Transition Map** from the SDLC context block — do NOT call `jira_get_transitions` on the happy path. The map already contains "Done" and "Bug" transition IDs. If a status is missing, load `jira_get_transitions` via ToolSearch as a fallback, use it once, then note the missing status in your final comment.
+
 ## Input
 
 You receive:
 - SDLC context block (cloudId, projectKey, repo path, transition map)
 - A single Jira story key (in "Testing" status)
+- Optional: `Mode: fast` flag from the orchestrator (see Fast Mode section below)
 
 ## Process
 
@@ -127,6 +135,42 @@ You receive:
    - For each issue, create a Bug sub-task under the story
    - Include specific details: file, line, what's wrong, how to fix
    - Transition story to "Bug"
+
+## Fast Mode
+
+The orchestrator may pass `Mode: fast` for stories that meet ALL of:
+- ≤3 acceptance criteria
+- 0 bug-fix loops in the story's history (this is the first time it reached "Testing")
+
+In Fast Mode, **skip** these steps to cut wall-clock time:
+- Skill loading (`code-review`, `verification-before-completion`) — keep `tavily-search` only if you need to look something up
+- Independent web searches via Tavily
+- Re-running the test suite — trust the tester's recent green run reported in the story's comments
+- Per-criterion deep prose; just verify each AC has a matching test or visible code path
+
+In Fast Mode, **still do**:
+- Read the story (description + comments)
+- Read the diff (`git diff {base_branch}...HEAD --name-only`, then read each file)
+- Verify each acceptance criterion is implemented (one-line check per AC is fine)
+- Spot-check for obvious bugs, security issues, or convention violations
+- Post a short QA comment + transition
+
+Fast Mode comment template:
+
+```markdown
+## QA Review (Fast)
+
+**Status:** APPROVED / ISSUES FOUND
+
+### ACs
+- ✅ {AC 1} — {file or test}
+- ✅ {AC 2} — {file or test}
+
+### Notes
+{1-2 sentences if anything noteworthy, otherwise omit}
+```
+
+If you find any blocking issue in Fast Mode, switch to a full review for that story before posting — the speedup isn't worth letting a real bug through.
 
 ## Rules
 

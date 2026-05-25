@@ -111,3 +111,42 @@ The AI-SDLC pipeline requires the standalone `mcp-atlassian` MCP server (configu
 7. **Commit messages** — Always include the Jira ticket key: `{STORY-KEY}: {summary}`
 8. **Branch naming** — Use `{story-key}/{short-slug}` (e.g., `PROJ-42/xml-parser`)
 9. **PR target** — Always use `--base {pr_target_branch}` when creating PRs
+
+## Performance Rules — How Agents Use Jira
+
+Every agent should treat Jira round-trips as the bottleneck of the pipeline. Follow these rules in every agent run:
+
+### 1. Parallelize Jira reads and writes
+
+When you need multiple independent Jira calls (e.g., reading a parent story + a child bug, or transitioning a ticket + adding a comment), issue them as **parallel tool calls in a single message**. Do NOT chain them sequentially.
+
+**Examples:**
+- Reading the bug + parent story → one message, two `jira_get_issue` calls
+- Posting a result comment + transitioning status → one message, two calls
+- Reading multiple stories in a batch → one message, N calls
+
+The only time calls must be sequential is when the result of one is the input to the next (e.g., create issue → use returned key to create a link).
+
+### 2. Use the transition map from the orchestrator's context block
+
+The orchestrator discovers the project's transition IDs once in Phase 0 and passes them in every agent prompt as `Transition Map: {status_name: transition_id, ...}`.
+
+**Always use the map first.** Do NOT call `mcp__mcp-atlassian__jira_get_transitions` on the happy path — the map already has what you need.
+
+```
+# Pseudo-code for transitioning to "Ready for Dev":
+transition_id = transition_map["Ready for Dev"]
+mcp__mcp-atlassian__jira_transition_issue(issue_key, transition_id)
+```
+
+**Fallback** — If the status you need is **not** in the map (rare; usually means the workflow has a status you haven't seen):
+1. Load `jira_get_transitions` via ToolSearch
+2. Call it once to find the missing transition ID
+3. Proceed with `jira_transition_issue`
+4. Note the missing status in your final Jira comment so the orchestrator can refresh the map
+
+This means individual agents do NOT include `jira_get_transitions` in their startup ToolSearch — they only load it on miss.
+
+### 3. Batch comment + transition where the API allows
+
+A single status-change message often combines "post results" + "move to next status". Always issue them as **parallel calls**, not sequential — the order doesn't matter and the API handles both independently.

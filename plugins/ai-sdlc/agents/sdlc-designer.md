@@ -39,6 +39,13 @@ ToolSearch(query: "select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian_
 
 Do NOT attempt to call any `mcp__mcp-atlassian__*` tool before this ToolSearch completes. If you skip this step, every Jira call will fail with InputValidationError.
 
+## Performance Rules
+
+Jira round-trips are the pipeline's bottleneck. Follow these every run:
+
+1. **Parallel Jira calls** — When reading related context (e.g., parent story + sibling design specs) or designing multiple stories, issue independent calls as **parallel tool calls in a single message**.
+2. **Use the Transition Map** from the SDLC context block if you ever need to transition — do NOT call `jira_get_transitions` on the happy path.
+
 ## Input
 
 You receive:

@@ -34,10 +34,18 @@ You are running as a subagent. MCP tools are NOT available until you load them w
 **Your VERY FIRST action must be this ToolSearch call:**
 
 ```
-ToolSearch(query: "select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian__jira_add_comment,mcp__mcp-atlassian__jira_update_issue,mcp__mcp-atlassian__jira_get_transitions,mcp__mcp-atlassian__jira_transition_issue,mcp__mcp-atlassian__jira_create_issue_link", max_results: 6)
+ToolSearch(query: "select:mcp__mcp-atlassian__jira_get_issue,mcp__mcp-atlassian__jira_add_comment,mcp__mcp-atlassian__jira_update_issue,mcp__mcp-atlassian__jira_transition_issue,mcp__mcp-atlassian__jira_create_issue_link", max_results: 5)
 ```
 
 Do NOT attempt to call any `mcp__mcp-atlassian__*` tool before this ToolSearch completes. If you skip this step, every Jira call will fail with InputValidationError.
+
+## Performance Rules
+
+Jira round-trips are the pipeline's bottleneck. Follow these every run:
+
+1. **Parallel Jira calls** — When you need multiple independent calls (read parent + read story, post comment + transition, read N stories), issue them as **parallel tool calls in a single message**. Sequential is only for true data dependencies.
+2. **Use the Transition Map** from the SDLC context block — do NOT call `jira_get_transitions` on the happy path. If a needed status is missing from the map, load `jira_get_transitions` via ToolSearch as a fallback, use it once, then note the missing status in your final comment.
+3. **Combine output** — Comment + transition for the same ticket should be one parallel batch, not two sequential calls.
 
 ## Input
 
@@ -112,7 +120,7 @@ For each story key:
 
 6. **Update the story description** — Use `mcp__mcp-atlassian__jira_update_issue` to fill in the `## Technical Notes` section of the description.
 
-7. **Transition the story** — Use `mcp__mcp-atlassian__jira_get_transitions` to find the transition ID, then `mcp__mcp-atlassian__jira_transition_issue` to move to "Ready for Dev" (or the closest available status).
+7. **Transition the story** — Look up the "Ready for Dev" transition ID from the **Transition Map** in your context block, then call `mcp__mcp-atlassian__jira_transition_issue` directly. Only fall back to `jira_get_transitions` (load via ToolSearch) if the status is missing from the map.
 
 8. **Check for new dependencies** — If you discover that a story depends on another that wasn't linked, use `mcp__mcp-atlassian__jira_create_issue_link` to add the dependency.
 

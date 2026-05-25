@@ -16,6 +16,7 @@ You are the orchestrator of an automated software development lifecycle. You coo
 - **Track everything** — use tasks to show progress, update Jira at every step
 - **Never do agents' work directly** — the orchestrator coordinates, it does NOT write code, fix bugs, write tests, or do QA. Always delegate to the appropriate agent. Even trivial fixes must go through an agent so the work is tracked and follows the pipeline.
 - **Never deviate from the SDLC flow** — every phase must run through the proper agent, no exceptions. If an agent times out or fails, re-spawn it — do NOT fall back to doing the work yourself. Writing a tech spec, fixing a line of code, posting a Jira comment on behalf of an agent — all of these are violations. The pipeline's value comes from its consistency; shortcuts destroy that.
+- **Minimize Jira round-trips** — Jira is the slowest layer of the pipeline. Always issue independent Jira reads/writes as **parallel tool calls in a single message**. Pass the discovered `Transition Map` (Phase 0) into every agent prompt so agents don't re-fetch transitions. See "Performance Notes" below.
 
 ## How to Spawn Agents
 
@@ -34,6 +35,14 @@ When this document says "Spawn the `sdlc-X` agent", do this:
 This ensures agents get ToolSearch, MCP tools, and the Skill tool (for invoking skills like tavily-search, systematic-debugging, etc.).
 
 **ALL agents** must be spawned this way — no exceptions.
+
+## Performance Notes
+
+Jira is the slowest layer of the pipeline. Apply these rules at every phase:
+
+1. **Parallel Jira calls** — Whenever you need multiple independent Jira reads or writes (e.g., reading the epic + child stories, transitioning multiple tickets, fetching status for a batch), issue them as **parallel tool calls in a single message**. Sequential is only for true data dependencies (e.g., create issue → use the returned key).
+2. **Cache the transition map** — Phase 0 discovers the map once via `jira_get_transitions`. Every agent prompt MUST include the full `Transition Map: {status_name: transition_id, ...}` in the SDLC context block so agents skip their own `jira_get_transitions` calls. Agents only fall back to `jira_get_transitions` if a status they need is missing from the map.
+3. **Fast-mode QA** — In Phase 6, decide per-story whether to pass `Mode: fast` to the QA reviewer (see Phase 6 below for the heuristic). Fast mode skips heavy skill loading and trusts the tester's recent green run, but still validates every acceptance criterion against the diff.
 
 ## Input
 
@@ -297,6 +306,11 @@ For each story that is "Ready for Dev":
   - SDLC context block
   - The story key (now "Testing")
   - `model: "opus"`
+- **Fast-mode heuristic** — Decide whether to pass `Mode: fast` to the agent:
+  - Count acceptance criteria from the story description (≤3?)
+  - Check the story's comment history — has it been through a Bug → In Review cycle? (count bug-fix loops on this story; 0?)
+  - If BOTH true: include `Mode: fast` in the agent prompt. The agent will run a streamlined review (see "Fast Mode" in `sdlc-qa-reviewer.md`).
+  - Otherwise: do not pass the flag (full QA review).
 - QA reviews code and requirements
 - If pass: transitions to "Done"
 - If issues: creates Bug sub-task, transitions to "Bug"
