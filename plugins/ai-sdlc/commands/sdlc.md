@@ -278,12 +278,42 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
 
 Process stories in dependency order (stories with no blockers first).
 
-For each story that is "Ready for Dev":
+### Workspace isolation — create a worktree per story
+
+Before spawning ANY agent that touches the repo (developer, tester, bug-fixer), the orchestrator creates a dedicated git worktree for that story. This is non-negotiable when stories run in parallel — without it, two agents in the same directory will check out each other's branches and corrupt each other's work.
+
+**Convention:**
+- Worktree path: `{repo_path}.worktrees/{STORY-KEY}`
+- Branch name: `{STORY-KEY}/{short-slug}` (orchestrator picks the slug from the story title; if it's already known from a prior phase, reuse it)
+
+**Setup (Phase 4, before spawning the developer):**
+
+```bash
+# Idempotent: if the worktree already exists (resume case), skip.
+if [ ! -d "{repo_path}.worktrees/{STORY-KEY}" ]; then
+  # Make sure base branch is up to date in the main repo
+  git -C {repo_path} fetch origin {base_branch}
+  # Create worktree on a fresh feature branch off the latest base
+  git -C {repo_path} worktree add "{repo_path}.worktrees/{STORY-KEY}" -b "{STORY-KEY}/{short-slug}" "origin/{base_branch}"
+fi
+```
+
+If the feature branch already exists remotely (resume / rerun), use:
+```bash
+git -C {repo_path} worktree add "{repo_path}.worktrees/{STORY-KEY}" "{STORY-KEY}/{short-slug}"
+```
+
+Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context block to every agent for this story (developer, tester, QA, bug-fixer).
+
+**Same-story serialization:** Developer → Tester → QA → Bug-fixer for the SAME story share one worktree and run sequentially. Different stories get different worktrees and may run in parallel.
+
+**Never spawn two agents pointing at the same Worktree Path concurrently.**
 
 ### Step 4: Develop
+- Create the worktree as described above (if not already present)
 - **Read** `sdlc-developer.md` and **spawn as general-purpose Agent()** with:
   - The agent file body as the system prompt
-  - SDLC context block
+  - SDLC context block — including `Worktree Path: {repo_path}.worktrees/{STORY-KEY}`
   - Single story key
   - Base branch name
   - `model: "opus"`
@@ -292,7 +322,7 @@ For each story that is "Ready for Dev":
 ### Step 5: Test
 - **Read** `sdlc-tester.md` and **spawn as general-purpose Agent()** with:
   - The agent file body as the system prompt
-  - SDLC context block
+  - SDLC context block — including the same `Worktree Path` used by the developer
   - The story key (now "In Review")
   - The PR branch name
   - `model: "sonnet"`
@@ -319,7 +349,7 @@ For each story that is "Ready for Dev":
 - If story is in "Bug" status:
   - **Read** `sdlc-bug-fixer.md` and **spawn as general-purpose Agent()** with:
     - The agent file body as the system prompt
-    - SDLC context block
+    - SDLC context block — including the parent story's `Worktree Path` (the bug fix happens on the same branch)
     - The Bug sub-task key
     - The parent story key
     - `model: "sonnet"`
@@ -328,9 +358,10 @@ For each story that is "Ready for Dev":
   - **Maximum 3 bug-fix loops per story.** After that, add a Jira comment and move on.
 
 ### Parallelism
-- Independent stories (no dependency between them) can be developed in parallel
-- Spawn multiple developer agents simultaneously when possible
+- Independent stories (no dependency between them) can be developed in parallel — **each in its own worktree** (see "Workspace isolation" above)
+- Spawn multiple developer agents simultaneously when possible, but only after their worktrees have been created
 - Always respect dependency order: if Story B is blocked by Story A, wait until A reaches "Done"
+- **Never** spawn two agents (developer/tester/bug-fixer/QA) for the same story at the same time — they share one worktree and one branch
 
 ## Phase 8: Completion
 
@@ -341,7 +372,18 @@ For each story that is "Ready for Dev":
    - PRs created (with links)
    - Total bugs found and fixed
 
-3. **If dev/prod model (PR Target is `dev`):**
+3. **Clean up per-story worktrees:**
+   For every story that reached `Done` (and whose PR is merged or abandoned):
+   ```bash
+   git -C {repo_path} worktree remove "{repo_path}.worktrees/{STORY-KEY}"
+   ```
+   Then prune any stale references:
+   ```bash
+   git -C {repo_path} worktree prune
+   ```
+   Skip stories whose work is still open (failed / blocked) — leave their worktrees so the user can investigate.
+
+4. **If dev/prod model (PR Target is `dev`):**
    - Merge all story PRs into `dev` (if not already merged)
    - If `--auto`: log "Auto-approving promotion" and promote immediately
    - Otherwise: **PAUSE — Ask the user:** "All stories are done on `dev`. Promote to `main`?"
@@ -361,7 +403,7 @@ For each story that is "Ready for Dev":
      ```
    - Tag the release: `git tag v{X.Y.Z} main && git push origin v{X.Y.Z}`
 
-4. **If single-branch model (PR Target is `main`):**
+5. **If single-branch model (PR Target is `main`):**
    - Suggest next steps (merge PRs, manual testing, etc.)
 
 ## Environment — Read Before Running Any Commands

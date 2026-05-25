@@ -15,7 +15,8 @@ The orchestrator passes a standardized context block to every agent:
 - Project Name: {product_name}
 - Project Key: {projectKey}
 - Cloud ID: {cloudId}
-- Repo Path: {absolute_path_to_working_directory}
+- Repo Path: {absolute_path_to_main_working_tree}
+- Worktree Path: {absolute_path_to_per_story_worktree}   # Phase 4+ only
 - Base Branch: {branch_agents_branch_from}
 - PR Target: {branch_PRs_merge_into}
 - QBV Key: {qbv_issue_key}
@@ -26,6 +27,9 @@ The orchestrator passes a standardized context block to every agent:
 **Base Branch** is the branch agents create feature branches from (e.g., `dev` or `main`).
 **PR Target** is the branch PRs are opened against — usually the same as Base Branch.
 In a dev/prod workflow (`dev` + `main` branches), both are `dev` during development. The orchestrator handles promotion to `main` separately.
+
+**Repo Path** is the main checkout — used by the orchestrator and read-only by agents (e.g., to read `CLAUDE.md`).
+**Worktree Path** is the per-story `git worktree` created by the orchestrator before Phase 4. Developer/tester/bug-fixer agents do ALL git operations and code edits in the worktree. This prevents concurrent agents from clobbering each other's checkouts. See `SKILL.md` ("Workspace Isolation — Git Worktrees") for details.
 
 This block is injected into the agent's spawn prompt. It provides the structural information agents need to interact with Jira and the codebase.
 

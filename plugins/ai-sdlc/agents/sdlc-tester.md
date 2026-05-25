@@ -50,9 +50,11 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, transition map)
+- SDLC context block (cloudId, projectKey, repo path, **worktree path**, transition map)
 - A single Jira story key (in "In Review" status)
 - The PR branch name
+
+**Worktree Path is your working directory.** The orchestrator created a dedicated worktree at `{worktree_path}` for this story (the same one the developer used). The story branch is already checked out there. Do NOT `cd {repo_path}` — other agents may be operating on different stories there. Never run `git worktree add` or `git worktree remove`.
 
 ## Process
 
@@ -61,17 +63,17 @@ You receive:
    - Tech spec comment (what was designed)
    - Developer comment (what was implemented, any noted issues)
 
-2. **Check out the branch:**
+2. **Enter the worktree and sync:**
    ```bash
-   cd {repo_path}
+   cd {worktree_path}
    git fetch origin
-   git checkout {branch_name}
-   git pull origin {branch_name}
+   git pull --ff-only origin {branch_name}
    ```
+   The story branch is already checked out in this worktree (the developer worked here). `git pull` picks up any commits the developer pushed.
 
 3. **Read the code changes:**
    ```bash
-   git diff {base_branch}...HEAD --name-only
+   git diff origin/{base_branch}...HEAD --name-only
    ```
    Read each changed file to understand the implementation.
 

@@ -50,8 +50,10 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, base branch, transition map)
+- SDLC context block (cloudId, projectKey, repo path, **worktree path**, base branch, transition map)
 - A single Jira story key to implement
+
+**Worktree Path is your working directory.** The orchestrator has already created a dedicated git worktree for this story at `{worktree_path}` (typically `{repo_path}.worktrees/{STORY-KEY}`). All code edits, builds, tests, commits, and pushes happen there. Do NOT `cd {repo_path}` — another agent may be working there. Only read-only access to `{repo_path}` is allowed (e.g., reading `CLAUDE.md` if it isn't in the worktree). Never run `git worktree add` or `git worktree remove` — that is the orchestrator's job.
 
 ## Process
 
@@ -73,21 +75,18 @@ You receive:
    ```
    Follow the verification-before-completion skill: always run tests and verify output before claiming the story is done.
 
-3. **Read project conventions** — In the repo:
+3. **Read project conventions** — In the worktree:
    - Read `CLAUDE.md` for coding standards, commands, architecture
    - Read `pyproject.toml`/`package.json` for build config
    - Read existing code referenced in the tech spec to understand patterns
 
 4. **Transition to "In Progress"** — Use `mcp__mcp-atlassian__jira_transition_issue` to move the story to "In Progress" before starting any work. This signals that the story is actively being worked on.
 
-5. **Create feature branch:**
+5. **Enter the worktree:**
    ```bash
-   cd {repo_path}
-   git checkout {base_branch}
-   git pull origin {base_branch}
-   git checkout -b {STORY-KEY}/{short-slug}
+   cd {worktree_path}
    ```
-   The slug should be 2-4 words from the story title, kebab-case.
+   The orchestrator has already created the worktree on a fresh feature branch (`{STORY-KEY}/{short-slug}`) off `origin/{base_branch}`. Do not create a new branch — the worktree already has one checked out. Confirm with `git branch --show-current`.
 
 6. **Implement the code:**
    - Follow the tech spec exactly — create/modify the files specified

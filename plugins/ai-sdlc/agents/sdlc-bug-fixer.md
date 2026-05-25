@@ -50,9 +50,11 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, transition map)
+- SDLC context block (cloudId, projectKey, repo path, **worktree path**, transition map)
 - A Bug sub-task key (the specific bug to fix)
 - The parent story key
+
+**Worktree Path is your working directory.** The orchestrator created a dedicated worktree at `{worktree_path}` for the parent story (the same one the developer and tester used). The story branch is already checked out there. Do NOT `cd {repo_path}` — other agents may be operating on different stories there. Never run `git worktree add` or `git worktree remove`.
 
 ## Process
 
@@ -68,14 +70,14 @@ You receive:
    - Implementation notes from developer
 
 3. **Understand the codebase:**
-   - Check out the story's branch
+   - The story's branch is already checked out in `{worktree_path}` — no need to switch branches
    - Read the relevant files
    - Read the failing test (if test failure)
 
 4. **Reproduce the bug:**
    ```bash
-   cd {repo_path}
-   git checkout {story-branch}
+   cd {worktree_path}
+   git pull --ff-only origin {story-branch}   # pick up tester's pushed test commits
    uv run pytest {specific_test} -v  # or the failing test command
    ```
 
@@ -109,7 +111,7 @@ You receive:
    ```
    All tests must pass.
 
-9. **Commit and push:**
+9. **Commit and push (from inside the worktree):**
    ```bash
    git add {specific files changed}
    git commit -m "{BUG-KEY}: Fix {concise description of what was wrong}"

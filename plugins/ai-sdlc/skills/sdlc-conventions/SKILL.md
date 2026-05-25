@@ -78,6 +78,46 @@ The pipeline supports two branching models, detected automatically in Phase 0:
 
 Agents never need to know which model is active — they use `{base_branch}` and `{pr_target_branch}` from the context block.
 
+## Workspace Isolation — Git Worktrees
+
+When the orchestrator runs multiple agents concurrently (e.g., developing two independent stories at once), they MUST NOT share a single working directory. A plain `cd {repo_path} && git checkout {branch}` from one agent yanks the working tree out from under the other.
+
+The pipeline solves this with **git worktrees** — one worktree per story branch.
+
+**Convention:**
+
+- Worktrees are created as a sibling of the repo: `{repo_path}.worktrees/{STORY-KEY}`
+  - Example: repo at `~/git/jiralyzer-dev` → worktree at `~/git/jiralyzer-dev.worktrees/CSI-105`
+- The orchestrator (Phase 4 onward) creates the worktree before spawning the first agent for a story, and removes it in Phase 8 after the story reaches Done.
+- Each agent prompt receives a `Worktree Path` field in the SDLC context block. Agents operate inside the worktree, NOT in the main `Repo Path`.
+- The main `Repo Path` is for read-only operations only (reading `CLAUDE.md`, scanning project structure for context). All `git checkout`, edits, commits, and pushes happen in the `Worktree Path`.
+
+**Lifecycle:**
+
+```
+Phase 4 (Developer):   orchestrator runs `git -C {repo_path} worktree add {worktree_path} -b {STORY-KEY}/{slug} {base_branch}`
+                       → developer works in {worktree_path}
+Phase 5 (Tester):      reuses the same {worktree_path} (story branch already checked out there)
+Phase 6 (QA):          reads from {worktree_path} (read-only)
+Phase 7 (Bug Fixer):   reuses the same {worktree_path}
+Phase 8 (Completion):  after story is Done & PR merged, orchestrator runs `git -C {repo_path} worktree remove {worktree_path}`
+```
+
+**Same-story agents are serialized** — developer → tester → QA → bug-fixer all touch the same branch, so they run sequentially per story. Only **different stories run in parallel**, each in its own worktree.
+
+**Why this matters:**
+
+- Two developers branching from `dev` simultaneously no longer fight over `HEAD`
+- A bug-fixer running on `STORY-A` cannot accidentally check out `STORY-A`'s branch in the main repo while the tester for `STORY-B` is mid-run
+- `git status`, `git diff`, and `pytest` results are stable per agent
+- If an agent crashes, the worktree is recoverable — `git worktree list` shows all live worktrees
+
+**Cleanup rules:**
+
+- The orchestrator owns the worktree lifecycle. Agents NEVER run `git worktree add` or `git worktree remove`.
+- If a worktree path already exists when the orchestrator tries to create it (e.g., resuming a pipeline), reuse it — do not delete and recreate.
+- If a story is abandoned/blocked, the orchestrator removes the worktree in Phase 8 along with the others.
+
 ## Required MCP Server: mcp-atlassian
 
 The AI-SDLC pipeline requires the standalone `mcp-atlassian` MCP server (configured via `/mcp`). All Jira operations use `mcp__mcp-atlassian__jira_*` tools.
@@ -111,6 +151,7 @@ The AI-SDLC pipeline requires the standalone `mcp-atlassian` MCP server (configu
 7. **Commit messages** — Always include the Jira ticket key: `{STORY-KEY}: {summary}`
 8. **Branch naming** — Use `{story-key}/{short-slug}` (e.g., `PROJ-42/xml-parser`)
 9. **PR target** — Always use `--base {pr_target_branch}` when creating PRs
+10. **Operate in your worktree** — All git/edit/test commands run with `cd {worktree_path}` (or `git -C {worktree_path}`). Never `cd {repo_path}` for write operations. Never run `git worktree add/remove` from an agent — that is the orchestrator's job.
 
 ## Performance Rules — How Agents Use Jira
 
