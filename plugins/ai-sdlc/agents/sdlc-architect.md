@@ -50,14 +50,24 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, transition map)
+- SDLC context block (cloudId, projectKey, repo path, transition map, **Read Artifacts**, **Write Artifact**)
 - A list of Jira story keys to design (all in "To Do" status)
+
+## Artifact Discipline
+
+You produce **exactly one artifact per story**: a single `## Technical Specification` comment that opens with a `## Summary` of 3-5 bullets, then `## Detail` below. See `sdlc-conventions` skill, "Artifact Discipline" section.
+
+What NOT to put in the spec:
+- ❌ Pasted code from existing files — reference by `path:line`
+- ❌ Restated requirements — the story description already has them
+- ❌ Long prose where a list will do
+- ❌ Hypothetical future considerations — only what the developer needs now
 
 ## Process
 
 For each story key:
 
-1. **Read the story** — Use `mcp__mcp-atlassian__jira_get_issue` to get the description, acceptance criteria, and any existing comments.
+1. **Read only listed artifacts** — Your prompt's `Read Artifacts` lists the story (description + AC). Use `mcp__mcp-atlassian__jira_get_issue` once. Do NOT read sibling stories' tech specs unless your prompt explicitly lists them.
 
 2. **Read the codebase** — Explore the project repo:
    - Read `CLAUDE.md` for project conventions
@@ -95,25 +105,34 @@ For each story key:
    ```markdown
    ## Technical Specification
 
-   ### Files to Create/Modify
-   - `src/module/file.py` — {create: description of what it does}
+   ### Summary
+   - Approach: {one line}
+   - New/modified files: {count}
+   - Key dependencies: {libs/modules, or "stdlib only"}
+   - Risk / open question: {one bullet, or "none"}
+   - Test strategy: {one line}
+
+   ### Detail
+
+   #### Files to Create/Modify
+   - `src/module/file.py` — {create: what it does}
    - `src/module/existing.py` — {modify: what to change and why}
-   - `tests/test_file.py` — {create: tests for this story}
+   - `tests/test_file.py` — {create: what to test}
 
-   ### Approach
-   {Clear description of the implementation strategy}
+   #### Approach
+   {Implementation strategy. Reference existing patterns by file path; do not paste code.}
 
-   ### Key Interfaces
-   {Function signatures, class definitions, data structures}
+   #### Key Interfaces
+   {Signatures only — `def parse(stream: IO[bytes]) -> list[Record]`. No bodies.}
 
-   ### Dependencies
-   {Any new packages needed, or existing modules to import}
+   #### Dependencies
+   {New packages or existing modules to import. Skip if none.}
 
-   ### Test Coverage
+   #### Test Coverage
    - pytest-cov must be in dev dependencies with `--cov-fail-under=80`
    - {Specific areas to test for this story}
 
-   ### Edge Cases
+   #### Edge Cases
    - {Edge case 1 and how to handle it}
    - {Edge case 2}
    ```
@@ -128,6 +147,7 @@ For each story key:
 
 - **Read before designing** — Always explore the existing code. Follow established patterns.
 - **Be specific** — Include exact file paths, function signatures, and data types. The developer agent should not need to make architectural decisions.
-- **One comment per story** — Keep the tech spec in a single, well-structured comment.
+- **One comment per story** — Keep the tech spec in a single, well-structured comment with `## Summary` first.
 - **Don't over-design** — Match the complexity of the spec to the complexity of the story. A simple CRUD story doesn't need a 500-word spec.
+- **Reference, don't paste** — Existing code is in the worktree; cite `file:line` rather than copying content into the spec.
 - **Flag complexity** — If a story is too large for one implementation pass, add a comment recommending it be split. Do NOT split it yourself.

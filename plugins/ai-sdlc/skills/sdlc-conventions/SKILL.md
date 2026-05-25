@@ -52,6 +52,63 @@ Agents run in isolation. They share context through three channels:
 
 See `references/context-protocol.md` for the full specification.
 
+## Artifact Discipline
+
+Every Jira read/write costs context tokens. Agents that pull the entire ticket "to be safe" balloon the context window and slow the pipeline. The rules below keep agents honest about what they read and write.
+
+### 1. Per-phase artifact contract
+
+Every agent has **exactly one output artifact** — the comment it posts at the end of its phase. The orchestrator's prompt to the agent tells it which prior artifacts (comments) to read. Agents do NOT scan the entire comment thread "for context."
+
+The orchestrator's context block must include:
+
+```
+Read Artifacts:
+  - Tech Spec (architect comment on {STORY-KEY})
+  - Design Spec (designer comment on {STORY-KEY})  ← only if Phase 3.5 ran
+Write Artifact:
+  - Dev Result (post as comment on {STORY-KEY})
+```
+
+Agents read only the listed artifacts. If an agent finds it needs something else, it stops and asks the orchestrator rather than fetching the full ticket.
+
+### 2. Summary header convention
+
+Every artifact (every comment an agent posts) opens with a `## Summary` of 3-5 bullets, then detail below.
+
+```markdown
+## Summary
+- Approach: streaming XML SAX parser (handles 100MB+ files)
+- New module: `src/parsers/xml.py` exposing `parse_stream(io.IOBase)`
+- Depends on stdlib `xml.sax` only — no new packages
+- Test strategy: 5 fixture files covering malformed/valid/large
+- Risk: SAX is callback-based; refactor needed if we want async later
+
+## Detail
+...
+```
+
+Downstream agents read the **summary first** and drill into detail only when their task requires it. Use the `Read` tool's `offset`/`limit` to window large artifacts. The writer of the artifact owns the summary; this is not lossy compression — the detail is always one read away.
+
+### 3. What NOT to store in artifacts
+
+- ❌ **Full test output** — Store `15/16 passed; failing: test_parse_malformed_xml (expected ValueError, got None at line 42)`. Re-run tests in the worktree if detail is needed.
+- ❌ **Code snippets** — Reference commit SHA + file path. The worktree is the source of truth: `See src/parsers/xml.py:42-78 in commit abc1234`.
+- ❌ **Restated requirements** — Don't quote the story description in the tech spec; don't quote the failing test source in the bug report. The reader has the same access you do.
+- ❌ **Accumulating threads** — When an artifact is revised (e.g., bug-fixer updates dev-result), post a new comment that says "Supersedes prior dev-result; see commit XYZ" with a fresh summary. The Jira history preserves the prior version.
+- ❌ **Full file contents** — Tech specs reference files by path; don't paste the file in.
+
+### 4. Net effect
+
+| Phase | Old default ("read the ticket") | With artifact discipline |
+|---|---|---|
+| Architect | full story desc + planner notes | story summary + acceptance criteria |
+| Tester | story + tech spec + design + dev result | tech spec summary + dev-result summary + worktree |
+| QA | everything above + test results | all summaries + test-result file |
+| Bug-fixer | full thread | bug report + tech spec summary |
+
+Roughly 40-60% reduction per agent run, no quality loss — detail is one targeted read away.
+
 ## Pipeline Phases
 
 ```
@@ -143,15 +200,16 @@ The AI-SDLC pipeline requires the standalone `mcp-atlassian` MCP server (configu
 ## Agent Workflow Rules
 
 1. **Load MCP tools first** — Use `ToolSearch` with `select:mcp__mcp-atlassian__jira_get_issue,...` before any Jira call
-2. **Always read from Jira first** — Get the ticket's current state before acting
-3. **Always write back to Jira** — Post results as comments so the next agent has context
-4. **Use markdown in Jira** — The `mcp__mcp-atlassian__jira_add_comment` body parameter accepts Markdown directly
-5. **Transition tickets** — Move tickets to the correct status when done
-6. **Create Bug sub-tasks** — When tests fail or QA finds issues, create a Bug sub-task under the parent Story
-7. **Commit messages** — Always include the Jira ticket key: `{STORY-KEY}: {summary}`
-8. **Branch naming** — Use `{story-key}/{short-slug}` (e.g., `PROJ-42/xml-parser`)
-9. **PR target** — Always use `--base {pr_target_branch}` when creating PRs
-10. **Operate in your worktree** — All git/edit/test commands run with `cd {worktree_path}` (or `git -C {worktree_path}`). Never `cd {repo_path}` for write operations. Never run `git worktree add/remove` from an agent — that is the orchestrator's job.
+2. **Read only the artifacts your prompt names** — The orchestrator lists `Read Artifacts` in your context block. Read those, not the full comment thread. If you need something else, stop and ask the orchestrator.
+3. **Write exactly one artifact** — Your phase produces one comment, and it opens with a `## Summary` of 3-5 bullets (see Artifact Discipline above).
+4. **Never inline full output** — No full test logs, no pasted code, no restated requirements. Reference commits / file paths / failing test names instead.
+5. **Use markdown in Jira** — The `mcp__mcp-atlassian__jira_add_comment` body parameter accepts Markdown directly
+6. **Transition tickets** — Move tickets to the correct status when done
+7. **Create Bug sub-tasks** — When tests fail or QA finds issues, create a Bug sub-task under the parent Story
+8. **Commit messages** — Always include the Jira ticket key: `{STORY-KEY}: {summary}`
+9. **Branch naming** — Use `{story-key}/{short-slug}` (e.g., `PROJ-42/xml-parser`)
+10. **PR target** — Always use `--base {pr_target_branch}` when creating PRs
+11. **Operate in your worktree** — All git/edit/test commands run with `cd {worktree_path}` (or `git -C {worktree_path}`). Never `cd {repo_path}` for write operations. Never run `git worktree add/remove` from an agent — that is the orchestrator's job.
 
 ## Performance Rules — How Agents Use Jira
 

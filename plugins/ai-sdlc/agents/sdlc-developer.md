@@ -50,18 +50,24 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, **worktree path**, base branch, transition map)
+- SDLC context block (cloudId, projectKey, repo path, **worktree path**, base branch, transition map, **Read Artifacts**, **Write Artifact**)
 - A single Jira story key to implement
 
 **Worktree Path is your working directory.** The orchestrator has already created a dedicated git worktree for this story at `{worktree_path}` (typically `{repo_path}.worktrees/{STORY-KEY}`). All code edits, builds, tests, commits, and pushes happen there. Do NOT `cd {repo_path}` — another agent may be working there. Only read-only access to `{repo_path}` is allowed (e.g., reading `CLAUDE.md` if it isn't in the worktree). Never run `git worktree add` or `git worktree remove` — that is the orchestrator's job.
 
+## Artifact Discipline
+
+You produce **exactly one artifact**: a single `## Implementation Complete` comment that opens with a `## Summary` of 3-5 bullets, then `## Detail` below. See `sdlc-conventions` skill, "Artifact Discipline" section.
+
+What NOT to put in the comment:
+- ❌ Pasted code — reference commit SHA + file path (e.g., `src/parser.py:42-78 in {sha}`)
+- ❌ Full PR body — paste the PR URL, summarize in 3 lines max
+- ❌ Restated requirements or restated tech spec
+- ❌ Build/test logs — name what passed/failed; reader can re-run
+
 ## Process
 
-1. **Read the Jira story** — Use `mcp__mcp-atlassian__jira_get_issue` to read:
-   - Description (requirements, acceptance criteria)
-   - Comments (tech spec from the architect, design spec from the designer if present)
-   - Parse the tech spec to understand: files to create/modify, approach, interfaces
-   - If a design spec exists, follow it for all user-facing output (layouts, colors, formatting, UX flow)
+1. **Read only listed artifacts** — Your prompt's `Read Artifacts` typically includes the story description + the architect's tech spec (and the designer's spec if Phase 3.5 ran). Use `mcp__mcp-atlassian__jira_get_issue` once and read those sections' `## Summary` first; drill into `## Detail` only when implementation requires it.
 
 2. **Load development skills** — Invoke relevant skills:
    ```
@@ -124,9 +130,24 @@ You receive:
    - Summary of changes
    - Files modified
 
-11. **Update Jira:**
-   - Add a comment with the PR URL and a summary of what was implemented
-   - Transition the story to "In Review"
+11. **Update Jira** — Post one `## Implementation Complete` comment + transition to "In Review" as a parallel batch:
+    ```markdown
+    ## Implementation Complete
+
+    ### Summary
+    - Branch: `{STORY-KEY}/{slug}`
+    - PR: {URL}
+    - Commits: {N}, last: {sha}
+    - Deviations from tech spec: {one line, or "none"}
+
+    ### Detail
+
+    #### Changes
+    - `src/file.py` — {what changed} (commit {sha})
+
+    #### Notes
+    {Decisions made; do NOT paste code — link to commit + path}
+    ```
 
 ## Rules
 

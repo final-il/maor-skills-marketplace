@@ -49,15 +49,22 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, transition map)
+- SDLC context block (cloudId, projectKey, repo path, transition map, **Read Artifacts**, **Write Artifact**)
 - A single Jira story key (in "Testing" status)
 - Optional: `Mode: fast` flag from the orchestrator (see Fast Mode section below)
 
+## Artifact Discipline
+
+You produce **exactly one artifact**: a single `## QA Review` comment that opens with a `## Summary` of 3-5 bullets, then `## Detail` below. See `sdlc-conventions` skill, "Artifact Discipline" section.
+
+What NOT to put in the comment:
+- ❌ Pasted code or pasted test output — reference `file:line` + commit SHA
+- ❌ Restated acceptance criteria — show only the verdict per AC
+- ❌ Long code-quality essays — one bullet per real issue, with a reference
+
 ## Process
 
-1. **Read the full story context** — Use `mcp__mcp-atlassian__jira_get_issue` to read:
-   - Description (requirements, acceptance criteria)
-   - All comments (tech spec, implementation notes, test results)
+1. **Read only listed artifacts** — Your prompt's `Read Artifacts` is typically: story description + AC, tech spec summary, dev-result summary, test-result summary. Read each artifact's `## Summary` first; drill into `## Detail` only when verifying a specific concern.
 
 2. **Read the code:**
    - Identify the PR branch from the developer's Jira comment
@@ -104,26 +111,29 @@ You receive:
    - Any breaking changes to existing functionality?
    - Are imports and dependencies correct?
 
-5. **Post review results** — Add a Jira comment:
+5. **Post review results** — One `## QA Review` comment + transition as a parallel batch:
    ```markdown
    ## QA Review
 
-   **Status:** APPROVED / ISSUES FOUND
+   ### Summary
+   - Status: APPROVED / ISSUES FOUND
+   - Acceptance criteria: {N of M} pass
+   - Coverage: {X}% (required: 80%)
+   - Code quality: {one-line verdict}
+   - Bugs filed: {count} (keys: {BUG-1, BUG-2}, or "none")
 
-   ### Requirements Check
-   - ✅ {Criterion 1} — implemented in {file}:{line}
-   - ✅ {Criterion 2} — verified by test {test_name}
-   - ❌ {Criterion 3} — {what's wrong}
+   ### Detail
 
-   ### Code Quality
-   {Observations — keep it brief, only note real issues}
+   #### Requirements Check
+   - ✅ AC1 — verified by `test_basic_parse`
+   - ✅ AC2 — implemented in `src/parser.py:42`
+   - ❌ AC3 — {what's wrong} (`src/parser.py:88`)
 
-   ### Test Coverage
-   Coverage: {X}% (required: 80%)
-   {Assessment of test adequacy}
+   #### Code Quality
+   {One bullet per real issue with `file:line` reference. Skip section if clean.}
 
-   ### Issues
-   {Numbered list of issues, if any}
+   #### Issues → Bug Sub-tasks
+   - {BUG-KEY}: {one-line description}
    ```
 
 6. **Act on results:**
@@ -155,19 +165,19 @@ In Fast Mode, **still do**:
 - Spot-check for obvious bugs, security issues, or convention violations
 - Post a short QA comment + transition
 
-Fast Mode comment template:
+Fast Mode comment template (still follows artifact discipline — `## Summary` first):
 
 ```markdown
 ## QA Review (Fast)
 
-**Status:** APPROVED / ISSUES FOUND
+### Summary
+- Status: APPROVED / ISSUES FOUND
+- ACs: {N of M} pass
+- Notes: {one line, or "none"}
 
-### ACs
-- ✅ {AC 1} — {file or test}
-- ✅ {AC 2} — {file or test}
-
-### Notes
-{1-2 sentences if anything noteworthy, otherwise omit}
+### Detail
+- ✅ AC1 — {file or test}
+- ✅ AC2 — {file or test}
 ```
 
 If you find any blocking issue in Fast Mode, switch to a full review for that story before posting — the speedup isn't worth letting a real bug through.

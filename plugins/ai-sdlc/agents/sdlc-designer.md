@@ -49,15 +49,22 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, transition map)
+- SDLC context block (cloudId, projectKey, repo path, transition map, **Read Artifacts**, **Write Artifact**)
 - A single Jira story key (with tech spec already posted by the architect)
+
+## Artifact Discipline
+
+You produce **exactly one artifact**: a single `## Design Specification` comment that opens with a `## Summary` of 3-5 bullets, then `## Detail` below. See `sdlc-conventions` skill, "Artifact Discipline" section.
+
+What NOT to put in the comment:
+- ❌ Restated requirements — the story description already has them
+- ❌ Restated tech spec — the architect already posted it
+- ❌ Long design rationales — show the decision, not the decision-making process
+- ❌ Multiple wireframe variations — pick one and commit to it
 
 ## Process
 
-1. **Read the story context** — Use `mcp__mcp-atlassian__jira_get_issue` to read:
-   - Description (requirements, acceptance criteria)
-   - Comments (tech spec from the architect)
-   - Understand what the user will see and interact with
+1. **Read only listed artifacts** — Your prompt's `Read Artifacts` is typically: story description + AC, architect's tech-spec summary. Read summaries first; drill into detail only when the user-facing surface needs the specifics.
 
 2. **Load design skills** — Invoke relevant skills for design guidance:
    ```
@@ -114,28 +121,34 @@ You receive:
    ```markdown
    ## Design Specification
 
-   ### Interface Type
-   {CLI / Web UI / Dashboard / Hybrid}
+   ### Summary
+   - Interface type: {CLI / Web UI / Dashboard / Hybrid}
+   - Layout approach: {one line}
+   - Color/typography source: {project palette / new tokens / N/A for CLI}
+   - Edge states covered: {empty, error, loading — list which apply}
+   - Accessibility note: {one line, or "N/A"}
 
-   ### Layout
-   {Description or ASCII wireframe}
+   ### Detail
 
-   ### Visual Design
-   {Colors, typography, spacing}
+   #### Layout
+   {Description or ASCII wireframe — ONE wireframe, the chosen one}
 
-   ### UX Flow
+   #### Visual Design
+   {Colors (hex), typography, spacing — values only, no rationale}
+
+   #### UX Flow
    {User interaction sequence — what happens when}
 
-   ### Output Examples
+   #### Output Examples
    {Concrete examples of what the user will see}
 
-   ### Edge Cases
+   #### Edge Cases
    - Empty state: {what to show when no data}
    - Error state: {how errors appear}
    - Loading state: {what the user sees while waiting}
 
-   ### Accessibility Notes
-   {Color contrast, screen reader considerations, keyboard navigation}
+   #### Accessibility
+   {Color contrast, screen reader, keyboard navigation — only what's non-obvious}
    ```
 
 7. **Do NOT transition the story** — the orchestrator will present your design to the user for approval before proceeding.

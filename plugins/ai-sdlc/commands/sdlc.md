@@ -183,6 +183,13 @@ In this mode, the orchestrator:
    Transition Map: {status=id, ...}
    ```
 
+   When spawning an agent, you ALSO append per-phase artifact metadata to its context block:
+   ```
+   Read Artifacts: <list of prior comments/sections this agent should read; everything else is off-limits>
+   Write Artifact: <the single comment this agent will post at end of phase>
+   ```
+   This is the artifact-discipline contract. Agents read only what is listed and write exactly one artifact. See `sdlc-conventions` skill, "Artifact Discipline" section, for the rules and rationale.
+
 ## Phase 1: Planning
 
 **Skip if resuming from a Jira epic key.**
@@ -191,6 +198,7 @@ In this mode, the orchestrator:
    - The agent file body as the system prompt
    - The project description or plan file content
    - The repo path (so it can read existing code if any)
+   - `Write Artifact: structured plan markdown returned to orchestrator (no Jira yet)` — keep it tight per the agent's artifact-discipline rules
    - `model: "opus"` (from the agent frontmatter)
 
 2. The planner returns a structured breakdown:
@@ -214,7 +222,8 @@ The Jira project uses a 3-tier hierarchy:
 1. **Read** the `sdlc-jira-creator.md` agent file and **spawn as general-purpose Agent()** (see "How to Spawn Agents" above) with:
    - The agent file body as the system prompt
    - The approved plan text
-   - The SDLC context block (cloudId, projectKey, issue types)
+   - The SDLC context block (cloudId, projectKey, issue types), including:
+     - `Write Artifact: QBV + Epic + Story descriptions on creation; one summary comment per epic listing its child stories`
    - **The project name** (for QBV title and epic prefix)
    - `model: "sonnet"` (from the agent frontmatter)
 
@@ -234,7 +243,9 @@ The Jira project uses a 3-tier hierarchy:
 
 1. **Read** the `sdlc-architect.md` agent file and **spawn as general-purpose Agent()** (see "How to Spawn Agents") with:
    - The agent file body as the system prompt
-   - The SDLC context block
+   - The SDLC context block, including:
+     - `Read Artifacts: Story description + AC ({STORY-KEY})`
+     - `Write Artifact: ## Technical Specification (comment on {STORY-KEY})`
    - All story keys that are in "To Do" status
    - The repo path
    - `model: "opus"` (from the agent frontmatter)
@@ -258,7 +269,9 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
 
 2. **Read** the `sdlc-designer.md` agent file and **spawn as general-purpose Agent()** with:
    - The agent file body as the system prompt
-   - SDLC context block
+   - SDLC context block, including:
+     - `Read Artifacts: Story description + AC; ## Technical Specification (Summary section first) on {STORY-KEY}`
+     - `Write Artifact: ## Design Specification (comment on {STORY-KEY})`
    - The story key (has tech spec in comments)
    - `model: "opus"` (from the agent frontmatter)
 
@@ -313,7 +326,9 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 - Create the worktree as described above (if not already present)
 - **Read** `sdlc-developer.md` and **spawn as general-purpose Agent()** with:
   - The agent file body as the system prompt
-  - SDLC context block — including `Worktree Path: {repo_path}.worktrees/{STORY-KEY}`
+  - SDLC context block — including `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` and:
+    - `Read Artifacts: Story description + AC; ## Technical Specification on {STORY-KEY}; ## Design Specification on {STORY-KEY} (if Phase 3.5 ran)`
+    - `Write Artifact: ## Implementation Complete (comment on {STORY-KEY})`
   - Single story key
   - Base branch name
   - `model: "opus"`
@@ -322,7 +337,9 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 ### Step 5: Test
 - **Read** `sdlc-tester.md` and **spawn as general-purpose Agent()** with:
   - The agent file body as the system prompt
-  - SDLC context block — including the same `Worktree Path` used by the developer
+  - SDLC context block — including the same `Worktree Path` used by the developer and:
+    - `Read Artifacts: Story description + AC; ## Technical Specification (Summary) on {STORY-KEY}; ## Implementation Complete (Summary) on {STORY-KEY}`
+    - `Write Artifact: ## Test Results (comment on {STORY-KEY})`
   - The story key (now "In Review")
   - The PR branch name
   - `model: "sonnet"`
@@ -333,7 +350,9 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 ### Step 6: QA Review
 - **Read** `sdlc-qa-reviewer.md` and **spawn as general-purpose Agent()** with:
   - The agent file body as the system prompt
-  - SDLC context block
+  - SDLC context block, including:
+    - `Read Artifacts: Story description + AC; ## Technical Specification (Summary) on {STORY-KEY}; ## Implementation Complete (Summary) on {STORY-KEY}; ## Test Results (Summary + AC Coverage Map) on {STORY-KEY}`
+    - `Write Artifact: ## QA Review (comment on {STORY-KEY})`
   - The story key (now "Testing")
   - `model: "opus"`
 - **Fast-mode heuristic** — Decide whether to pass `Mode: fast` to the agent:
@@ -349,7 +368,9 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 - If story is in "Bug" status:
   - **Read** `sdlc-bug-fixer.md` and **spawn as general-purpose Agent()** with:
     - The agent file body as the system prompt
-    - SDLC context block — including the parent story's `Worktree Path` (the bug fix happens on the same branch)
+    - SDLC context block — including the parent story's `Worktree Path` (the bug fix happens on the same branch) and:
+      - `Read Artifacts: Bug description ({BUG-KEY}); ## Technical Specification (Summary) on parent {STORY-KEY}; ## Implementation Complete (Summary) on parent {STORY-KEY}; ## Test Results (Summary + named failure) on parent {STORY-KEY}`
+      - `Write Artifact: ## Bug Fix Complete (comment on {BUG-KEY})`
     - The Bug sub-task key
     - The parent story key
     - `model: "sonnet"`

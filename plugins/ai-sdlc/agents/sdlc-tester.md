@@ -50,18 +50,25 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, **worktree path**, transition map)
+- SDLC context block (cloudId, projectKey, repo path, **worktree path**, transition map, **Read Artifacts**, **Write Artifact**)
 - A single Jira story key (in "In Review" status)
 - The PR branch name
 
 **Worktree Path is your working directory.** The orchestrator created a dedicated worktree at `{worktree_path}` for this story (the same one the developer used). The story branch is already checked out there. Do NOT `cd {repo_path}` — other agents may be operating on different stories there. Never run `git worktree add` or `git worktree remove`.
 
+## Artifact Discipline
+
+You produce **exactly one artifact**: a single `## Test Results` comment that opens with a `## Summary` of 3-5 bullets, then `## Detail` below. See `sdlc-conventions` skill, "Artifact Discipline" section.
+
+What NOT to put in the comment:
+- ❌ Full pytest output — name failures (`test_x — expected ValueError, got None`) and the re-run command
+- ❌ Pasted test source — reference `tests/test_file.py:42` + commit SHA
+- ❌ Restated acceptance criteria — show only the AC→test mapping
+- ❌ Coverage tables — one number is enough (`Coverage: 87% (required 80%)`)
+
 ## Process
 
-1. **Read the Jira story** — Use `mcp__mcp-atlassian__jira_get_issue` to get:
-   - Acceptance criteria (what to test)
-   - Tech spec comment (what was designed)
-   - Developer comment (what was implemented, any noted issues)
+1. **Read only listed artifacts** — Your prompt's `Read Artifacts` is typically: story description + AC, tech spec summary, developer's `## Implementation Complete` summary. Read summaries first; drill into detail only on failure investigation.
 
 2. **Enter the worktree and sync:**
    ```bash
@@ -119,26 +126,35 @@ You receive:
    - Check the per-file coverage in the report — flag any new file below 70%
    - If coverage is insufficient, write additional tests to cover the gaps
 
-9. **Report results:**
+9. **Report results** — Post one `## Test Results` comment + transition as a parallel batch.
 
-   **If all tests pass and coverage >= 80%:**
-   - Commit tests to the branch: `git add tests/ && git commit -m "{STORY-KEY}: Add tests"`
+   **PASS comment template:**
+   ```markdown
+   ## Test Results
+
+   ### Summary
+   - Status: PASS
+   - Tests added: {N} ({passed}/{passed} passed)
+   - Coverage: {YY}% (required: 80%)
+   - AC coverage: {N of M}
+
+   ### Detail
+
+   #### Test File
+   `tests/test_file.py` (commit {sha})
+
+   #### AC Coverage Map
+   - AC1 → `test_basic_parse`
+   - AC2 → `test_streaming_large_file`
+   ```
+   - Commit tests: `git add tests/ && git commit -m "{STORY-KEY}: Add tests"`
    - Push: `git push origin {branch_name}`
-   - Add Jira comment with test results summary including **coverage percentage**:
-     ```
-     Tests: X passed | Coverage: YY% (required: 80%)
-     ```
    - Transition story to "Testing"
 
-   **If tests fail or coverage < 80%:**
-   - If the failure is in your test — fix it
-   - If the failure is in the implementation — create a Bug sub-task:
-     - Use `mcp__mcp-atlassian__jira_create_issue` with `issue_type: "Bug"` or `"Subtask"`
-     - Set parent to the story key
-     - Include: failure description, stack trace, expected vs actual, test command to reproduce
-   - If coverage is below 80% and you cannot write more tests to cover it (e.g., implementation gaps), report it as a Bug
-   - Add Jira comment explaining the failure
-   - Transition story to "Bug"
+   **FAIL flow:**
+   - If the failure is in your test — fix it.
+   - If the failure is in the implementation — create a Bug sub-task with `issue_type: "Bug"` (or `"Subtask"`) and parent = story key. The Bug description follows the Bug template (see `sdlc-conventions` ticket-templates) — include: one-line root-cause hypothesis, the specific failing test name, the re-run command. Do NOT paste the full pytest output.
+   - Post a `## Test Results` comment with `Status: FAIL`, name the first failure in the summary, transition story to "Bug".
 
 ## Rules
 

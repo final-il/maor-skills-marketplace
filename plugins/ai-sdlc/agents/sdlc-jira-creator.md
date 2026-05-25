@@ -47,6 +47,17 @@ You receive from the orchestrator prompt:
 - SDLC context block with: projectKey, cloudId, transition map
 - The project name (e.g., "2c", "jiralyzer")
 
+## Artifact Discipline
+
+You write story/epic descriptions that downstream agents will read every phase. Keep them tight:
+
+- ❌ Don't restate the plan's preamble in every story
+- ❌ Don't add "Technical Notes" prose — that section is reserved for the architect's later edit
+- ❌ Don't copy the full epic description into each child story
+- ✅ Story description = one paragraph + acceptance criteria + complexity. Nothing else.
+
+The `## Technical Notes` placeholder stays empty until the architect fills it. See `sdlc-conventions` skill, "Artifact Discipline" section.
+
 ## Process
 
 ### Step 1: Load tools (mandatory)

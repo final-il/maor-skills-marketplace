@@ -104,21 +104,31 @@
 
 ## Comment Formats
 
+**Every artifact comment** opens with `## Summary` (3-5 bullets), then `## Detail`. See `SKILL.md` "Artifact Discipline" for the rationale.
+
 ### Architect Comment (Tech Spec)
 ```markdown
 ## Technical Specification
 
-### Files to Create/Modify
+### Summary
+- Approach: {one-line description}
+- New/modified files: {count} (e.g., 2 src + 1 test)
+- Key dependencies: {libs, modules}
+- Risk / open question: {one bullet, or "none"}
+
+### Detail
+
+#### Files to Create/Modify
 - `src/module/file.py` — {what to do}
 - `tests/test_file.py` — {what to test}
 
-### Approach
-{Description of the implementation approach}
+#### Approach
+{Implementation approach. Reference existing patterns by file path; do not paste code.}
 
-### Data Structures
-{Key data structures, function signatures}
+#### Data Structures
+{Key signatures only — `def parse(stream: IO[bytes]) -> list[Record]`. No bodies.}
 
-### Edge Cases
+#### Edge Cases
 - {Edge case 1}
 - {Edge case 2}
 ```
@@ -127,48 +137,89 @@
 ```markdown
 ## Implementation Complete
 
-**Branch:** `{STORY-KEY}/{slug}`
-**PR:** {PR URL}
+### Summary
+- Branch: `{STORY-KEY}/{slug}`
+- PR: {URL}
+- Commits: {count}, last: {sha}
+- Deviations from tech spec: {one line, or "none"}
 
-### Changes
-- `src/file.py` — {what was changed}
-- `src/other.py` — {what was changed}
+### Detail
 
-### Notes
-{Any deviations from tech spec, decisions made}
+#### Changes
+- `src/file.py` — {what was changed} (commit {sha})
+- `src/other.py` — {what was changed} (commit {sha})
+
+#### Notes
+{Decisions made; do NOT paste code — link to commit + path}
 ```
 
 ### Tester Comment (Test Results)
 ```markdown
 ## Test Results
 
-**Status:** PASS / FAIL
-**Tests added:** {count}
-**Test file:** `tests/test_file.py`
+### Summary
+- Status: PASS / FAIL
+- Tests added: {count} ({passed} passed, {failed} failed)
+- AC coverage: {N of M} acceptance criteria covered
+- First failure (if any): `{test_name}` — {one-line cause}
 
-### Test Summary
-- ✅ {test_name} — {what it validates}
-- ✅ {test_name} — {what it validates}
-- ❌ {test_name} — {failure reason}
+### Detail
 
-### Coverage
-{Which acceptance criteria are covered}
+#### Test File
+`tests/test_file.py` (commit {sha})
+
+#### Failures
+- ❌ `test_parse_malformed_xml` — expected `ValueError`, got `None` at line 42
+  (re-run: `pytest tests/test_file.py::test_parse_malformed_xml -x`)
+
+#### AC Coverage Map
+- AC1 → `test_basic_parse`
+- AC2 → `test_streaming_large_file`
+- AC3 → not covered (out of scope this story)
+
+(Do NOT paste full pytest output — name failures and let the bug-fixer re-run.)
 ```
 
 ### QA Comment (Review Results)
 ```markdown
 ## QA Review
 
-**Status:** APPROVED / ISSUES FOUND
+### Summary
+- Status: APPROVED / ISSUES FOUND
+- Acceptance criteria: {N of M} pass
+- Code quality: {one-line verdict}
+- Bugs filed: {count} (keys: {BUG-1, BUG-2})
 
-### Requirements Check
-- ✅ {Acceptance criterion 1}
-- ✅ {Acceptance criterion 2}
-- ❌ {Acceptance criterion 3} — {what's wrong}
+### Detail
 
-### Code Quality
-{Observations about code quality, patterns, potential issues}
+#### Requirements Check
+- ✅ AC1 — verified by `test_basic_parse`
+- ✅ AC2 — verified by `test_streaming_large_file`
+- ❌ AC3 — {what's wrong, with file:line reference}
 
-### Issues
-{List of issues found, if any — each becomes a Bug sub-task}
+#### Code Quality
+{Observations referencing file:line, not pasted code}
+
+#### Issues → Bug Sub-tasks
+- {BUG-KEY}: {one-line description}
+- {BUG-KEY}: {one-line description}
+```
+
+### Bug Fixer Comment (Fix Done)
+```markdown
+## Bug Fix Complete
+
+### Summary
+- Bug: {BUG-KEY}
+- Root cause: {one line}
+- Fix: {one line}
+- Commits: {count}, last: {sha}
+
+### Detail
+
+#### Changes
+- `src/file.py:42-78` — {what changed} (commit {sha})
+
+#### Verification
+{How you verified the fix — name the test, not the output}
 ```

@@ -37,6 +37,17 @@ You receive either:
 - A path to a plan file (read it)
 - Both, along with a path to an existing repo (read CLAUDE.md, pyproject.toml, src/ structure)
 
+## Artifact Discipline
+
+Your output is the plan markdown — it becomes the QBV description and the source for epic/story descriptions. Keep it tight:
+
+- ❌ No prose paragraphs where bullets work
+- ❌ No long "Research Findings" — 3-5 bullets on what the research changed about the plan; full search dumps stay in your scratch context
+- ❌ No restated project description in every section
+- ✅ Every story has a one-line description and concrete acceptance criteria — nothing more
+
+See `sdlc-conventions` skill, "Artifact Discipline" section.
+
 ## Process
 
 1. **Understand the project** — Read all provided context. If a repo exists, explore its structure to understand what's already built.

@@ -50,24 +50,27 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, **worktree path**, transition map)
+- SDLC context block (cloudId, projectKey, repo path, **worktree path**, transition map, **Read Artifacts**, **Write Artifact**)
 - A Bug sub-task key (the specific bug to fix)
 - The parent story key
 
 **Worktree Path is your working directory.** The orchestrator created a dedicated worktree at `{worktree_path}` for the parent story (the same one the developer and tester used). The story branch is already checked out there. Do NOT `cd {repo_path}` — other agents may be operating on different stories there. Never run `git worktree add` or `git worktree remove`.
 
+## Artifact Discipline
+
+You produce **exactly one artifact**: a single `## Bug Fix Complete` comment on the Bug sub-task that opens with a `## Summary` of 3-5 bullets, then `## Detail` below. See `sdlc-conventions` skill, "Artifact Discipline" section.
+
+What NOT to put in the comment:
+- ❌ Pasted before/after code — reference `file:line` + commit SHA
+- ❌ Full test output — name the test that now passes
+- ❌ Restated bug description — the bug ticket already has it
+- ❌ Long debugging journal — one-line root cause is enough
+
 ## Process
 
-1. **Read the bug ticket** — Use `mcp__mcp-atlassian__jira_get_issue` to understand:
-   - What went wrong (description, error details, stack trace)
-   - Steps to reproduce
-   - Expected vs actual behavior
-   - Suggested fix (if any)
+1. **Read only listed artifacts** — Your prompt's `Read Artifacts` is typically: bug description, parent story's tech spec summary, developer's `## Implementation Complete` summary, tester's failure summary. Read summaries first.
 
-2. **Read the parent story** — Get full context:
-   - Original requirements and acceptance criteria
-   - Tech spec from architect
-   - Implementation notes from developer
+2. **Read the parent story** — Use the listed parent-story summary; do NOT re-read every comment in the thread.
 
 3. **Understand the codebase:**
    - The story's branch is already checked out in `{worktree_path}` — no need to switch branches
@@ -118,13 +121,25 @@ You receive:
    git push origin {story-branch}
    ```
 
-10. **Update Jira:**
-   - Add a comment on the Bug sub-task explaining:
-     - Root cause
-     - What was changed and why
-     - Test results after fix
-   - Transition the Bug sub-task to "Done"
-   - Transition the parent Story back to "In Review" (so it re-enters the test/QA cycle)
+10. **Update Jira** — Post one `## Bug Fix Complete` comment + transition Bug to Done + transition parent Story to "In Review", as a parallel batch:
+    ```markdown
+    ## Bug Fix Complete
+
+    ### Summary
+    - Bug: {BUG-KEY}
+    - Root cause: {one line}
+    - Fix: {one line}
+    - Commits: {N}, last: {sha}
+    - Verification: `{test_name}` now passes
+
+    ### Detail
+
+    #### Changes
+    - `src/file.py:42-78` — {what changed} (commit {sha})
+
+    #### Verification
+    {Name the test, the re-run command. Do NOT paste pytest output.}
+    ```
 
 ## Rules
 
