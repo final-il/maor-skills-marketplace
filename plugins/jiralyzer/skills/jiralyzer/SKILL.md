@@ -232,6 +232,82 @@ Useful flags:
 
 The dashboard reads the database **read-only** — concurrent `./run.sh sync` calls are safe. While the dashboard is open, you can run `./run.sh sync --project <KEY>` in another terminal and the charts refresh within ~5 seconds.
 
+## Pinning Analyses
+
+After producing a useful analysis (SQL + chart), offer to pin it so it shows up in the
+dashboard's "My Analyses" tab. Pinned analyses re-run free at view time — no LLM call,
+no Zscaler dance, and they compose with the dashboard's sidebar filters.
+
+### When to offer a pin
+
+Offer to pin **after** the user has seen the result and explicitly liked it. Phrase it
+as a yes/no: *"Pin this as `velocity-by-team`? (y/n)"*. Do NOT pin silently or in bulk.
+Never auto-pin — if the user declines, do nothing.
+
+### How to pin
+
+1. Build a JSON spec for the analysis. Use `{WHERE}` or `{AND}` tokens in the SQL so
+   the dashboard's sidebar filters narrow the pin just like the built-in tabs.
+2. Write the spec to a tmp path (e.g. `/tmp/<id>.json`).
+3. Call `./run.sh pin save --from-json <tmp_path>`.
+4. Confirm to the user that the pin is saved and visible in the dashboard's
+   "My Analyses" tab.
+
+### JSON template
+
+```json
+{
+  "id": "velocity-by-team",
+  "title": "Velocity by team (last 90d)",
+  "description": "Resolved tickets per team over the trailing 90 days.",
+  "sql": "SELECT team, COUNT(*) AS n FROM tickets WHERE resolved IS NOT NULL {AND} GROUP BY team",
+  "chart": {"type": "bar", "x": "team", "y": "n", "color_by": null},
+  "created_at": "2026-05-25",
+  "tags": ["velocity"]
+}
+```
+
+### Rules
+
+- **Pin id**: must match `[a-z0-9-]+` (lowercase letters, digits, hyphens). The
+  dashboard URL/file uses this id. Slug the title to derive a sensible default
+  (e.g. "Velocity by team" → `velocity-by-team`).
+- **Title**: free-form, shown as the chart heading.
+- **SQL**: embed `{WHERE}` (clean SELECT with no existing WHERE) or `{AND}` (SQL
+  already has its own WHERE) so sidebar filters compose. A pin without a token
+  will run unfiltered — discouraged. Rewrite the SQL to add the right token
+  before pinning if the original analysis didn't include one.
+- **Chart types**: `bar`, `line`, `pie`, `scatter`, `histogram`. For `pie` use
+  `names`/`values` keys instead of `x`/`y`. For `histogram`, only `x` is
+  required.
+- **created_at**: ISO date `YYYY-MM-DD`. The CLI will auto-stamp today's date if
+  you omit the field.
+- **Pin storage location**: `~/.jiralyzer/analyses/<id>.json`. Override with the
+  `JIRALYZER_PINS_DIR` env var.
+- **Overwrite**: re-pinning the same id requires `--overwrite`. Default refuses
+  with a clear error — re-prompt the user (overwrite or rename?) and act on
+  their answer.
+
+### Example flow (skill transcript)
+
+> User: *"Show me velocity by team"*
+>
+> Skill: *(runs analysis, shows chart)* *"That looks like a useful regular metric.
+> Pin this as `velocity-by-team` so it shows in the dashboard? (y/n)"*
+>
+> User: *"y"*
+>
+> Skill: *(writes `/tmp/velocity-by-team.json`, runs `./run.sh pin save --from-json /tmp/velocity-by-team.json`)*
+> *"Pinned. Open the dashboard's 'My Analyses' tab to see it."*
+
+### Listing & managing pins
+
+```bash
+./run.sh pin list             # show id, title, created_at, tags
+./run.sh pin show <id>        # print the JSON spec
+./run.sh pin delete <id>      # remove the pin (prompts for confirmation)
+```
+
 ## Export
 
 For downstream analysis (Snowflake, BigQuery, etc.):
