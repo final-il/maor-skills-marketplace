@@ -1,10 +1,12 @@
 # AI-SDLC Workflow States
 
-## CRITICAL — `Bug` is an issue *type*, not a status
+## Workflow Statuses
 
-CSI's Jira workflow has these statuses only: **Backlog, Selected for Development, In Progress, In Review, Testing, Done**. There is **no `Bug` status**. The pipeline uses `Bug` as an *issue type* — a child issue parented to a Story when a defect is found. The parent Story is sent **back to "In Progress"** (actively being fixed) until the Bug is resolved.
+Stories move through these statuses: **Backlog, Selected for Development, In Progress, In Review, Testing, Done**.
 
-When a project has different status names, the orchestrator maps them at Phase 0. Common synonyms:
+`Bug` is an issue *type*, not a status. A defect is a child issue (issuetype=Bug) parented to a Story; while the Bug is open, the parent Story sits in **In Progress**.
+
+When a project uses different status names, the orchestrator maps them at Phase 0. Common synonyms:
 - "Backlog" / "To Do"
 - "Selected for Development" / "Ready for Dev"
 - All other names should match exactly.
@@ -26,7 +28,7 @@ When a project has different status names, the orchestrator maps them at Phase 0
   - Tester/QA can move a Story **back** to **In Progress** when a defect is found (a child Bug issue is created in parallel)
   - Bug Fixer moves a Story **back** to **In Review** after pushing the fix
 - The orchestrator discovers transition IDs dynamically at startup using `mcp__mcp-atlassian__jira_get_transitions`
-- The Transition Map passed to agents has keys like `"In Progress"`, `"In Review"`, `"Testing"`, `"Done"` — there is no `"Bug"` key, because there is no Bug status.
+- The Transition Map passed to agents has keys for each status: `"Backlog"`, `"Selected for Development"`, `"In Progress"`, `"In Review"`, `"Testing"`, `"Done"`.
 
 ## Bug Lifecycle
 

@@ -73,7 +73,7 @@ When the user (not an agent) reports a bug — typically while testing a Done st
    - `additional_fields.parent`: the parent story key
    - `additional_fields.labels`: `["ai-sdlc", "{project_name}", "user-reported"]`
    - Description follows the Bug template in `sdlc-conventions` ticket-templates: one-line root-cause hypothesis (or "unknown"), steps to reproduce as the user described them, expected vs actual.
-3. **Reopen the parent Story** if it was `Done`: transition it back to **`In Progress`** (uses the Transition Map). ⚠️ There is no `Bug` status — `Bug` is an issue type only. The parent Story sits in `In Progress` while the child Bug is being resolved.
+3. **Move the parent Story to `In Progress`** (uses the Transition Map). The Story sits in `In Progress` while the child Bug is being resolved.
 4. **Ensure the worktree exists** for the parent story:
    ```bash
    if [ ! -d "{repo_path}.worktrees/{STORY-KEY}" ]; then
@@ -376,7 +376,7 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
   - `model: "sonnet"`
 - Tester writes tests, runs them
 - If pass: transitions Story to "Testing"
-- If fail: creates a child Bug issue (`issue_type: "Bug"`, `parent: {STORY-KEY}`) AND transitions parent Story back to **"In Progress"**. ⚠️ There is no "Bug" status — `Bug` is an issue type only.
+- If fail: creates a child Bug issue (`issue_type: "Bug"`, `parent: {STORY-KEY}`) AND transitions parent Story to **"In Progress"**.
 
 ### Step 6: QA Review
 - **Read** `sdlc-qa-reviewer.md` and **spawn as general-purpose Agent()** with:
@@ -393,10 +393,10 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
   - Otherwise: do not pass the flag (full QA review).
 - QA reviews code and requirements
 - If pass: transitions Story to "Done"
-- If issues: creates a child Bug issue (`issue_type: "Bug"`, `parent: {STORY-KEY}`) AND transitions parent Story back to **"In Progress"**. ⚠️ There is no "Bug" status — `Bug` is an issue type only.
+- If issues: creates a child Bug issue (`issue_type: "Bug"`, `parent: {STORY-KEY}`) AND transitions parent Story to **"In Progress"**.
 
 ### Step 7: Bug Fix (if needed)
-- Detection: query `parent = {STORY-KEY} AND issuetype = Bug AND status != Done`. If any row returns, the Story is in the bug-fix loop (the parent Story will be in **In Progress**, not a fictional "Bug" status).
+- Detection: query `parent = {STORY-KEY} AND issuetype = Bug AND status != Done`. If any row returns, the Story is in the bug-fix loop (the parent Story will be in **In Progress**).
 - For each open child Bug:
   - **Read** `sdlc-bug-fixer.md` and **spawn as general-purpose Agent()** with:
     - The agent file body as the system prompt
@@ -491,7 +491,6 @@ When `$ARGUMENTS` is a Jira epic key:
    - "In Review" → Phase 5 (Test)
    - "Testing" → Phase 6 (QA)
    - "Done" → skip (unless user reports a defect — see "User-Reported Bugs" section)
-   ⚠️ There is no "Bug" status — never check for one.
 
 ## Lifecycle — How Work Flows Back
 

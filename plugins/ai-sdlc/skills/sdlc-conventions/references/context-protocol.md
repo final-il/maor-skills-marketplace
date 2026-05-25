@@ -22,8 +22,6 @@ The orchestrator passes a standardized context block to every agent:
 - QBV Key: {qbv_issue_key}
 - Issue Keys: {comma-separated list of relevant Jira issue keys}
 - Transition Map: Backlog={id}, Selected for Development={id}, In Progress={id}, In Review={id}, Testing={id}, Done={id}
-  # Note: there is NO "Bug" key. `Bug` is an issue type, not a status. When a defect is found,
-  # the parent Story is transitioned back to "In Progress"; child Bug issues have their own status.
 - Read Artifacts: <list of prior comments/sections this agent should read; everything else is off-limits>
 - Write Artifact: <the single comment this agent will post at the end of its phase>
 ```
@@ -44,7 +42,7 @@ This is the **primary** channel for substantive context:
 - **Story descriptions** contain requirements and acceptance criteria
 - **Comments** are artifacts — exactly one per agent phase (tech spec, design, dev result, test result, QA review, bug report)
 - **Status** indicates where in the pipeline a ticket is
-- **Sub-tasks** (Bug type) contain bug reports
+- **Child Bug issues** (issuetype=Bug, parented to a Story) contain defect reports
 
 **Reading context from Jira (artifact discipline):**
 ```
