@@ -213,6 +213,25 @@ run.sh stats --format json  # Machine-readable
 
 This shows: table row counts, date ranges, status distribution, top assignees, resolution metrics.
 
+## Dashboard
+
+For an interactive web view of the analytics, run:
+
+```bash
+./run.sh dashboard
+```
+
+This launches a Streamlit app at `http://localhost:8501` with five tabs (Overview, Aging, Workload, Story Points, Categories), sidebar filters (project, team, assignee, date range), and live auto-refresh on `jiralyzer.db` changes.
+
+Useful flags:
+
+```bash
+./run.sh dashboard --port 8888    # custom port
+./run.sh dashboard --no-browser   # don't auto-open the browser
+```
+
+The dashboard reads the database **read-only** — concurrent `./run.sh sync` calls are safe. While the dashboard is open, you can run `./run.sh sync --project <KEY>` in another terminal and the charts refresh within ~5 seconds.
+
 ## Export
 
 For downstream analysis (Snowflake, BigQuery, etc.):
