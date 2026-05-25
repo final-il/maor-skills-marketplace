@@ -21,7 +21,9 @@ The orchestrator passes a standardized context block to every agent:
 - PR Target: {branch_PRs_merge_into}
 - QBV Key: {qbv_issue_key}
 - Issue Keys: {comma-separated list of relevant Jira issue keys}
-- Transition Map: To Do={id}, Planning={id}, Ready for Dev={id}, In Progress={id}, In Review={id}, Testing={id}, Done={id}, Bug={id}
+- Transition Map: Backlog={id}, Selected for Development={id}, In Progress={id}, In Review={id}, Testing={id}, Done={id}
+  # Note: there is NO "Bug" key. `Bug` is an issue type, not a status. When a defect is found,
+  # the parent Story is transitioned back to "In Progress"; child Bug issues have their own status.
 - Read Artifacts: <list of prior comments/sections this agent should read; everything else is off-limits>
 - Write Artifact: <the single comment this agent will post at the end of its phase>
 ```

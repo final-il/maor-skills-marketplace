@@ -73,7 +73,7 @@ When the user (not an agent) reports a bug — typically while testing a Done st
    - `additional_fields.parent`: the parent story key
    - `additional_fields.labels`: `["ai-sdlc", "{project_name}", "user-reported"]`
    - Description follows the Bug template in `sdlc-conventions` ticket-templates: one-line root-cause hypothesis (or "unknown"), steps to reproduce as the user described them, expected vs actual.
-3. **Reopen the parent Story** if it was `Done`: transition it to `Bug` (uses the Transition Map).
+3. **Reopen the parent Story** if it was `Done`: transition it back to **`In Progress`** (uses the Transition Map). ⚠️ There is no `Bug` status — `Bug` is an issue type only. The parent Story sits in `In Progress` while the child Bug is being resolved.
 4. **Ensure the worktree exists** for the parent story:
    ```bash
    if [ ! -d "{repo_path}.worktrees/{STORY-KEY}" ]; then
@@ -375,8 +375,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
   - The PR branch name
   - `model: "sonnet"`
 - Tester writes tests, runs them
-- If pass: transitions to "Testing"
-- If fail: creates Bug sub-task, transitions to "Bug"
+- If pass: transitions Story to "Testing"
+- If fail: creates a child Bug issue (`issue_type: "Bug"`, `parent: {STORY-KEY}`) AND transitions parent Story back to **"In Progress"**. ⚠️ There is no "Bug" status — `Bug` is an issue type only.
 
 ### Step 6: QA Review
 - **Read** `sdlc-qa-reviewer.md` and **spawn as general-purpose Agent()** with:
@@ -388,24 +388,25 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
   - `model: "opus"`
 - **Fast-mode heuristic** — Decide whether to pass `Mode: fast` to the agent:
   - Count acceptance criteria from the story description (≤3?)
-  - Check the story's comment history — has it been through a Bug → In Review cycle? (count bug-fix loops on this story; 0?)
+  - Check the story's comment history — has it been through an In Progress → In Review fix cycle (i.e., does it have any closed child Bug issues)? (count bug-fix loops on this story; 0?)
   - If BOTH true: include `Mode: fast` in the agent prompt. The agent will run a streamlined review (see "Fast Mode" in `sdlc-qa-reviewer.md`).
   - Otherwise: do not pass the flag (full QA review).
 - QA reviews code and requirements
-- If pass: transitions to "Done"
-- If issues: creates Bug sub-task, transitions to "Bug"
+- If pass: transitions Story to "Done"
+- If issues: creates a child Bug issue (`issue_type: "Bug"`, `parent: {STORY-KEY}`) AND transitions parent Story back to **"In Progress"**. ⚠️ There is no "Bug" status — `Bug` is an issue type only.
 
 ### Step 7: Bug Fix (if needed)
-- If story is in "Bug" status:
+- Detection: query `parent = {STORY-KEY} AND issuetype = Bug AND status != Done`. If any row returns, the Story is in the bug-fix loop (the parent Story will be in **In Progress**, not a fictional "Bug" status).
+- For each open child Bug:
   - **Read** `sdlc-bug-fixer.md` and **spawn as general-purpose Agent()** with:
     - The agent file body as the system prompt
     - SDLC context block — including the parent story's `Worktree Path` (the bug fix happens on the same branch) and:
       - `Read Artifacts: Bug description ({BUG-KEY}); ## Technical Specification (Summary) on parent {STORY-KEY}; ## Implementation Complete (Summary) on parent {STORY-KEY}; ## Test Results (Summary + named failure) on parent {STORY-KEY}`
       - `Write Artifact: ## Bug Fix Complete (comment on {BUG-KEY})`
-    - The Bug sub-task key
+    - The Bug issue key
     - The parent story key
     - `model: "sonnet"`
-  - Bug fixer fixes the issue, transitions bug to "Done", story back to "In Review"
+  - Bug fixer fixes the issue, transitions the Bug issue to "Done", and transitions the parent Story back to "In Review"
   - **Loop back to Step 5** (re-test)
   - **Maximum 3 bug-fix loops per story.** After that, add a Jira comment and move on.
 
@@ -473,7 +474,7 @@ This applies to all phases that run shell commands (Phase 4–7). Pass this envi
 
 - **Agent spawn failure:** Log the error, retry once. If still fails, report to user.
 - **Jira MCP error:** Check if it's auth-related (suggest re-auth) or data-related (log and skip).
-- **Test failures in loop:** After 3 iterations of Bug → Fix → Re-test, mark story as blocked.
+- **Test failures in loop:** After 3 iterations of (open child Bug → fix → re-test), mark story as blocked.
 - **Missing workflow status:** Fall back to To Do / In Progress / Done. Use comments for sub-states.
 
 ## Resume Support
@@ -481,13 +482,16 @@ This applies to all phases that run shell commands (Phase 4–7). Pass this envi
 When `$ARGUMENTS` is a Jira epic key:
 1. Fetch the epic and all child stories
 2. Check each story's status
-3. Resume from where the pipeline left off:
-   - "Backlog" / "To Do" stories → start at Phase 3 (Architecture)
+3. Resume from where the pipeline left off, by Story status:
+   - "Backlog" / "To Do" → Phase 3 (Architecture)
    - "Selected for Development" / "Ready for Dev" → Phase 4 (Develop)
+   - "In Progress" → check for open child Bugs (`parent = X AND issuetype = Bug AND status != Done`):
+     - Open child Bugs exist → Phase 7 (Bug Fix)
+     - No open child Bugs → resume Phase 4 (Developer was interrupted mid-implementation)
    - "In Review" → Phase 5 (Test)
    - "Testing" → Phase 6 (QA)
-   - "Bug" → Phase 7 (Bug Fix)
-   - "Done" → skip
+   - "Done" → skip (unless user reports a defect — see "User-Reported Bugs" section)
+   ⚠️ There is no "Bug" status — never check for one.
 
 ## Lifecycle — How Work Flows Back
 

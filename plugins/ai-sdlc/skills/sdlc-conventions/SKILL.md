@@ -16,14 +16,17 @@ The AI-SDLC system uses Jira as the coordination layer between autonomous agents
 
 ## Jira Workflow
 
-Tickets flow through these statuses:
+Stories flow through these statuses:
 
 ```
-To Do → Planning → Ready for Dev → In Progress → In Review → Testing → Done
-                                                       ↘ Bug → In Progress (loop)
+Backlog → Selected for Development → In Progress → In Review → Testing → Done
+                                          ↑                           │
+                                          └─── (defect: open child Bug) ─┘
 ```
 
-See `references/workflow-states.md` for detailed status definitions.
+When a Tester/QA finds a defect, they (a) create a child **Bug issue** parented to the Story and (b) move the Story back to **In Progress**. After the Bug Fixer pushes the fix, the Bug issue goes to Done and the Story returns to **In Review** for re-testing.
+
+**`Bug` is an issue *type*, not a status.** CSI has no Bug status. See `references/workflow-states.md` for the full definitions and detection rules.
 
 ## Labels
 
@@ -38,7 +41,7 @@ The system creates tickets in a 3-tier hierarchy:
 - **Epic** (level 1) — Major functional area, parented to the QBV
 - **Story** (level 0) — Implementable unit (1-3 days of work), parented to an Epic
 - **Sub-task** — Optional fine-grained steps under a Story
-- **Bug** — Created as sub-task of a Story when tests/QA fail
+- **Bug** — A child *issue* (issuetype=Bug, parented to the Story) created when tests/QA find a defect. Has its own status independent of the parent Story. **There is no "Bug" status** — see `references/workflow-states.md`.
 
 See `references/ticket-templates.md` for description templates.
 
@@ -205,7 +208,7 @@ The AI-SDLC pipeline requires the standalone `mcp-atlassian` MCP server (configu
 4. **Never inline full output** — No full test logs, no pasted code, no restated requirements. Reference commits / file paths / failing test names instead.
 5. **Use markdown in Jira** — The `mcp__mcp-atlassian__jira_add_comment` body parameter accepts Markdown directly
 6. **Transition tickets** — Move tickets to the correct status when done
-7. **Create Bug sub-tasks** — When tests fail or QA finds issues, create a Bug sub-task under the parent Story
+7. **Create Bug issues, send Story back to In Progress** — When tests fail or QA finds issues, create a child issue with `issue_type: "Bug"` and `parent: {STORY-KEY}`, AND transition the parent Story back to **In Progress** (NOT to "Bug" — there is no Bug status). The Bug Fixer transitions the Story back to **In Review** when the fix is pushed.
 8. **Commit messages** — Always include the Jira ticket key: `{STORY-KEY}: {summary}`
 9. **Branch naming** — Use `{story-key}/{short-slug}` (e.g., `PROJ-42/xml-parser`)
 10. **PR target** — Always use `--base {pr_target_branch}` when creating PRs

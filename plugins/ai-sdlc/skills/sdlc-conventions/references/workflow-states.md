@@ -1,43 +1,55 @@
 # AI-SDLC Workflow States
 
+## CRITICAL — `Bug` is an issue *type*, not a status
+
+CSI's Jira workflow has these statuses only: **Backlog, Selected for Development, In Progress, In Review, Testing, Done**. There is **no `Bug` status**. The pipeline uses `Bug` as an *issue type* — a child issue parented to a Story when a defect is found. The parent Story is sent **back to "In Progress"** (actively being fixed) until the Bug is resolved.
+
+When a project has different status names, the orchestrator maps them at Phase 0. Common synonyms:
+- "Backlog" / "To Do"
+- "Selected for Development" / "Ready for Dev"
+- All other names should match exactly.
+
 ## Status Definitions
 
 | Status | Meaning | Entered By | Exited By |
 |--------|---------|------------|-----------|
-| **To Do** | Story created, not yet designed | Jira Creator agent | Architect agent |
-| **Planning** | Architect is designing the tech spec | Architect agent (start) | Architect agent (end) |
-| **Ready for Dev** | Tech spec complete (+ design spec if UI story), implementation can begin | Architect agent (or Designer after approval) | Developer agent |
-| **In Progress** | Developer is actively writing code | Developer agent (start) | Developer agent (end) |
-| **In Review** | Code written and PR opened, awaiting tests | Developer agent | Tester agent |
-| **Testing** | Tests written and passing, awaiting QA review | Tester agent | QA Reviewer agent |
-| **Done** | QA passed, story complete | QA Reviewer agent | — |
-| **Bug** | Issue found by tester or QA, needs fixing | Tester or QA agent | Bug Fixer agent |
+| **Backlog** (or **To Do**) | Story created, not yet designed | Jira Creator agent | Architect agent |
+| **Selected for Development** (or **Ready for Dev**) | Tech spec complete (+ design spec if UI story), implementation can begin | Architect agent (or Designer after approval) | Developer agent |
+| **In Progress** | Developer is actively writing code, OR Bug Fixer is actively resolving a child Bug | Developer agent / Bug Fixer agent | Developer agent / Bug Fixer agent |
+| **In Review** | Code written and PR opened, awaiting tests (also where Story returns after a fix) | Developer / Bug Fixer | Tester agent |
+| **Testing** | Tests pass, awaiting QA review | Tester agent | QA Reviewer agent |
+| **Done** | QA passed (Story) or fix complete (Bug issue) | QA Reviewer / Bug Fixer | — |
 
 ## Transition Rules
 
 - Transitions go **forward only**, except:
-  - Bug Fixer moves a story **back** to "In Review" after fixing
-  - QA Reviewer can move a story **back** to "Bug" if issues found
+  - Tester/QA can move a Story **back** to **In Progress** when a defect is found (a child Bug issue is created in parallel)
+  - Bug Fixer moves a Story **back** to **In Review** after pushing the fix
 - The orchestrator discovers transition IDs dynamically at startup using `mcp__mcp-atlassian__jira_get_transitions`
-- If the Jira project uses different status names, the orchestrator maps them at init time
+- The Transition Map passed to agents has keys like `"In Progress"`, `"In Review"`, `"Testing"`, `"Done"` — there is no `"Bug"` key, because there is no Bug status.
 
 ## Bug Lifecycle
 
-1. Tester or QA finds an issue
-2. Creates a **Bug sub-task** under the parent Story
-3. Transitions the parent Story to "Bug" status
-4. Bug Fixer agent picks up the Bug sub-task
-5. Fixes the code, runs tests
-6. Transitions Bug sub-task to "Done"
-7. Transitions parent Story back to "In Review"
-8. Tester re-validates
+A Bug is a separate Jira issue (issuetype=Bug) parented to a Story. It has its own status independent of the parent.
+
+1. Tester or QA finds a defect (or the user reports one).
+2. They create a **Bug issue** with `issue_type: "Bug"` and `parent: {STORY-KEY}`. The Bug starts in `Backlog` / `To Do`.
+3. The parent Story is transitioned **back to "In Progress"** — it's actively being fixed again.
+4. The Bug Fixer agent picks up the Bug:
+   - Transitions the Bug to **In Progress**
+   - Fixes the code, pushes the commit
+   - Transitions the Bug to **Done**
+   - Transitions the parent Story back to **In Review** (re-enters Tester → QA loop)
+5. Tester re-runs (Story → Testing on pass, → In Progress + new Bug on another fail).
+
+**Detecting active bug work on a Story:** the orchestrator queries child issues, not parent status.
+
+```
+JQL: parent = {STORY-KEY} AND issuetype = Bug AND status != Done
+```
+
+A Story is "in the bug-fix loop" if it has any non-Done child Bug. Don't infer this from the Story's own status.
 
 ## Max Retry
 
-A story can go through the Bug → Fix → Re-test loop at most **3 times**. After that, the orchestrator flags it for human review and moves to the next story.
-
-## Fallback Statuses
-
-If the Jira project does not have all these statuses, use this minimal mapping:
-- To Do, In Progress, Done (standard Jira defaults)
-- Use Jira comments to track sub-states (e.g., "## Status: Ready for Dev")
+A Story can go through the In-Progress (fix) → In Review → Testing loop at most **3 times** with a child Bug each round. After that, the orchestrator flags it for human review and moves on.

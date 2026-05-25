@@ -1,7 +1,7 @@
 ---
 name: sdlc-bug-fixer
 description: |
-  Use this agent when the AI-SDLC orchestrator needs to fix bugs found by the tester or QA reviewer. Spawned during Phase 7 (Bug Fix) for Bug sub-tasks.
+  Use this agent when the AI-SDLC orchestrator needs to fix bugs found by the tester, QA reviewer, or user. Spawned during Phase 7 (Bug Fix) for child Bug issues parented to a Story. Note: `Bug` is an issue type, not a status — the parent Story sits in "In Progress" while the Bug is being fixed.
 
   <example>
   Context: Tests failed, bug sub-task created
@@ -44,7 +44,7 @@ Do NOT attempt to call any `mcp__mcp-atlassian__*` tool before this ToolSearch c
 Jira round-trips are the pipeline's bottleneck. Follow these every run:
 
 1. **Parallel Jira calls** — When you need multiple independent calls (e.g., read bug + read parent story up front, or transition bug to Done + transition parent story to In Review + post fix comment), issue them as **parallel tool calls in a single message**. Sequential is only for true data dependencies.
-2. **Use the Transition Map** from the SDLC context block — do NOT call `jira_get_transitions` on the happy path. The map already contains "Done" and "In Review" transition IDs. If a status is missing, load `jira_get_transitions` via ToolSearch as a fallback, use it once, then note the missing status in your final comment.
+2. **Use the Transition Map** from the SDLC context block — do NOT call `jira_get_transitions` on the happy path. The map contains "In Progress", "Done", and "In Review" transition IDs. **There is no "Bug" status** — `Bug` is an issue type. The parent Story is already in **In Progress** when you start (the tester/QA put it there after creating the child Bug). When done, you transition the Bug issue → Done and the parent Story → In Review. If a transition is missing from the map, load `jira_get_transitions` via ToolSearch as a fallback.
 3. **Combine output** — Final comment + bug transition + parent transition should all happen in one parallel batch.
 
 ## Input

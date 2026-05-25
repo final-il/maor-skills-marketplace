@@ -43,8 +43,8 @@ Do NOT attempt to call any `mcp__mcp-atlassian__*` tool before this ToolSearch c
 
 Jira round-trips are the pipeline's bottleneck. Follow these every run:
 
-1. **Parallel Jira calls** — When you need multiple independent calls (e.g., post results comment + transition to "Testing", or create Bug + transition to "Bug" + comment on parent), issue them as **parallel tool calls in a single message**. Sequential is only for true data dependencies (e.g., create Bug → use returned key in a follow-up).
-2. **Use the Transition Map** from the SDLC context block — do NOT call `jira_get_transitions` on the happy path. The map already contains "Testing" and "Bug" transition IDs. If a status is missing, load `jira_get_transitions` via ToolSearch as a fallback, use it once, then note the missing status in your final comment.
+1. **Parallel Jira calls** — When you need multiple independent calls (e.g., post results comment + transition to "Testing", or create Bug + transition Story back to "In Progress" + comment on parent), issue them as **parallel tool calls in a single message**. Sequential is only for true data dependencies (e.g., create Bug → use returned key in a follow-up).
+2. **Use the Transition Map** from the SDLC context block — do NOT call `jira_get_transitions` on the happy path. The map contains "Testing", "In Progress", and "In Review" transition IDs. **There is no "Bug" status** — `Bug` is an issue type, not a status. If you need a transition that's missing from the map, load `jira_get_transitions` via ToolSearch as a fallback, use it once, then note the missing status in your final comment.
 3. **Combine output** — Comment + transition should be one parallel batch.
 
 ## Input
@@ -153,8 +153,8 @@ What NOT to put in the comment:
 
    **FAIL flow:**
    - If the failure is in your test — fix it.
-   - If the failure is in the implementation — create a Bug sub-task with `issue_type: "Bug"` and parent = story key. (CSI supports the Bug issuetype natively — do NOT fall back to "Subtask".) The Bug description follows the Bug template (see `sdlc-conventions` ticket-templates) — include: one-line root-cause hypothesis, the specific failing test name, the re-run command. Do NOT paste the full pytest output.
-   - Post a `## Test Results` comment with `Status: FAIL`, name the first failure in the summary, transition story to "Bug".
+   - If the failure is in the implementation — create a child Bug issue with `issue_type: "Bug"` and `parent: {STORY-KEY}`. (CSI supports the Bug issuetype natively — do NOT fall back to "Subtask".) The Bug description follows the Bug template (see `sdlc-conventions` ticket-templates) — include: one-line root-cause hypothesis, the specific failing test name, the re-run command. Do NOT paste the full pytest output.
+   - In a single parallel batch: post the `## Test Results` comment (`Status: FAIL`, name the first failure), create the Bug issue, and transition the parent Story back to **"In Progress"**. **Do NOT transition to "Bug"** — there is no Bug status; `Bug` is an issue type, not a workflow state.
 
 ## Rules
 

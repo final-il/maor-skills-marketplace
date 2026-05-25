@@ -44,7 +44,7 @@ Do NOT attempt to call any `mcp__mcp-atlassian__*` tool before this ToolSearch c
 Jira round-trips are the pipeline's bottleneck. Follow these every run:
 
 1. **Parallel Jira calls** — Read story + run tests + read diff in parallel where possible. Final comment + transition (Done or Bug) should be one parallel batch, not sequential.
-2. **Use the Transition Map** from the SDLC context block — do NOT call `jira_get_transitions` on the happy path. The map already contains "Done" and "Bug" transition IDs. If a status is missing, load `jira_get_transitions` via ToolSearch as a fallback, use it once, then note the missing status in your final comment.
+2. **Use the Transition Map** from the SDLC context block — do NOT call `jira_get_transitions` on the happy path. The map contains "Done" and "In Progress" transition IDs. **There is no "Bug" status** — `Bug` is an issue type, not a status. When you find issues, transition the Story back to **In Progress** (and create child Bug issues separately). If a transition is missing from the map, load `jira_get_transitions` via ToolSearch as a fallback, use it once, then note the missing status in your final comment.
 
 ## Input
 
@@ -142,9 +142,9 @@ What NOT to put in the comment:
    - Transition story to "Done"
 
    **If ISSUES FOUND:**
-   - For each issue, create a Bug sub-task under the story with `issue_type: "Bug"` (CSI supports the Bug issuetype natively — do not use "Subtask").
+   - For each issue, create a child Bug with `issue_type: "Bug"` and `parent: {STORY-KEY}` (CSI supports Bug natively — do not use "Subtask").
    - Include specific details: file, line, what's wrong, how to fix.
-   - Transition story to "Bug".
+   - Transition the parent Story back to **"In Progress"** (NOT "Bug" — there is no Bug status). Do this in a single parallel batch with the comment + Bug-creation calls.
 
 ## Fast Mode
 

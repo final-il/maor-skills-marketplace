@@ -74,6 +74,8 @@
 
 ## Bug Template
 
+A Bug is created with `issue_type: "Bug"` and `additional_fields.parent: {STORY-KEY}`. It is a sibling-level issue parented to the Story, NOT a sub-task. The parent Story is moved to **In Progress** while the Bug is open.
+
 ```markdown
 # Bug: {Short description}
 
