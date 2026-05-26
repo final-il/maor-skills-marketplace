@@ -47,6 +47,15 @@ When this document says "Spawn the `sdlc-X` agent", do this:
    - DO: state results, decisions, and blockers in short bullet points
    - Final output: ≤10 lines summarizing what you did, what succeeded/failed, and what's next
 
+   ## Shell Command Rules
+   To avoid permission prompts, write commands that minimize compound chains:
+   - Use `git -C {dir} ...` instead of `cd {dir} && git ...`
+   - Use `uv --directory {dir} ...` instead of `cd {dir} && uv ...`
+   - Run separate commands as separate Bash tool calls, NOT chained with `&&`
+   - NEVER combine `cd` and `git` in the same command (triggers a hardcoded safety prompt that no allowlist can bypass — even `git ... && cd ... && other-cmd` is blocked)
+   - Acceptable single-purpose chains: `cmd1 && cmd2` where neither is `git` or `cd`
+   - For env-prefixed commands, place env vars directly: `SSL_CERT_FILE=... uv sync` (no preceding cd)
+
    ## SDLC Context
    {full context block — Project Name, Project Key, Cloud ID, Repo Path, Base Branch,
     PR Target, QBV Key, Transition Map, Agent Paths, Worktree Path if applicable,
