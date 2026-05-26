@@ -22,19 +22,51 @@ You are the orchestrator of an automated software development lifecycle. You coo
 
 **CRITICAL:** Plugin subagents cannot access MCP tools (Claude Code platform limitation). All SDLC agents need Jira MCP access. You MUST spawn them as **general-purpose agents** — NOT as typed subagents.
 
+### Pointer-not-body — never read the agent file in the orchestrator
+
+The agent's role definition is loaded by the **agent itself** as its first action, not by the orchestrator. Reading the body in the orchestrator inlines ~2k tokens per spawn into orchestrator history, which compounds across 7-9 spawns per epic. Pass the **path** instead.
+
+### Resolve agent paths once (Phase 0)
+
+In Phase 0 you run **one Glob** to find all agent files (see Phase 0, step 4b). The result is stored in the context block as `Agent Paths:` — one path per role. Reuse those paths for every spawn; do NOT re-glob and do NOT Read the agent files.
+
+### Per-spawn pattern
+
 When this document says "Spawn the `sdlc-X` agent", do this:
 
-1. **Read** the agent file: `plugins/ai-sdlc/agents/sdlc-X.md` (use the Glob tool to find it in the plugin cache if the path isn't known — search for `**/ai-sdlc/agents/sdlc-X.md`)
-2. Extract the **body** (everything after the `---` frontmatter closing)
-3. Extract the **model** from the frontmatter (opus or sonnet)
-4. **Spawn** using `Agent()` with:
-   - `prompt`: the body text + your context block + task-specific instructions
-   - `model`: from the frontmatter
+1. Look up the agent path in your context block's `Agent Paths` map (e.g., `developer: /Users/.../sdlc-developer.md`).
+2. Build the spawn prompt as a **pointer + context + task**, NOT body + context + task:
+   ```
+   Your role definition is at: {agent_path}
+   Read it as your VERY FIRST action, before anything else (including ToolSearch).
+
+   ## SDLC Context
+   {full context block — Project Name, Project Key, Cloud ID, Repo Path, Base Branch,
+    PR Target, QBV Key, Transition Map, Agent Paths, Worktree Path if applicable,
+    Read Artifacts, Write Artifact}
+
+   ## Task
+   {task-specific instructions, e.g., "Implement story CSI-443" or "Fix bug CSI-510 (parent CSI-449)"}
+   ```
+3. **Spawn** using `Agent()` with:
+   - `prompt`: the prompt string above
+   - `model`: hardcoded per role (see table below)
    - Do NOT set `subagent_type`
 
-This ensures agents get ToolSearch, MCP tools, and the Skill tool (for invoking skills like tavily-search, systematic-debugging, etc.).
+| Role | Model |
+|---|---|
+| sdlc-planner | opus |
+| sdlc-jira-creator | sonnet |
+| sdlc-architect | opus |
+| sdlc-designer | opus |
+| sdlc-developer | opus |
+| sdlc-tester | sonnet |
+| sdlc-qa-reviewer | opus |
+| sdlc-bug-fixer | sonnet |
 
-**ALL agents** must be spawned this way — no exceptions.
+This ensures agents get ToolSearch, MCP tools, and the Skill tool (for invoking skills like tavily-search, systematic-debugging, etc.), and keeps the orchestrator's context lean.
+
+**ALL agents** must be spawned this way — no exceptions. Never paste an agent's body into the spawn prompt.
 
 ## Performance Notes
 
@@ -124,6 +156,21 @@ In this mode, the orchestrator:
    The orchestrator routes by status. Descriptions and comments are read by the spawned agent under its artifact-discipline contract.
 
 4. **Jira project:** Always use `CSI` (CSI-PM). Do NOT ask the user which project — it is always CSI.
+
+4b. **Resolve agent file paths once.** Run **one Glob**: `**/ai-sdlc/agents/sdlc-*.md`. From the result, build the `Agent Paths` map:
+   ```
+   {
+     planner:      "/.../plugins/ai-sdlc/agents/sdlc-planner.md",
+     jira-creator: "/.../plugins/ai-sdlc/agents/sdlc-jira-creator.md",
+     architect:    "/.../plugins/ai-sdlc/agents/sdlc-architect.md",
+     designer:     "/.../plugins/ai-sdlc/agents/sdlc-designer.md",
+     developer:    "/.../plugins/ai-sdlc/agents/sdlc-developer.md",
+     tester:       "/.../plugins/ai-sdlc/agents/sdlc-tester.md",
+     qa-reviewer:  "/.../plugins/ai-sdlc/agents/sdlc-qa-reviewer.md",
+     bug-fixer:    "/.../plugins/ai-sdlc/agents/sdlc-bug-fixer.md",
+   }
+   ```
+   If multiple matches per role exist (e.g., dev marketplace + cached prod marketplace), pick the path under the active marketplace (`maor-skills-marketplace-dev` if `~/git-dev/.claude/settings.json` enables it, else `maor-skills-marketplace`). Do NOT Read these files — agents Read their own role definition.
 
 5. **Discover workflow transitions:**
    - Find an existing ticket in the project, or ask the user for a sample ticket key
@@ -217,6 +264,7 @@ In this mode, the orchestrator:
    PR Target: {pr_target_branch}
    QBV Key: {qbv_key or "to be created"}
    Transition Map: {status=id, ...}
+   Agent Paths: {role=path, ...}     ← from step 4b
    ```
 
    When spawning an agent, you ALSO append per-phase artifact metadata to its context block:
@@ -230,12 +278,12 @@ In this mode, the orchestrator:
 
 **Skip if resuming from a Jira epic key.**
 
-1. **Read** the `sdlc-planner.md` agent file and **spawn as general-purpose Agent()** with:
-   - The agent file body as the system prompt
-   - The project description or plan file content
-   - The repo path (so it can read existing code if any)
-   - `Write Artifact: structured plan markdown returned to orchestrator (no Jira yet)` — keep it tight per the agent's artifact-discipline rules
-   - `model: "opus"` (from the agent frontmatter)
+1. **Spawn `sdlc-planner` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+   - Pointer to `Agent Paths.planner`
+   - SDLC context block including:
+     - `Write Artifact: structured plan markdown returned to orchestrator (no Jira yet)` — keep it tight per the agent's artifact-discipline rules
+   - Task: the project description or plan file content + the repo path (so it can read existing code if any)
+   - `model: "opus"`
 
 2. The planner returns a structured breakdown:
    - Epics with descriptions
@@ -255,13 +303,12 @@ The Jira project uses a 3-tier hierarchy:
 - **Epic** (level 1) — functional area within the project, parented to the QBV
 - **Story** (level 0) — individual work item, parented to an Epic
 
-1. **Read** the `sdlc-jira-creator.md` agent file and **spawn as general-purpose Agent()** (see "How to Spawn Agents" above) with:
-   - The agent file body as the system prompt
-   - The approved plan text
-   - The SDLC context block (cloudId, projectKey, issue types), including:
+1. **Spawn `sdlc-jira-creator` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+   - Pointer to `Agent Paths.jira-creator`
+   - SDLC context block (cloudId, projectKey, issue types), including:
      - `Write Artifact: QBV + Epic + Story descriptions on creation; one summary comment per epic listing its child stories`
-   - **The project name** (for QBV title and epic prefix)
-   - `model: "sonnet"` (from the agent frontmatter)
+   - Task: the approved plan text + **the project name** (for QBV title and epic prefix)
+   - `model: "sonnet"`
 
 2. The agent creates:
    - A **QBV** issue: `"{project_name} — {short description}"` with labels `["ai-sdlc", "{project_name}"]`
@@ -277,14 +324,13 @@ The Jira project uses a 3-tier hierarchy:
 
 ## Phase 3: Architecture
 
-1. **Read** the `sdlc-architect.md` agent file and **spawn as general-purpose Agent()** (see "How to Spawn Agents") with:
-   - The agent file body as the system prompt
-   - The SDLC context block, including:
+1. **Spawn `sdlc-architect` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+   - Pointer to `Agent Paths.architect`
+   - SDLC context block, including:
      - `Read Artifacts: Story description + AC ({STORY-KEY})`
      - `Write Artifact: ## Technical Specification (comment on {STORY-KEY})`
-   - All story keys that are in "To Do" status
-   - The repo path
-   - `model: "opus"` (from the agent frontmatter)
+   - Task: all story keys in "To Do" status + the repo path
+   - `model: "opus"`
 
 2. The architect reads each story from Jira, writes tech specs as comments, and transitions to "Ready for Dev"
 
@@ -303,13 +349,13 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
    - User prompts or interactive flows
    Then the story needs design.
 
-2. **Read** the `sdlc-designer.md` agent file and **spawn as general-purpose Agent()** with:
-   - The agent file body as the system prompt
+2. **Spawn `sdlc-designer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+   - Pointer to `Agent Paths.designer`
    - SDLC context block, including:
      - `Read Artifacts: Story description + AC; ## Technical Specification (Summary section first) on {STORY-KEY}`
      - `Write Artifact: ## Design Specification (comment on {STORY-KEY})`
-   - The story key (has tech spec in comments)
-   - `model: "opus"` (from the agent frontmatter)
+   - Task: the story key (has tech spec in comments)
+   - `model: "opus"`
 
 3. The designer reads the tech spec, analyzes existing UI patterns in the codebase, and posts a "## Design Specification" comment on the story (wireframes, colors, UX flow, output examples).
 
@@ -360,36 +406,34 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 
 ### Step 4: Develop
 - Create the worktree as described above (if not already present)
-- **Read** `sdlc-developer.md` and **spawn as general-purpose Agent()** with:
-  - The agent file body as the system prompt
+- **Spawn `sdlc-developer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+  - Pointer to `Agent Paths.developer`
   - SDLC context block — including `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` and:
     - `Read Artifacts: Story description + AC; ## Technical Specification on {STORY-KEY}; ## Design Specification on {STORY-KEY} (if Phase 3.5 ran)`
     - `Write Artifact: ## Implementation Complete (comment on {STORY-KEY})`
-  - Single story key
-  - Base branch name
+  - Task: single story key + base branch name
   - `model: "opus"`
 - Developer writes code, commits, opens PR, transitions to "In Review"
 
 ### Step 5: Test
-- **Read** `sdlc-tester.md` and **spawn as general-purpose Agent()** with:
-  - The agent file body as the system prompt
+- **Spawn `sdlc-tester` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+  - Pointer to `Agent Paths.tester`
   - SDLC context block — including the same `Worktree Path` used by the developer and:
     - `Read Artifacts: Story description + AC; ## Technical Specification (Summary) on {STORY-KEY}; ## Implementation Complete (Summary) on {STORY-KEY}`
     - `Write Artifact: ## Test Results (comment on {STORY-KEY})`
-  - The story key (now "In Review")
-  - The PR branch name
+  - Task: the story key (now "In Review") + the PR branch name
   - `model: "sonnet"`
 - Tester writes tests, runs them
 - If pass: transitions Story to "Testing"
 - If fail: creates a child Bug issue (`issue_type: "Bug"`, `parent: {STORY-KEY}`) AND transitions parent Story to **"In Progress"**.
 
 ### Step 6: QA Review
-- **Read** `sdlc-qa-reviewer.md` and **spawn as general-purpose Agent()** with:
-  - The agent file body as the system prompt
+- **Spawn `sdlc-qa-reviewer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+  - Pointer to `Agent Paths.qa-reviewer`
   - SDLC context block, including:
     - `Read Artifacts: Story description + AC; ## Technical Specification (Summary) on {STORY-KEY}; ## Implementation Complete (Summary) on {STORY-KEY}; ## Test Results (Summary + AC Coverage Map) on {STORY-KEY}`
     - `Write Artifact: ## QA Review (comment on {STORY-KEY})`
-  - The story key (now "Testing")
+  - Task: the story key (now "Testing")
   - `model: "opus"`
 - **Fast-mode heuristic** — Decide whether to pass `Mode: fast` to the agent:
   - Count acceptance criteria from the story description (≤3?)
@@ -403,13 +447,12 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 ### Step 7: Bug Fix (if needed)
 - Detection: query `parent = {STORY-KEY} AND issuetype = Bug AND status != Done`. If any row returns, the Story is in the bug-fix loop (the parent Story will be in **In Progress**).
 - For each open child Bug:
-  - **Read** `sdlc-bug-fixer.md` and **spawn as general-purpose Agent()** with:
-    - The agent file body as the system prompt
+  - **Spawn `sdlc-bug-fixer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+    - Pointer to `Agent Paths.bug-fixer`
     - SDLC context block — including the parent story's `Worktree Path` (the bug fix happens on the same branch) and:
       - `Read Artifacts: Bug description ({BUG-KEY}); ## Technical Specification (Summary) on parent {STORY-KEY}; ## Implementation Complete (Summary) on parent {STORY-KEY}; ## Test Results (Summary + named failure) on parent {STORY-KEY}`
       - `Write Artifact: ## Bug Fix Complete (comment on {BUG-KEY})`
-    - The Bug issue key
-    - The parent story key
+    - Task: the Bug issue key + the parent story key
     - `model: "sonnet"`
   - Bug fixer fixes the issue, transitions the Bug issue to "Done", and transitions the parent Story back to "In Review"
   - **Loop back to Step 5** (re-test)
