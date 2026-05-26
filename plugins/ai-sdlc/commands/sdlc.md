@@ -597,67 +597,39 @@ This applies to all phases that run shell commands (Phase 4–7). Pass this envi
 
 ## Pause & Handoff
 
-When the user says "pause", "stop", "save progress", or the orchestrator finishes a batch and is about to hit context limits, save state for fast resume in the next session.
+Two tiers — automatic (cheap) and explicit (rich):
 
-**Trigger automatically** at the end of each completed batch (e.g., after all stories in a wave reach their next phase gate).
+### Auto-save (batch boundaries)
 
-**Process:**
+**Trigger:** at the end of each completed batch (all stories in a wave reached their next phase gate), or when context exceeds 60%.
 
-1. **Build the resume file.** Write to `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-resume-{EPIC-KEY}.md`:
+Write the resume file **directly** — no skill invocation, no user confirmation. Just the context block + routing table + last action. This is the minimum needed for fast resume:
 
-```markdown
----
-name: sdlc-resume-{EPIC-KEY}
-description: Cached SDLC state for fast resume of {EPIC-KEY} — skip Phase 0 discovery
-metadata:
-  type: project
----
-
-## Context Block
-
-Project Name: {product_name}
-Project Key: {projectKey}
-Cloud ID: {cloudId}
-Repo Path: {repo_path}
-Base Branch: {base_branch}
-PR Target: {pr_target_branch}
-QBV Key: {qbv_key}
-Epic Key: {EPIC-KEY}
-Transition Map: {status=id, ...}
-Agent Paths: {role=path, ...}
-
-## Story Routing Table
-
-| Key | Title (short) | Status | Next Phase | Branch | Notes |
-|-----|---------------|--------|------------|--------|-------|
-| CSI-443 | Backend scaffold | In Review | Phase 5 | CSI-443/backend-scaffold | worktree exists |
-| CSI-449 | Frontend scaffold | Testing | Phase 6 | CSI-449/frontend-scaffold | worktree exists |
-| ... | | | | | |
-
-## Last Action
-
-- Date: {YYYY-MM-DD}
-- Completed: {what finished this session}
-- Next: {exact first action for resume — e.g., "spawn tester for CSI-443"}
-
-## Active Worktrees
-
-- {repo_path}.worktrees/CSI-443 (branch: CSI-443/backend-scaffold)
-- {repo_path}.worktrees/CSI-449 (branch: CSI-449/frontend-scaffold)
+```
+Write ~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-resume-{EPIC-KEY}.md with:
+- ## Context Block (all fields from the current context block)
+- ## Story Routing Table (key, status, next phase, branch, notes)
+- ## Last Action (date, completed, next)
+- ## Active Worktrees (paths + branches)
 ```
 
-2. **Update MEMORY.md** — ensure a pointer exists:
-   ```
-   - [SDLC Resume: {EPIC-KEY}](sdlc-resume-{EPIC-KEY}.md) — cached state for fast /sdlc resume
-   ```
+Update MEMORY.md pointer if missing. Report one line to user: "State saved. Resume: `/sdlc continue {EPIC-KEY}`"
 
-3. **Report to user:**
-   ```
-   Saved SDLC state for {EPIC-KEY}. Next session: `/sdlc continue {EPIC-KEY}` will resume in ~5s instead of full discovery.
-   Next action: {one-liner}
-   ```
+### Explicit handoff (user-triggered)
 
-**Cleanup:** When an epic reaches Phase 8 (all stories Done), delete the resume file — it's stale.
+**Trigger:** user says "pause", "stop", "save progress", "handoff", or `/sdlc pause {EPIC-KEY}`.
+
+Invoke the full skill: `Skill("ai-sdlc:sdlc-handoff")`. This does everything auto-save does PLUS:
+- Git state scanning (uncommitted changes, ahead/behind per worktree)
+- Checkpoint commit offer
+- Decisions + dead ends + blockers capture
+- User confirmation before writing
+- CLAUDE.md update
+- Rich handoff summary output
+
+**Why two tiers:** Auto-save costs ~0 extra tokens (inline write). The full skill loads ~120 lines + does user interaction — worth it when explicitly pausing, wasteful at every batch boundary.
+
+**Cleanup:** When an epic reaches Phase 8 (all stories Done), delete the resume file.
 
 ## Error Handling
 
