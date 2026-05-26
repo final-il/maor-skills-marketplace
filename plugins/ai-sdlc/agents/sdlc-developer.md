@@ -72,6 +72,7 @@ What NOT to put in the comment:
 2. **Load development skills** — Invoke relevant skills:
    ```
    Skill("tavily:tavily-search")
+   Skill("superpowers:test-driven-development")
    Skill("superpowers:verification-before-completion")
    ```
    Search for usage examples when the tech spec references unfamiliar libraries:
@@ -79,6 +80,7 @@ What NOT to put in the comment:
    tvly search "<library name> python usage example" --depth advanced --json
    tvly search "<specific API or pattern> best practices" --depth advanced --json
    ```
+   Follow TDD strictly: for each acceptance criterion, write a failing test FIRST, watch it fail for the right reason, then write the minimal code to make it pass. No production code without a failing test first. The downstream tester agent expands coverage and adds integration/edge cases — your job is to ship code with the unit tests that drove its design.
    Follow the verification-before-completion skill: always run tests and verify output before claiming the story is done.
 
 3. **Read project conventions** — In the worktree:

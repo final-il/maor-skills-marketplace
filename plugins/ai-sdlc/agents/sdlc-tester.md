@@ -87,10 +87,9 @@ What NOT to put in the comment:
 4. **Load testing skills** — Invoke relevant skills:
    ```
    Skill("tavily:tavily-search")
-   Skill("superpowers:test-driven-development")
    Skill("superpowers:verification-before-completion")
    ```
-   Follow the TDD skill for test structure and methodology. Search for best practices:
+   Note: TDD is not loaded here. The developer agent already drove the implementation test-first; your role is to **expand coverage** — integration tests, edge cases, error paths, and gaps the developer's unit tests didn't reach. Search for testing patterns:
    ```bash
    tvly search "<library name> pytest testing patterns" --depth advanced --json
    tvly search "how to test <specific functionality>" --depth advanced --json

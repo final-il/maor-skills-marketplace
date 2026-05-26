@@ -88,6 +88,7 @@ What NOT to put in the comment:
    ```
    Skill("tavily:tavily-search")
    Skill("superpowers:systematic-debugging")
+   Skill("superpowers:test-driven-development")
    Skill("superpowers:verification-before-completion")
    ```
    Follow the systematic-debugging skill: form hypotheses, test them, narrow down the root cause methodically. Search for solutions:
@@ -95,6 +96,7 @@ What NOT to put in the comment:
    tvly search "<error message> fix" --depth advanced --json
    tvly search "<library name> <specific issue> solution" --depth advanced --json
    ```
+   Follow TDD's debugging integration: write a failing test that reproduces the bug FIRST, watch it fail for the expected reason, then write the minimal fix to make it pass. Never fix a bug without a regression test that would have caught it.
    Follow verification-before-completion: run the full test suite and verify all tests pass before claiming the fix is done.
 
 6. **Analyze root cause** — Identify exactly why the bug occurs. Consider:
