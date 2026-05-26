@@ -121,7 +121,8 @@ Transition Map: {status=id, ...}
 The user provides `$ARGUMENTS` which can be:
 1. **A file path** (ends in `.md`, `.txt`, or starts with `/`) — read the file as the project plan
 2. **A Jira epic key** (matches pattern like `PROJ-123`) — resume an existing pipeline
-3. **A text description** — treat as a new project description
+3. **`pause {EPIC-KEY}`** — save current state for fast resume (see "Pause & Handoff")
+4. **A text description** — treat as a new project description
 
 ### Flags
 
@@ -185,6 +186,32 @@ In this mode, the orchestrator:
 4. Proceeds to architecture (brief) → develop → test → QA
 
 ## Phase 0: Initialization
+
+### Fast Resume from Memory
+
+Before doing anything else, check if a cached resume file exists for this epic:
+
+1. If `$ARGUMENTS` matches a Jira key pattern (e.g., `CSI-62`), check if the memory file exists:
+   ```
+   Read: ~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-resume-{EPIC-KEY}.md
+   ```
+2. If the file exists and contains a valid SDLC context block:
+   - Parse the cached `Context Block` (project key, cloudId, transition map, agent paths, base branch, etc.)
+   - Parse the `Story Routing Table` (story key → status → next phase)
+   - Run **one verification JQL** to confirm statuses haven't drifted:
+     ```
+     JQL: parent = {EPIC-KEY} AND issuetype = Story
+     fields: ["status"]
+     ```
+   - **If all statuses match the cached table** → skip the rest of Phase 0 entirely. Proceed to routing.
+   - **If any status drifted** → update the routing table in-place (re-route only the changed stories). No need to re-discover transitions or agent paths — those are stable.
+   - **If the file is missing or malformed** → fall through to full Phase 0 below.
+
+This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader spawn).
+
+---
+
+### Full Phase 0 (when no cached resume exists)
 
 1. Parse `$ARGUMENTS` to determine input type
 2. If file path: read the file content
@@ -560,6 +587,70 @@ Before running package managers or network-dependent tools, check the project's 
 - **Never use `--break-system-packages`** for pip.
 
 This applies to all phases that run shell commands (Phase 4–7). Pass this environment context to spawned developer/tester/bug-fixer agents in their prompts.
+
+## Pause & Handoff
+
+When the user says "pause", "stop", "save progress", or the orchestrator finishes a batch and is about to hit context limits, save state for fast resume in the next session.
+
+**Trigger automatically** at the end of each completed batch (e.g., after all stories in a wave reach their next phase gate).
+
+**Process:**
+
+1. **Build the resume file.** Write to `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-resume-{EPIC-KEY}.md`:
+
+```markdown
+---
+name: sdlc-resume-{EPIC-KEY}
+description: Cached SDLC state for fast resume of {EPIC-KEY} — skip Phase 0 discovery
+metadata:
+  type: project
+---
+
+## Context Block
+
+Project Name: {product_name}
+Project Key: {projectKey}
+Cloud ID: {cloudId}
+Repo Path: {repo_path}
+Base Branch: {base_branch}
+PR Target: {pr_target_branch}
+QBV Key: {qbv_key}
+Epic Key: {EPIC-KEY}
+Transition Map: {status=id, ...}
+Agent Paths: {role=path, ...}
+
+## Story Routing Table
+
+| Key | Title (short) | Status | Next Phase | Branch | Notes |
+|-----|---------------|--------|------------|--------|-------|
+| CSI-443 | Backend scaffold | In Review | Phase 5 | CSI-443/backend-scaffold | worktree exists |
+| CSI-449 | Frontend scaffold | Testing | Phase 6 | CSI-449/frontend-scaffold | worktree exists |
+| ... | | | | | |
+
+## Last Action
+
+- Date: {YYYY-MM-DD}
+- Completed: {what finished this session}
+- Next: {exact first action for resume — e.g., "spawn tester for CSI-443"}
+
+## Active Worktrees
+
+- {repo_path}.worktrees/CSI-443 (branch: CSI-443/backend-scaffold)
+- {repo_path}.worktrees/CSI-449 (branch: CSI-449/frontend-scaffold)
+```
+
+2. **Update MEMORY.md** — ensure a pointer exists:
+   ```
+   - [SDLC Resume: {EPIC-KEY}](sdlc-resume-{EPIC-KEY}.md) — cached state for fast /sdlc resume
+   ```
+
+3. **Report to user:**
+   ```
+   Saved SDLC state for {EPIC-KEY}. Next session: `/sdlc continue {EPIC-KEY}` will resume in ~5s instead of full discovery.
+   Next action: {one-liner}
+   ```
+
+**Cleanup:** When an epic reaches Phase 8 (all stories Done), delete the resume file — it's stale.
 
 ## Error Handling
 
