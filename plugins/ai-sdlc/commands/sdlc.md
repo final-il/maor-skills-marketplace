@@ -40,6 +40,13 @@ When this document says "Spawn the `sdlc-X` agent", do this:
    Your role definition is at: {agent_path}
    Read it as your VERY FIRST action, before anything else (including ToolSearch).
 
+   ## Output Rules
+   Your text output goes back to the orchestrator, not the user. Be extremely concise:
+   - NO narration of your thought process or debugging journey
+   - NO "let me check...", "I notice that...", "the issue is..."
+   - DO: state results, decisions, and blockers in short bullet points
+   - Final output: ≤10 lines summarizing what you did, what succeeded/failed, and what's next
+
    ## SDLC Context
    {full context block — Project Name, Project Key, Cloud ID, Repo Path, Base Branch,
     PR Target, QBV Key, Transition Map, Agent Paths, Worktree Path if applicable,
