@@ -63,6 +63,7 @@ When this document says "Spawn the `sdlc-X` agent", do this:
 | sdlc-tester | sonnet |
 | sdlc-qa-reviewer | opus |
 | sdlc-bug-fixer | sonnet |
+| sdlc-jira-reader | sonnet |
 
 This ensures agents get ToolSearch, MCP tools, and the Skill tool (for invoking skills like tavily-search, systematic-debugging, etc.), and keeps the orchestrator's context lean.
 
@@ -75,6 +76,45 @@ Jira is the slowest layer of the pipeline. Apply these rules at every phase:
 1. **Parallel Jira calls** — Whenever you need multiple independent Jira reads or writes (e.g., reading the epic + child stories, transitioning multiple tickets, fetching status for a batch), issue them as **parallel tool calls in a single message**. Sequential is only for true data dependencies (e.g., create issue → use the returned key).
 2. **Cache the transition map** — Phase 0 discovers the map once via `jira_get_transitions`. Every agent prompt MUST include the full `Transition Map: {status_name: transition_id, ...}` in the SDLC context block so agents skip their own `jira_get_transitions` calls. Agents only fall back to `jira_get_transitions` if a status they need is missing from the map.
 3. **Fast-mode QA** — In Phase 6, decide per-story whether to pass `Mode: fast` to the QA reviewer (see Phase 6 below for the heuristic). Fast mode skips heavy skill loading and trusts the tester's recent green run, but still validates every acceptance criterion against the diff.
+4. **Delegate Jira reads to the reader agent** — The orchestrator MUST NOT call `jira_get_issue` to read ticket descriptions, comments, or any content that would expand inline in its context. The only direct Jira calls the orchestrator makes are:
+   - `jira_search` with field-selective `fields: [...]` (status routing, never full bodies)
+   - `jira_get_transitions` (once, cached)
+   - `jira_transition_issue` (writes — bounded)
+   - `jira_add_comment` (writes — bounded)
+   Everything else — reading ticket bodies, scanning comments for artifact headers, checking design approval, inspecting bug details — is delegated to `sdlc-jira-reader`. See "Delegating Jira Reads" below.
+
+## Delegating Jira Reads
+
+When the orchestrator needs information beyond what `jira_search` (field-selective) provides, it spawns the `sdlc-jira-reader` agent. This keeps expensive Jira content out of the orchestrator's context.
+
+**Spawn pattern:**
+```
+Your role definition is at: {Agent Paths.reader}
+Read it as your VERY FIRST action, before anything else (including ToolSearch).
+
+## SDLC Context
+Project Key: {projectKey}
+Cloud ID: {cloudId}
+Transition Map: {status=id, ...}
+
+## Question
+{free-form — what do you need to know?}
+
+## Schema
+{required output structure — table, JSON, or list}
+
+## Token Budget
+{default 800 — increase if you genuinely need more}
+```
+`model: "sonnet"`
+
+**When to spawn the reader:**
+- Phase 0 resume: need to check design-spec presence, tech-spec presence, or bug-loop counts beyond what status tells you
+- Design gate: checking which stories have approved designs before Phase 4
+- Bug-fix loop: need to know last failing test or iteration count
+- Any time you catch yourself about to call `jira_get_issue` — stop and delegate
+
+**Follow-up pattern:** If the reader's answer shows "More available", spawn a second reader with a narrower question. Cumulative cost of 2-3 focused spawns (~500-800 tokens each) is far cheaper than one unbounded read (5-15k tokens inline).
 
 ## Input
 
@@ -155,6 +195,8 @@ In this mode, the orchestrator:
    ```
    The orchestrator routes by status. Descriptions and comments are read by the spawned agent under its artifact-discipline contract.
 
+3b. **If you need more than status for routing** (e.g., checking design spec presence, bug-loop counts, or artifact readiness), spawn the `sdlc-jira-reader` agent instead of calling `jira_get_issue` yourself. See "Delegating Jira Reads" below.
+
 4. **Jira project:** Always use `CSI` (CSI-PM). Do NOT ask the user which project — it is always CSI.
 
 4b. **Resolve agent file paths once.** Run **one Glob**: `**/ai-sdlc/agents/sdlc-*.md`. From the result, build the `Agent Paths` map:
@@ -168,6 +210,7 @@ In this mode, the orchestrator:
      tester:       "/.../plugins/ai-sdlc/agents/sdlc-tester.md",
      qa-reviewer:  "/.../plugins/ai-sdlc/agents/sdlc-qa-reviewer.md",
      bug-fixer:    "/.../plugins/ai-sdlc/agents/sdlc-bug-fixer.md",
+     reader:       "/.../plugins/ai-sdlc/agents/sdlc-jira-reader.md",
    }
    ```
    If multiple matches per role exist (e.g., dev marketplace + cached prod marketplace), pick the path under the active marketplace (`maor-skills-marketplace-dev` if `~/git-dev/.claude/settings.json` enables it, else `maor-skills-marketplace`). Do NOT Read these files — agents Read their own role definition.
@@ -528,16 +571,34 @@ This applies to all phases that run shell commands (Phase 4–7). Pass this envi
 ## Resume Support
 
 When `$ARGUMENTS` is a Jira epic key:
-1. Fetch the epic + child stories with one `jira_search` call, fields: `["summary", "status", "issuetype", "parent", "labels"]`. Do NOT pull descriptions or comments — agents fetch their own story when spawned.
-2. For each story, route by status:
+
+1. **Quick status scan (orchestrator does this directly):**
+   Fetch the epic + child stories with one `jira_search` call, fields: `["summary", "status", "issuetype", "parent", "labels"]`. Do NOT pull descriptions or comments — agents fetch their own story when spawned.
+
+2. **Simple routing by status** — if ALL stories can be routed by status alone (no ambiguity), proceed:
    - "Backlog" / "To Do" → Phase 3 (Architecture)
    - "Selected for Development" / "Ready for Dev" → Phase 4 (Develop)
-   - "In Progress" → check for open child Bugs (`parent = X AND issuetype = Bug AND status != Done`):
+   - "In Progress" → check for open child Bugs (one more `jira_search`: `parent = X AND issuetype = Bug AND status != Done`):
      - Open child Bugs exist → Phase 7 (Bug Fix)
      - No open child Bugs → resume Phase 4 (Developer was interrupted mid-implementation)
    - "In Review" → Phase 5 (Test)
    - "Testing" → Phase 6 (QA)
    - "Done" → skip (unless user reports a defect — see "User-Reported Bugs" section)
+
+3. **If routing requires deeper Jira reads** — spawn `sdlc-jira-reader` instead of reading tickets yourself. Common triggers:
+   - Need to check if design specs exist / are approved before starting Phase 4 on UI stories
+   - Need to know which stories have tech specs already (resumed mid-Phase-3)
+   - Need bug-loop iteration count to decide whether to flag as blocked
+   - Need artifact presence to decide fast-mode QA eligibility
+
+   Example reader spawn for a 22-story resume:
+   ```
+   Question: "For epic CSI-62, list every child story. For each: key, status, has-tech-spec (bool),
+   has-design-spec (bool), design-approved (bool), open-bug-count. Stories in Done can be omitted."
+   Schema: Markdown table with columns: Key | Status | TechSpec | DesignSpec | Approved | Bugs | NextPhase
+   Token Budget: 1200
+   ```
+   Use the reader's response for all routing decisions. Do NOT call `jira_get_issue` yourself.
 
 ## Lifecycle — How Work Flows Back
 
