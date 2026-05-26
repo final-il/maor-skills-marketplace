@@ -10,7 +10,7 @@ description: >
 
 # SDLC Handoff
 
-Save the current AI-SDLC pipeline state so the next session can resume in seconds instead of re-discovering everything from Jira.
+Save the current AI-SDLC pipeline state so the next session can resume in seconds instead of re-discovering everything from Jira — both the technical context (transition maps, routing) and the human context (decisions, dead ends, blockers).
 
 ## When to Trigger
 
@@ -21,21 +21,67 @@ Save the current AI-SDLC pipeline state so the next session can resume in second
 
 ## Process
 
-### 1. Gather Current State
+### 1. Scan Active State
 
-Collect without asking the user (they already know it):
+Gather the current state automatically — don't ask the user to list what happened:
 
+**Git state (per active worktree):**
+```bash
+# For each worktree in {repo_path}.worktrees/
+git -C {worktree} status --short
+git -C {worktree} log --oneline -3
+git -C {worktree} rev-parse --abbrev-ref HEAD
+# Check if ahead of remote
+git -C {worktree} rev-list --count @{u}..HEAD 2>/dev/null
 ```
+
+**Pipeline state:**
 - Epic key being worked on
 - All story keys with their current Jira status
 - Which phase each story should enter next (routing table)
-- Active worktrees (check: ls {repo_path}.worktrees/)
-- Branch names per story
+- Active worktrees and their branches
 - The full SDLC context block (project key, cloudId, transition map, agent paths, base branch, PR target)
-- What just completed and what's next
+
+**Session context:**
+- What was the user's original goal this session?
+- What decisions were made (and why)?
+- What was completed?
+- What was attempted but didn't work (dead ends)?
+- What blockers were hit?
+- What's the immediate next step?
+
+### 2. Identify Uncommitted Work
+
+For each active worktree, check if there are uncommitted changes:
+
+```bash
+git -C {worktree} status --short
 ```
 
-### 2. Write the Resume File
+If there are uncommitted changes:
+- List the changed files
+- Show to the user
+- Ask: "Commit and push these changes before saving state? (y/n)"
+- If yes: commit with message `checkpoint: {STORY-KEY} — {brief summary}` and push
+- If no: note in the resume file that uncommitted work exists
+
+### 3. Confirm with User
+
+Present a draft summary to the user before writing:
+
+```
+Here's what I'm capturing for {EPIC-KEY} — anything to add or correct?
+
+Completed: {list}
+Decisions: {list}
+Dead ends: {list}
+Blockers: {list}
+Next step: {action}
+```
+
+Wait for user confirmation or additions. Incorporate their feedback.
+
+### 4. Write the Resume File
 
 Write to `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-resume-{EPIC-KEY}.md`:
 
@@ -66,18 +112,40 @@ Agent Paths: {full map as JSON — e.g., {"planner": "/path/...", "developer": "
 |-----|---------------|--------|------------|--------|-------|
 | {key} | {title} | {status} | {phase} | {branch} | {worktree exists / blocked / done} |
 
+## Session Notes
+
+### Completed This Session
+- {what got done — be specific with ticket keys and phases}
+
+### Decisions Made
+- {decision}: {why} (alternative considered: {what was rejected})
+
+### Dead Ends / What Didn't Work
+- {approach that failed}: {why it failed, so next session doesn't retry}
+
+### Blockers
+- {blocker}: {what's needed to unblock, who can help}
+
+### Approach / Architecture Notes
+- {any non-obvious technical decisions that affect future stories}
+
 ## Last Action
 
 - Date: {YYYY-MM-DD}
-- Completed: {what finished this session — be specific}
 - Next: {exact first action for resume — e.g., "spawn tester for CSI-443"}
 
 ## Active Worktrees
 
-- {repo_path}.worktrees/{STORY-KEY} (branch: {branch-name})
+- {repo_path}.worktrees/{STORY-KEY} (branch: {branch-name}, uncommitted: {yes/no})
+
+## Git State
+
+| Worktree | Branch | Ahead | Uncommitted | Last Commit |
+|----------|--------|-------|-------------|-------------|
+| {STORY-KEY} | {branch} | {N commits} | {yes/no} | {short sha + message} |
 ```
 
-### 3. Update MEMORY.md
+### 5. Update MEMORY.md
 
 Ensure a pointer exists in the memory index:
 
@@ -87,14 +155,45 @@ Ensure a pointer exists in the memory index:
 
 If a pointer already exists, leave it (no duplicate).
 
-### 4. Report to User
+### 6. Update Project CLAUDE.md (if applicable)
 
-Output a brief confirmation:
+If the project has a CLAUDE.md with a pipeline state or known issues section, update it:
+- **Pipeline State** — current phase, which stories are in which status
+- **Known Issues** — any new issues discovered this session
+- **Ticket Map** — if new tickets were created, add them
 
-```
-Saved SDLC state for {EPIC-KEY}.
-Next session: `/sdlc continue {EPIC-KEY}` resumes in ~5s (skips full Phase 0).
-Next action: {one-liner describing the exact next step}
+Only update sections relevant to what changed. Don't rewrite the whole file.
+
+### 7. Report to User
+
+Output a structured handoff summary:
+
+```markdown
+## SDLC Handoff — {YYYY-MM-DD}
+
+### Epic: {EPIC-KEY} ({product name})
+### Repo: {repo_path}
+### Branch: {base_branch}
+
+### Completed
+- {what got done}
+
+### Decisions Made
+- {decision}: {why}
+
+### In Progress
+- {what's partially done, with story keys}
+
+### Next Steps
+1. {exact first action for next session}
+2. {second action}
+3. {third action if applicable}
+
+### Blockers / Watch Out
+- {anything the next session should know}
+
+### Resume Command
+`/sdlc continue {EPIC-KEY}`
 ```
 
 ## Routing Rules Reference
@@ -113,8 +212,14 @@ Use these to fill the "Next Phase" column:
 
 ## Rules
 
-- Use absolute dates (YYYY-MM-DD), never "today" or "yesterday"
-- Keep the routing table compact — omit Done stories unless they have notes
-- The resume file replaces any previous version for the same epic (overwrite, don't append)
-- If the orchestrator doesn't have the full context block in memory (e.g., fresh session), gather what you can from git state and conversation context; mark missing fields as `{UNKNOWN — will rediscover}`
-- Delete the resume file when the epic reaches Phase 8 completion
+- **Scan state automatically** — don't ask the user to list what happened
+- **Be specific** — "CSI-443 is In Review, tester next" not "some tickets are in progress"
+- **Use absolute dates** — "2026-05-26" not "today" or "yesterday"
+- **Don't duplicate** — if something is already in CLAUDE.md or memory correctly, don't re-add
+- **Ask for confirmation** — always show the draft to the user before writing
+- **Commit checkpoint if uncommitted work exists** — ask first, never force-commit
+- **Capture dead ends** — these are the most valuable thing for the next session; without them, it'll retry the same failed approaches
+- **Keep it concise** — the next session needs actionable context, not a narrative
+- **Overwrite, don't append** — the resume file replaces any previous version for the same epic
+- **Mark unknowns** — if you can't determine a value, write `{UNKNOWN — will rediscover}` rather than guessing
+- **Delete on completion** — when the epic reaches Phase 8, delete the resume file
