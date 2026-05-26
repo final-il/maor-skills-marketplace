@@ -55,6 +55,12 @@ When this document says "Spawn the `sdlc-X` agent", do this:
    - NEVER combine `cd` and `git` in the same command (triggers a hardcoded safety prompt that no allowlist can bypass — even `git ... && cd ... && other-cmd` is blocked)
    - Acceptable single-purpose chains: `cmd1 && cmd2` where neither is `git` or `cd`
    - For env-prefixed commands, place env vars directly: `SSL_CERT_FILE=... uv sync` (no preceding cd)
+   - **Avoid temp files in /tmp** — pipe directly instead:
+     - BAD: `git show HEAD:file > /tmp/x.ts && wc -l /tmp/x.ts`
+     - GOOD: `git show HEAD:file | wc -l`
+     - BAD: `cmd > /tmp/out.json && jq '.foo' /tmp/out.json`
+     - GOOD: `cmd | jq '.foo'`
+     - If you genuinely need a file (e.g., to pass to a tool that requires a path), write inside the worktree at `{worktree_path}/.tmp-{name}` and clean up after
 
    ## SDLC Context
    {full context block — Project Name, Project Key, Cloud ID, Repo Path, Base Branch,
