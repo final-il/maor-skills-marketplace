@@ -81,10 +81,12 @@ When this document says "Spawn the `sdlc-X` agent", do this:
 | sdlc-jira-creator | sonnet |
 | sdlc-architect | opus |
 | sdlc-designer | opus |
+| sdlc-integrator | sonnet |
 | sdlc-developer | opus |
 | sdlc-tester | sonnet |
 | sdlc-qa-reviewer | opus |
 | sdlc-bug-fixer | sonnet |
+| sdlc-conflict-resolver | sonnet |
 | sdlc-jira-reader | sonnet |
 
 This ensures agents get ToolSearch, MCP tools, and the Skill tool (for invoking skills like tavily-search, systematic-debugging, etc.), and keeps the orchestrator's context lean.
@@ -251,15 +253,17 @@ This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader s
 4b. **Resolve agent file paths once.** Run **one Glob**: `**/ai-sdlc/agents/sdlc-*.md`. From the result, build the `Agent Paths` map:
    ```
    {
-     planner:      "/.../plugins/ai-sdlc/agents/sdlc-planner.md",
-     jira-creator: "/.../plugins/ai-sdlc/agents/sdlc-jira-creator.md",
-     architect:    "/.../plugins/ai-sdlc/agents/sdlc-architect.md",
-     designer:     "/.../plugins/ai-sdlc/agents/sdlc-designer.md",
-     developer:    "/.../plugins/ai-sdlc/agents/sdlc-developer.md",
-     tester:       "/.../plugins/ai-sdlc/agents/sdlc-tester.md",
-     qa-reviewer:  "/.../plugins/ai-sdlc/agents/sdlc-qa-reviewer.md",
-     bug-fixer:    "/.../plugins/ai-sdlc/agents/sdlc-bug-fixer.md",
-     reader:       "/.../plugins/ai-sdlc/agents/sdlc-jira-reader.md",
+     planner:           "/.../plugins/ai-sdlc/agents/sdlc-planner.md",
+     jira-creator:      "/.../plugins/ai-sdlc/agents/sdlc-jira-creator.md",
+     architect:         "/.../plugins/ai-sdlc/agents/sdlc-architect.md",
+     designer:          "/.../plugins/ai-sdlc/agents/sdlc-designer.md",
+     integrator:        "/.../plugins/ai-sdlc/agents/sdlc-integrator.md",
+     developer:         "/.../plugins/ai-sdlc/agents/sdlc-developer.md",
+     tester:            "/.../plugins/ai-sdlc/agents/sdlc-tester.md",
+     qa-reviewer:       "/.../plugins/ai-sdlc/agents/sdlc-qa-reviewer.md",
+     bug-fixer:         "/.../plugins/ai-sdlc/agents/sdlc-bug-fixer.md",
+     conflict-resolver: "/.../plugins/ai-sdlc/agents/sdlc-conflict-resolver.md",
+     reader:            "/.../plugins/ai-sdlc/agents/sdlc-jira-reader.md",
    }
    ```
    If multiple matches per role exist (e.g., dev marketplace + cached prod marketplace), pick the path under the active marketplace (`maor-skills-marketplace-dev` if `~/git-dev/.claude/settings.json` enables it, else `maor-skills-marketplace`). Do NOT Read these files — agents Read their own role definition.
@@ -457,9 +461,31 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
    - Otherwise: Ask "Approve this design? Or modify?" — do NOT proceed until the user approves
    - If rejected, re-spawn the designer with the user's feedback
 
-5. Stories that don't need design proceed directly to Phase 4.
+5. Stories that don't need design proceed directly to Phase 3.6.
 
 **IMPORTANT: The designer MUST run in the foreground, NOT in the background.** The user must review and approve designs before any development begins on those stories. Running the designer in the background skips the approval gate — this is not allowed. If you want to parallelize, you may develop non-design stories (pure backend/infrastructure) while waiting for design approval on UI stories, but the designer itself must be foreground so you can present its output to the user immediately.
+
+## Phase 3.6: Cross-Story Integration Audit
+
+**Always runs**, after Phase 3 (and 3.5 if it applied) and before any Phase 4 work begins. Catches name and file collisions before parallel branches start.
+
+1. **Identify the audit set.** Every story in the epic that is in `Selected for Development` (or the project's "Ready for Dev" equivalent) and has a `## Technical Specification` comment from the architect.
+   - If the epic has only one story, skip Phase 3.6 — there is nothing to audit.
+2. **Spawn `sdlc-integrator` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+   - Pointer to `Agent Paths.integrator`
+   - SDLC context block, including:
+     - `Read Artifacts: ## Technical Specification on every story key in the audit set (focus on ## Names Reserved + #### Files to Create/Modify sections)`
+     - `Write Artifact: ## Integration Notes (comment on each affected story)`
+   - Task: the epic key + comma-separated list of story keys in the audit set
+   - `model: "sonnet"`
+3. The integrator reads tech specs, builds a reservation index, and posts `## Integration Notes` on every affected story. Stories with no findings get NO comment (silence = clear).
+4. **Routing on integrator output:**
+   - If the integrator returns `Action required: 0` → proceed to Phase 4 immediately. Stories carrying COORDINATION notes go forward with their notes; the developer agent will read those as part of `Read Artifacts: ## Integration Notes`.
+   - If `Action required > 0` → stories listed under "Action required" have already been transitioned back to `Backlog` by the integrator. Re-run **Phase 3** (architect) on ONLY those stories with the integrator's recommended renames in the spawn prompt. Then re-run Phase 3.6 on the same epic. Cap at 2 audit iterations per epic; if a third iteration is needed, halt and ask the user to triage.
+   - If the integrator reports any INCOMPLETE stories (missing `## Names Reserved`) → re-run Phase 3 (architect) on them, then re-run Phase 3.6.
+5. The integrator does NOT need a worktree (read-only on Jira, no code).
+
+**Read-Artifact addendum for downstream agents:** When an affected story has a current `## Integration Notes` comment, every downstream agent prompt for that story (developer, tester, QA, bug-fixer) MUST include `## Integration Notes (Summary) on {STORY-KEY}` in `Read Artifacts`. Stories with no notes get the standard `Read Artifacts` list.
 
 ## Phase 4-7: Implementation Loop
 
@@ -556,16 +582,82 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 - Always respect dependency order: if Story B is blocked by Story A, wait until A reaches "Done"
 - **Never** spawn two agents (developer/tester/bug-fixer/QA) for the same story at the same time — they share one worktree and one branch
 
+## Phase 7.5: Continuous merge of Done PRs
+
+**Trigger:** Immediately after a story transitions to `Done` (post-QA), the orchestrator runs Phase 7.5 for that story's PR. Goal: keep the count of "Done but unmerged" PRs bounded so cross-PR conflicts stay small.
+
+**Drift cap:** Read `MAX_UNMERGED_DONE_PRS` from environment, default `5`. Track this as the orchestrator runs through the epic.
+
+### Step 7.5.1 — Locate the PR
+
+Find the PR for the just-Done story:
+- Preferred: read the PR URL from the developer's `## Implementation Complete` comment (already on the story).
+- Fallback: `gh pr list --head {STORY-KEY}/{slug} --base {pr_target_branch} --json number,url,headRefName --limit 1`.
+
+If no open PR is found (e.g., it was already merged manually), log it and move on — the story stays Done.
+
+### Step 7.5.2 — Try the simple merge
+
+Attempt:
+```bash
+gh pr merge {PR_NUMBER} --merge --repo {OWNER}/{REPO}
+```
+
+- **Success** → log it. Story stays `Done`. Continue to next story.
+- **Failure: PR has merge conflicts** → check whether other Done stories also have unmerged PRs. Determine via `gh pr list --base {pr_target_branch} --state open --json number,headRefName --limit 50` filtered to the current epic's story branches.
+  - **Zero sibling unmerged PRs** → this PR alone has a conflict against `{base_branch}`. File a child Bug under the story, transition the story to `In Progress`, and route through the **Phase 7 bug-fix loop** (the bug-fixer rebases / resolves / re-pushes; story comes back through Phase 5 → 6 → 7.5).
+  - **One or more sibling unmerged PRs** → trigger the **conflict-resolver** flow (Step 7.5.3).
+
+### Step 7.5.3 — Conflict-resolver dispatch (multi-PR pile-up)
+
+1. **Set up a merge worktree** dedicated to this run (NOT a story worktree):
+   ```bash
+   MERGE_WT="{repo_path}.worktrees/.merge-{epic-key}-$(date +%Y%m%d-%H%M%S)"
+   git -C {repo_path} fetch origin {base_branch}
+   git -C {repo_path} worktree add "$MERGE_WT" "origin/{base_branch}"
+   ```
+2. **Spawn `sdlc-conflict-resolver` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+   - Pointer to `Agent Paths.conflict-resolver`
+   - SDLC context block, including:
+     - `Repo Path: {repo_path}`
+     - `Base Branch: {base_branch}`
+     - `PR Target: {pr_target_branch}`
+     - `Merge Worktree Path: {MERGE_WT}`
+     - `Read Artifacts: none — agent reads only the open PR list and the conflict files in the worktree`
+     - `Write Artifact: ## Merge Result (one comment per affected story); optional Bug issues for escalations`
+   - Task: the epic key + comma-separated PR numbers (just-Done PR + every other open PR targeting `{base_branch}` from this epic's stories, oldest first)
+   - `model: "sonnet"`
+3. The agent merges PRs in topological order, applies the safe-pattern unions, and pushes once at the end. Read `sdlc-conflict-resolver.md` for what it considers safe.
+4. **On agent return:**
+   - For every PR the agent merged: log it. Stories stay `Done`. The PRs auto-close on push.
+   - For every PR the agent escalated: a child Bug was filed under the parent story and a `## Merge Result` comment was posted. Route those Bugs through the standard Phase 7 bug-fix loop (the orchestrator picks them up on its next routing pass).
+5. **Clean up the merge worktree:**
+   ```bash
+   git -C {repo_path} worktree remove "$MERGE_WT"
+   ```
+
+### Step 7.5.4 — Drift gate
+
+After every Phase 7.5 run, count remaining open PRs targeting `{base_branch}` from this epic's stories that are in `Done`. If `count > MAX_UNMERGED_DONE_PRS`:
+
+- Halt the pipeline. Do NOT spawn any more developer agents.
+- Post a comment on the epic listing the unmerged Done PRs and the most recent escalated Bug keys.
+- Ask the user: "More than {MAX} Done PRs are unmerged. Investigate before continuing — this is the conflict-pile-up signal Phase 7.5 was designed to catch."
+
+The orchestrator resumes only after the user has either merged the backlog manually or cleared the escalated Bugs (whichever applies).
+
 ## Phase 8: Completion
 
 1. Query Jira for all stories in the epic
-2. Summarize:
+2. **Assert all Done stories have merged PRs.** For each story in `Done`, verify its PR is merged (`gh pr view {N} --json state` returns `MERGED`). Phase 7.5 should have handled this continuously; this is the final safety check.
+   - If any Done story still has an open PR: re-run Phase 7.5 on those PRs (single batch). If the conflict-resolver still cannot merge them, halt and ask the user to investigate. Do NOT report epic completion while Done PRs are unmerged.
+3. Summarize:
    - Stories completed (Done)
    - Stories blocked or failed (with reasons)
    - PRs created (with links)
    - Total bugs found and fixed
 
-3. **Clean up per-story worktrees:**
+4. **Clean up per-story worktrees:**
    For every story that reached `Done` (and whose PR is merged or abandoned):
    ```bash
    git -C {repo_path} worktree remove "{repo_path}.worktrees/{STORY-KEY}"
@@ -576,8 +668,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
    ```
    Skip stories whose work is still open (failed / blocked) — leave their worktrees so the user can investigate.
 
-4. **If dev/prod model (PR Target is `dev`):**
-   - Merge all story PRs into `dev` (if not already merged)
+5. **If dev/prod model (PR Target is `dev`):**
+   - All story PRs should already be merged into `dev` via Phase 7.5. If any are still open, halt — Phase 7.5 should have handled this and there is something wrong.
    - If `--auto`: log "Auto-approving promotion" and promote immediately
    - Otherwise: **PAUSE — Ask the user:** "All stories are done on `dev`. Promote to `main`?"
    - If approved, promote:
@@ -596,8 +688,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
      ```
    - Tag the release: `git tag v{X.Y.Z} main && git push origin v{X.Y.Z}`
 
-5. **If single-branch model (PR Target is `main`):**
-   - Suggest next steps (merge PRs, manual testing, etc.)
+6. **If single-branch model (PR Target is `main`):**
+   - Suggest next steps (manual testing, etc.). PRs were auto-merged via Phase 7.5.
 
 ## Environment — Read Before Running Any Commands
 

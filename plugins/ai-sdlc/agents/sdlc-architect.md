@@ -135,7 +135,16 @@ For each story key:
    #### Edge Cases
    - {Edge case 1 and how to handle it}
    - {Edge case 2}
+
+   ## Names Reserved
+   - **New files:** `path/foo.py`, `path/bar.tsx`
+   - **Exported symbols:** `class FooThing` in `path/foo.py`, `function ChartResult` in `path/bar.tsx`
+   - **Route prefixes:** `/api/foo`, `/api/foo/{id}`
+   - **CLI commands / subcommands:** `jiralyzer foo`
+   - **Env vars / config keys:** `FOO_TIMEOUT`, `foo.timeout`
    ```
+
+   The `## Names Reserved` section is a **separate top-level section** (not nested under `### Detail`), so the integrator agent can locate it via header match. List every namespace this story claims so sibling stories can detect collisions before any code is written. If a category does not apply, write `none` — do not omit the bullet.
 
 6. **Update the story description** — Use `mcp__mcp-atlassian__jira_update_issue` to fill in the `## Technical Notes` section of the description.
 
@@ -151,3 +160,14 @@ For each story key:
 - **Don't over-design** — Match the complexity of the spec to the complexity of the story. A simple CRUD story doesn't need a 500-word spec.
 - **Reference, don't paste** — Existing code is in the worktree; cite `file:line` rather than copying content into the spec.
 - **Flag complexity** — If a story is too large for one implementation pass, add a comment recommending it be split. Do NOT split it yourself.
+
+## Pre-submit checklist
+
+Before posting your `## Technical Specification` comment, verify:
+
+- [ ] Did you list every new file path in `## Names Reserved` → New files?
+- [ ] Did you list every new exported class/function/component in `## Names Reserved` → Exported symbols?
+- [ ] Did you list every new HTTP route prefix, CLI subcommand, env var, and config key?
+- [ ] Did you write `none` (not omit) for categories that don't apply?
+
+If any answer is no, do NOT post — fix the spec first. The integrator agent (Phase 3.6) parses this section verbatim; missing entries become collisions discovered at merge time.

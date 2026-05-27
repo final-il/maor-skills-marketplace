@@ -69,11 +69,14 @@ The orchestrator's context block must include:
 Read Artifacts:
   - Tech Spec (architect comment on {STORY-KEY})
   - Design Spec (designer comment on {STORY-KEY})  ← only if Phase 3.5 ran
+  - Integration Notes (integrator comment on {STORY-KEY})  ← only if Phase 3.6 found shared files / collisions
 Write Artifact:
   - Dev Result (post as comment on {STORY-KEY})
 ```
 
 Agents read only the listed artifacts. If an agent finds it needs something else, it stops and asks the orchestrator rather than fetching the full ticket.
+
+**Architect-specific note:** The architect's `## Technical Specification` comment must include a top-level `## Names Reserved` section listing every new file path, exported symbol, route prefix, CLI command, and env var the story claims. The Phase 3.6 integrator agent parses this section verbatim across all sibling stories to detect collisions before development starts. See `references/ticket-templates.md` for the format.
 
 ### 2. Summary header convention
 
@@ -106,9 +109,11 @@ Downstream agents read the **summary first** and drill into detail only when the
 | Phase | Old default ("read the ticket") | With artifact discipline |
 |---|---|---|
 | Architect | full story desc + planner notes | story summary + acceptance criteria |
+| Integrator (3.6) | full thread on every story | `## Names Reserved` + `#### Files to Create/Modify` per sibling story |
 | Tester | story + tech spec + design + dev result | tech spec summary + dev-result summary + worktree |
 | QA | everything above + test results | all summaries + test-result file |
 | Bug-fixer | full thread | bug report + tech spec summary |
+| Conflict resolver (7.5) | reads no Jira | only the open PR list; conflict files in worktree |
 
 Roughly 40-60% reduction per agent run, no quality loss — detail is one targeted read away.
 
@@ -117,11 +122,17 @@ Roughly 40-60% reduction per agent run, no quality loss — detail is one target
 ```
 Phase 0: Init → Phase 1: Plan → Phase 2: Jira → Phase 3: Architect
   → Phase 3.5: Design (optional, user-facing stories only)
+  → Phase 3.6: Integrator (cross-story collision audit)
   → Phase 4: Develop → Phase 5: Test → Phase 6: QA → Phase 7: Bug Fix
+  → Phase 7.5: Continuous merge of Done PRs into base branch
   → Phase 8: Completion + Promotion
 ```
 
 Phase 3.5 (Design) is skipped for purely backend stories. When it runs, the user approves the design before development begins.
+
+Phase 3.6 (Integrator) runs after every Phase 3 batch. It reads the `## Names Reserved` and `#### Files to Create/Modify` sections from each story's tech spec, posts `## Integration Notes` on every affected story, and forces architects to revise tech specs when a hard name collision is detected. Read-only on code; only writes to Jira. See `sdlc-integrator.md`.
+
+Phase 7.5 (Continuous merge) runs immediately after each story reaches `Done`. It attempts `gh pr merge` on the story's PR; on a multi-PR mechanical conflict it dispatches the `sdlc-conflict-resolver` agent which union-merges safe additive collisions (imports, router registrations, dep lists, barrel re-exports). Semantic conflicts hard-stop and route through the bug-fix loop.
 
 ## Branching Model
 

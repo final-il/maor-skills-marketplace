@@ -133,7 +133,41 @@ A Bug is created with `issue_type: "Bug"` and `additional_fields.parent: {STORY-
 #### Edge Cases
 - {Edge case 1}
 - {Edge case 2}
+
+## Names Reserved
+- **New files:** `path/foo.py`, `path/bar.tsx`
+- **Exported symbols:** `class FooThing` in `path/foo.py`, `function ChartResult` in `path/bar.tsx`
+- **Route prefixes:** `/api/foo`, `/api/foo/{id}`
+- **CLI commands / subcommands:** `jiralyzer foo`
+- **Env vars / config keys:** `FOO_TIMEOUT`, `foo.timeout`
 ```
+
+**Names Reserved is mandatory.** It is a top-level section (not nested under `### Detail`) so the Phase 3.6 integrator agent can locate it via header match across stories. Every architect tech spec must include it. For categories that do not apply to a given story, write `none` — do not omit the bullet. The format is fixed:
+- Bullets keyed by category (`New files`, `Exported symbols`, etc.)
+- File paths as backticked relative paths
+- Symbols qualified by `<kind> <name> in <path>` (e.g., `class FooThing in src/foo.py`)
+- One reservation per item; comma-separated within a single bullet
+### Integrator Comment (Phase 3.6)
+```markdown
+## Integration Notes
+
+### Summary
+- Stories audited: {N}
+- Shared files: {count}
+- Name collisions: {count} (resolved | requires-rename)
+- Action required: {yes/no — see below}
+
+### Shared files
+- `web/backend/.../app.py` — also touched by CSI-X, CSI-Y. Strategy: union-merge router registrations.
+
+### Name collisions
+- `ChartResult.tsx` — also reserved by CSI-X for an incompatible API. Recommended rename: `ChartByType.tsx` (per internal type name).
+
+### Action required
+- Update tech spec to reflect the new component name OR confirm coordination with CSI-X.
+```
+
+The integrator posts ONE `## Integration Notes` comment per affected story. When a rename is required, the orchestrator re-routes affected stories to the architect for revision before development starts.
 
 ### Developer Comment (Implementation Done)
 ```markdown
