@@ -206,6 +206,12 @@ After the decision gate, if `proceed`, additional implementation subtasks are ad
 
 **Cross-team dependencies:** use Jira `Blocks` links between QW stories (not subtasks). Example: `CSIPLN-1254` (auto-approve rules engine) blocks `CSIPLN-1233` (firewall rule automation).
 
+**Timeline / Gantt fields (Jira Plans / Advanced Roadmaps):**
+- **Target start** — `customfield_10022` (date)
+- **Target end** — `customfield_10023` (date)
+
+These are the source of truth for any timeline / Gantt visualization. The plain `duedate` field is NOT used by this Jira instance for planning. When generating Gantt charts, manager decks, or any "when will it ship" view, fetch `customfield_10022` and `customfield_10023` and treat them as the planned window for the story. Example JQL field clause: `"Target start" >= 2026-06-01 AND "Target end" <= 2026-07-31`. To read via MCP: pass `fields: "summary,status,assignee,customfield_10022,customfield_10023"` to `jira_search` / `jira_get_issue`.
+
 ## Confluence Pages — Key IDs
 
 | Page | ID |
