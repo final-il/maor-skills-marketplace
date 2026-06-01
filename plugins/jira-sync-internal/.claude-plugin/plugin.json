@@ -1,0 +1,8 @@
+{
+  "name": "jira-sync-internal",
+  "description": "Air-gapped Jira sync — internal (offline) side. Query the local SQLite mirror, make offline edits, ingest packages from the external side, export deltas to ship back.",
+  "author": {
+    "name": "Maor B",
+    "email": "maorb@final.co.il"
+  }
+}

@@ -56,6 +56,18 @@
       "description": "CSI Department discovery and documentation agent. Guides structured discovery of teams' systems, processes, tooling, and pain points. Creates Confluence forms, scans sources, enriches data, publishes structured output.",
       "source": "./plugins/csi-discovery",
       "strict": false
+    },
+    {
+      "name": "jira-sync-internal",
+      "description": "Air-gapped Jira sync — internal (offline) side. Query the local SQLite mirror, make offline edits/comments/transitions/creates, ingest packages from the external side, export deltas to ship back.",
+      "source": "./plugins/jira-sync-internal",
+      "strict": false
+    },
+    {
+      "name": "jira-sync-external",
+      "description": "Air-gapped Jira sync — external (online) side. Pull from Jira Cloud, query the local store, ingest internal-side packages, push deltas back to Jira Cloud, export packages for the internal side.",
+      "source": "./plugins/jira-sync-external",
+      "strict": false
     }
   ]
 }

@@ -1,0 +1,8 @@
+{
+  "name": "jira-sync-external",
+  "description": "Air-gapped Jira sync — external (online) side. Pull from Jira Cloud, ingest internal-side packages, push deltas back to Jira, export packages for the internal side.",
+  "author": {
+    "name": "Maor B",
+    "email": "maorb@final.co.il"
+  }
+}
