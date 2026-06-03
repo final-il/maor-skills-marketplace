@@ -84,6 +84,11 @@ For each story, extract:
   - **Route prefixes** → list of route prefix strings
   - **CLI commands / subcommands** → list of command strings
   - **Env vars / config keys** → list of names
+- `## Wire Contracts` section — parse the bullets:
+  - **Produces** → list of `{transport} {channel} payload {schema_summary}` (e.g., `SSE event=tool_result payload {id, result, is_error}`)
+  - **Consumes** → list of the same shape, with the channel/event name and expected payload
+  - **Schema location** → single repo path (the canonical source of truth for the wire shape)
+  - **Producer story / consumer story** → Jira keys that own each side of the contract
 - `#### Files to Create/Modify` section — list of file paths annotated as create/modify
 
 If a story is missing a `## Names Reserved` section, record it as **incomplete** — it cannot participate in the audit. Post a comment on that story:
@@ -120,6 +125,38 @@ Routes, CLI commands, and env vars are HARD collisions when the same string appe
 
 A `modify` entry maps to a SHARED FILE when `len(stories) > 1`. Same file across `new_files` (one story) AND `modify` (another story) is also SHARED — the second story should be told it will be modifying a brand-new file from a sibling.
 
+### Step 2.5 — Build the wire-contract index and detect drift
+
+Wire-contract drift between two parallel stories (one producer, one consumer of the same channel) is THE most common failure mode this audit must catch. Run this step even if the names index has zero collisions.
+
+In memory, build:
+
+```
+contracts: {(transport, channel): {
+    producers: [(story_key, schema_summary, schema_location)],
+    consumers: [(story_key, schema_summary, schema_location)],
+}}
+```
+
+`transport` is `http` / `sse` / `websocket` / `ipc` / `file` / `cli-stdout`. `channel` is the route, event name, queue name, file format, etc. (e.g., `event=tool_result`, `POST /api/chat`).
+
+For each `(transport, channel)` group, classify:
+
+- **HARD wire collision** — at least one producer and at least one consumer, AND any of:
+  - Different `schema_location` paths between producer and consumer (no single source of truth)
+  - Different field names in the schema summaries (e.g., producer says `{id, result}`, consumer says `{tool_use_id, content}`)
+  - Different field types or required/optional discipline
+  - Producer is missing entirely (consumer references a contract no one produces) — orphaned consumer
+  - Consumer is missing entirely (producer emits a channel no one reads) — flag as INFO unless the story description explicitly says "for future use"
+- **WIRE COORDINATION** — producer and consumer share `schema_location` AND identical field names/types, but:
+  - Two producers exist (multi-source channel) — coordination needed; flag if their payloads differ
+  - The schema location is in a story that hasn't been transitioned to "Selected for Development" yet (sequencing risk)
+- **CLEAN** — exactly one producer + one consumer + identical schema reference + identical field summary. Silent.
+
+For HARD wire collisions, the recommended action is NEVER "rename one side." It is always: **collapse to a single canonical schema file**, and update both stories' `## Wire Contracts` sections to reference that file with identical field lists. Specify the exact file path and the exact field-name set the architect must rewrite to. If the producer and consumer disagree on which side is canonical, route the call: HTTP/SSE producers (servers) own the schema; consumers (clients) conform. For symmetric IPC, pick the producer alphabetically by story key.
+
+If a story is producing or consuming wire data but has no `## Wire Contracts` section, treat it as **incomplete** (same as missing `## Names Reserved`) — comment, transition back to Backlog, skip.
+
 ### Step 3 — Classify and rename-recommend
 
 For each HARD collision, propose a canonical name:
@@ -147,15 +184,20 @@ For each affected story, build the comment:
 ### Summary
 - Status: ACTION REQUIRED | COORDINATION | INFO
 - Hard collisions: {N}
+- Wire-contract drift: {N}
 - Shared files: {N}
 - Stories involved: {list of sibling keys}
-- Action required: {one line — e.g., "rename ChartResult.tsx and re-run architect" or "none — proceed with additive style"}
+- Action required: {one line — e.g., "rename ChartResult.tsx and re-run architect" or "collapse SSE tool_result schema to web/SSE_PROTOCOL.md and re-run architect on producer + consumer" or "none — proceed with additive style"}
 
 ### Detail
 
 #### Hard collisions (if any)
 - `ChartResult.tsx` (new file) — also reserved by CSI-X. Recommended rename for THIS story: `ChartByType.tsx`. Update `## Names Reserved` and `#### Files to Create/Modify` in this story's tech spec.
 - `class EventStore` (in `src/store.py`) — also defined by CSI-Y. Recommended rename for THIS story: `class GitHubEventStore`.
+
+#### Wire-contract drift (if any)
+- `SSE event=tool_result` — producer CSI-447 emits `{id, result, is_error}` (schema in `web/backend/jiralyzer_web/sse.py`); consumer CSI-454 reads `{tool_use_id, content}` (schema in `web/frontend/src/api/types.ts`). Two schema locations + field-name disagreement = drift.
+  - **Action:** Architect, collapse to a single canonical schema file at `web/SSE_PROTOCOL.md`. Producer side wins on field names → consumer must rewrite to `{id, result, is_error}`. Update both stories' `## Wire Contracts` sections to reference `web/SSE_PROTOCOL.md` with identical field lists.
 
 #### Shared files (if any)
 - `web/backend/app.py` — also touched by CSI-X, CSI-Y. Strategy: additive (router registrations). The conflict-resolver agent will union-merge at Phase 7.5 if needed. Append your `app.include_router(...)` calls; do NOT reorder existing ones.
@@ -168,12 +210,13 @@ For each affected story, build the comment:
 - {only when Status = ACTION REQUIRED — one bullet per concrete action}
 - Architect: rename `ChartResult.tsx` to `ChartByType.tsx` in this story's tech spec, then re-run.
 - Architect: rename `class EventStore` to `class GitHubEventStore` in this story's tech spec, then re-run.
+- Architect: collapse `SSE event=tool_result` schema to `web/SSE_PROTOCOL.md` and rewrite consumer to `{id, result, is_error}`; re-run on both producer and consumer stories.
 ```
 
 Set `Status` as:
 
-- `ACTION REQUIRED` — at least one hard collision. Story will be transitioned back to `Backlog`.
-- `COORDINATION` — only shared files / sequencing risk. Story stays in its current status; developer just needs to know.
+- `ACTION REQUIRED` — at least one hard collision OR at least one wire-contract drift. Story (and any paired wire-contract story) will be transitioned back to `Backlog`.
+- `COORDINATION` — only shared files / sequencing risk / multi-producer wire coordination. Story stays in its current status; developer just needs to know.
 - `INFO` — none of the above (skip — do not post).
 
 Issue all comments and transitions in **one parallel batch**.

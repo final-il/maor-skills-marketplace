@@ -106,6 +106,19 @@ What NOT to put in the comment:
    - Are error paths tested?
    - Do tests follow project conventions?
 
+   **c.1 Wire-contract verification (MANDATORY when story has a `## Wire Contracts` section)**
+
+   The tester is required to write end-to-end contract tests when a story produces or consumes data across a process boundary (see `sdlc-tester` "Wire-contract tests"). Verify they actually exist and aren't fakes:
+
+   - Open the test file. Confirm at least one test feeds real producer bytes into the real consumer parser (or the canonical schema's serialization round-trips through both sides).
+   - Reject as ISSUES FOUND if you see any banned pattern:
+     - Test authors a fixture and feeds it into the parser. (Tests parser against itself.)
+     - Test normalizes bytes before parsing (`replace("\r\n", "\n")`, JSON pretty-print before parse, lowercasing event names).
+     - Frontend test uses different event names than the backend actually emits.
+     - The wire schema referenced in the test does not match `## Wire Contracts` → schema location.
+   - Cross-check the test against the actual producer/consumer code: if the producer emits `event: text` but the test mocks `event: token`, file a Bug.
+   - If the story has a `## Wire Contracts` section but no end-to-end contract test exists, that is a blocking issue — file a Bug, status ISSUES FOUND.
+
    **d. Integration**
    - Does the code work with the rest of the codebase?
    - Any breaking changes to existing functionality?
@@ -163,6 +176,7 @@ In Fast Mode, **still do**:
 - Read the diff (`git diff {base_branch}...HEAD --name-only`, then read each file)
 - Verify each acceptance criterion is implemented (one-line check per AC is fine)
 - Spot-check for obvious bugs, security issues, or convention violations
+- **If the story has a `## Wire Contracts` section: verify at least one end-to-end contract test exists and is not parser-against-itself.** Wire verification is never skipped, even in Fast Mode — wire drift is the exact bug class that motivated this rule. If any banned pattern is present (fixture-against-parser, byte normalization before parse, event-name mismatch with the real producer), switch to a full review immediately.
 - Post a short QA comment + transition
 
 Fast Mode comment template (still follows artifact discipline — `## Summary` first):

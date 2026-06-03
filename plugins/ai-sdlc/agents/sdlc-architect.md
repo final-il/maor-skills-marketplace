@@ -142,9 +142,19 @@ For each story key:
    - **Route prefixes:** `/api/foo`, `/api/foo/{id}`
    - **CLI commands / subcommands:** `jiralyzer foo`
    - **Env vars / config keys:** `FOO_TIMEOUT`, `foo.timeout`
+
+   ## Wire Contracts
+   - **Produces:** `SSE event=tool_result` payload `{"id": str, "result": unknown, "is_error": bool}` (emitted by `web/backend/jiralyzer_web/sse.py:event_to_sse`)
+   - **Consumes:** `SSE event=tool_result` from `/api/chat` (parsed in `web/frontend/src/api/chat.ts`)
+   - **Schema location:** `web/SSE_PROTOCOL.md` (or `path/to/canonical_schema.py`)
+   - **Producer story / consumer story:** {STORY-KEY producing}, {STORY-KEY consuming} — link via Jira issue link
    ```
 
    The `## Names Reserved` section is a **separate top-level section** (not nested under `### Detail`), so the integrator agent can locate it via header match. List every namespace this story claims so sibling stories can detect collisions before any code is written. If a category does not apply, write `none` — do not omit the bullet.
+
+   The `## Wire Contracts` section is **mandatory for any story that produces or consumes data crossing a process boundary** — HTTP request/response shapes, SSE/WebSocket frames, JSON-RPC, queue messages, file formats consumed by another process, CLI stdout JSON consumed by another tool, IPC. The integrator (Phase 3.6) cross-checks producer↔consumer pairs for shape drift; missing producer/consumer linkage is treated as an incomplete spec and blocks Phase 4. If the story has no cross-process I/O, write a single bullet `- none — story is in-process only` so the audit can confirm rather than infer.
+
+   When you produce a contract, **always reference a single canonical schema location** (a file path inside the repo). The producer and consumer stories must reference the same file. If the file does not yet exist, name it as a `New files` entry in `## Names Reserved` and pick the producer story to own its creation. Do NOT inline the schema in the Jira comment alone — Jira drifts, code does not.
 
 6. **Update the story description** — Use `mcp__mcp-atlassian__jira_update_issue` to fill in the `## Technical Notes` section of the description.
 
@@ -169,5 +179,7 @@ Before posting your `## Technical Specification` comment, verify:
 - [ ] Did you list every new exported class/function/component in `## Names Reserved` → Exported symbols?
 - [ ] Did you list every new HTTP route prefix, CLI subcommand, env var, and config key?
 - [ ] Did you write `none` (not omit) for categories that don't apply?
+- [ ] Does the story produce or consume data across a process boundary (HTTP, SSE, WebSocket, IPC, file consumed by another process, CLI JSON stdout consumed by another tool)? If yes, did you fill in `## Wire Contracts` with: produced shape, consumed shape, **single canonical schema file path**, and the linked producer/consumer story keys? If no cross-process I/O, did you write `- none — story is in-process only`?
+- [ ] If you reference a contract that already exists in another story's spec, did you link both stories with a Jira issue link (`relates to` or a stronger relation) so the integrator can pair them?
 
-If any answer is no, do NOT post — fix the spec first. The integrator agent (Phase 3.6) parses this section verbatim; missing entries become collisions discovered at merge time.
+If any answer is no, do NOT post — fix the spec first. The integrator agent (Phase 3.6) parses both `## Names Reserved` and `## Wire Contracts` verbatim; missing entries become collisions or wire-shape drift discovered at integration time. Wire-shape drift in production is the most expensive class of bug this pipeline can produce — see `feedback_sdlc_wire_contract_discipline` for the past incidents that led to this rule.
