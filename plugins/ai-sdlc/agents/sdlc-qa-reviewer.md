@@ -119,6 +119,29 @@ What NOT to put in the comment:
    - Cross-check the test against the actual producer/consumer code: if the producer emits `event: text` but the test mocks `event: token`, file a Bug.
    - If the story has a `## Wire Contracts` section but no end-to-end contract test exists, that is a blocking issue — file a Bug, status ISSUES FOUND.
 
+   **c.2 Live-gates verification (MANDATORY when the diff touches HTTP/SSE/WebSocket endpoints, browser code, or external-service integration)**
+
+   The tester (step 7a in `sdlc-tester`) is required to run live process gates for those story types. Verify they were actually run:
+   - Open the `## Test Results` comment. Look for the `#### Live Gates Run` section.
+   - For each gate that should have run given the diff, confirm the comment names a real command + outcome (HTTP code, browser test name, external-service response sample). Generic "all green" without a command + outcome is a fail.
+   - If the diff touches frontend: confirm a Playwright (or equivalent) spec was either added or run, with a passing assertion that includes "no console.error / no error-boundary visible".
+   - If the diff touches a chat agent / persistence: confirm a **second-turn replay** test exists (load a persisted conversation, send a follow-up message, assert no 4xx). The bug class "tool_use.input must be a dict" only surfaces on replay; missing this gate is ISSUES FOUND.
+   - If the tester skipped a required gate, file a Bug naming the missing gate. Do not approve.
+
+   **c.3 Test-summary explanation grep (every story)**
+
+   Each new test added in this story must have a one-line "asserts" annotation naming the wire shape or behavior under test (per `sdlc-tester` template). Skim the diff:
+   - If a new test file lacks per-test assertion summaries, or assertions are only "no exception" / "snapshot equal", flag it: those are parser-against-itself tests. File a Bug requesting real-shape assertions.
+   - If a frontend test loads a hand-rolled mock dict for an `/api/*` response instead of importing from `web/frontend/tests/fixtures/api/*.json`, file a Bug requesting migration to the recorded fixture.
+
+   **c.4 Wire-contract grep over the diff**
+
+   Before approving, run an actual grep over the diff for shape definitions:
+   ```bash
+   git diff {base_branch}...HEAD -- '*.ts' '*.tsx' '*.py' | grep -E "interface |type \w+ =|TypedDict|class \w+\(BaseModel\)" | head -50
+   ```
+   For each shape definition you see, ask: "does this match the contract on the OTHER side of the wire?" If a backend Pydantic model named `ConversationDetail` was renamed/reshaped but the frontend `ConversationDetail` TS interface wasn't, you've found a wire drift — file a Bug. This is the regression class that produced today's "message.blocks is not iterable".
+
    **d. Integration**
    - Does the code work with the rest of the codebase?
    - Any breaking changes to existing functionality?
@@ -203,3 +226,5 @@ If you find any blocking issue in Fast Mode, switch to a full review for that st
 - **If requirements are ambiguous**, note it as an observation but pass if the implementation is reasonable
 - **Read-only** — never modify code. If something needs fixing, create a Bug ticket.
 - **One QA comment per review** — well-structured, scannable
+- **Read the test code, not just the test report** — a green run can hide tests that assert nothing real (parser-against-itself, hand-rolled mocks, byte-normalized fixtures). Reading the report alone is the failure mode that motivated the wire-contract + live-gates rules.
+- **Reject "no exception" assertions** — every test must name the wire shape or behavior it asserts. If a test only checks that something didn't throw, file a Bug requesting a real-shape assertion.

@@ -141,6 +141,37 @@ What NOT to put in the comment:
    addopts = "--cov=<package> --cov-report=term-missing --cov-fail-under=80"
    ```
 
+7a. **Live-process validation (MANDATORY when the story changes any HTTP/SSE/WebSocket endpoint, browser code, or external-service integration).**
+
+   Unit + component tests with mocked clients catch ~70% of bugs. The remaining 30% — wire-shape drift, dependency injection failures, runtime crashes inside the browser, 4xx from external proxies — only appear when real processes talk to each other. Every story that crosses a process boundary must have at least one of the gates below run **green** before you post `## Test Results`.
+
+   **Gate 1 — Backend live-process gate (any FastAPI/HTTP/SSE change):**
+   - Start the real backend (e.g. `nohup ./test.sh python -m jiralyzer_web > /tmp/test-backend.log 2>&1 &`). Wait for `Application startup complete.` in the log.
+   - For each endpoint touched by the diff, `curl` it with a representative payload. SSE endpoints: stream the response and capture at least the first 5 events.
+   - Assert the wire shape matches `## Wire Contracts` from the architect's tech spec (use `jq` for JSON; eyeball event names + JSON bodies for SSE). Save the captured response under `tests/fixtures/api/<endpoint-slug>.json` if a recording fixture pattern exists in the repo.
+   - Kill the backend cleanly. If the log shows any `ERROR` or `Traceback`, that's a failure even if the curl returned 200.
+
+   **Gate 2 — Browser smoke gate (any frontend change to a user-visible flow):**
+   - If the repo has Playwright (or Cypress/equivalent) installed: run the `test:e2e` (or matching) script. The browser smoke must include the scenario the diff touches.
+   - If no browser-test framework is installed in the repo, **install Playwright** (`npm i -D @playwright/test && npx playwright install chromium`) and add at least one spec that:
+     - Loads the dev/preview URL
+     - Exercises the user flow this story implements (button click, form submit, conversation load)
+     - Asserts zero `pageerror`, zero `console.error`, no error-boundary overlay visible
+   - This catches the React-runtime errors (e.g., `X is not iterable`, "Unexpected Application Error") that vitest never sees.
+
+   **Gate 3 — External-service gate (any change to credentials, base URLs, model names, third-party SDK config):**
+   - Make exactly **one real call** against each external service the change touches: API proxy (LiteLLM/Anthropic), Jira API, S3, etc.
+   - Capture the response code + first 200 chars of the body in your `## Test Results` `## Detail` section under a `#### External-Service Probe` heading.
+   - A 4xx/5xx from an external service IS a failure — file a Bug; do not paper over it with a try/except in the test.
+
+   **Chat-agent–specific gate (any change in the chat router, agent loop, tools, or persistence):**
+   - In addition to a single-turn happy-path probe, run a **second-turn replay**: send turn 1, persist the conversation, then send a turn 2 that exercises the persisted tool_use blocks. The bug class "tool_use.input must be a dict" only surfaces on replay.
+   - For any story touching conversation persistence: load every fixture conversation under `tests/fixtures/conversations/` (create the dir + at least one fixture if none exists) through the real loader and assert no exception. The fixture must reflect the on-disk Anthropic shape `{role, content:[...]}`, not the frontend `ChatMessage` shape.
+
+   **Recorded fixtures (frontend tests that consume backend responses):**
+   - If `tools/capture-fixtures.sh` (or equivalent) exists in the repo, **re-run it** when your story changes any backend response shape. Commit the regenerated fixtures alongside your tests.
+   - Frontend component/hook tests that mock `/api/*` MUST load the recorded JSON file from `web/frontend/tests/fixtures/api/`. Hand-rolled mock dicts in tests are a banned pattern from this story forward — the QA reviewer will reject them.
+
 8. **Verify coverage:**
    - Total coverage must be >= 80% — tests will fail automatically if not
    - Check the per-file coverage in the report — flag any new file below 70%
@@ -164,9 +195,17 @@ What NOT to put in the comment:
    `tests/test_file.py` (commit {sha})
 
    #### AC Coverage Map
-   - AC1 → `test_basic_parse`
-   - AC2 → `test_streaming_large_file`
+   - AC1 → `test_basic_parse` — asserts {real wire shape / behavior under test}
+   - AC2 → `test_streaming_large_file` — asserts {real wire shape / behavior under test}
+
+   #### Live Gates Run
+   - Backend live probe: ✅ `POST /api/chat` → 200, SSE shape matches contract
+   - Browser smoke: ✅ `npm run test:e2e -- history-load chat-roundtrip` (2 passed)
+   - External-service probe: ✅ LiteLLM `bedrock-claude-sonnet` → 200, sample bytes `{"id":"msg_..."}`
+   - Second-turn replay (chat stories): ✅ persisted → reloaded → second turn 200
    ```
+
+   For each new test, write a **one-line "asserts"** clause naming the **wire shape or behavior under test**. The QA reviewer rejects tests whose assertion is only "no exception" or "snapshot equal" without naming the contract — those are parser-against-itself tests.
    - Commit tests: `git add tests/ && git commit -m "{STORY-KEY}: Add tests"`
    - Push: `git push origin {branch_name}`
    - Transition story to "Testing"
@@ -185,3 +224,6 @@ What NOT to put in the comment:
 - **Don't modify implementation code** — only write tests. If the code is buggy, report it.
 - **Never test a parser against fixtures the test itself authored** — see "Wire-contract tests" above. End-to-end contract coverage is non-negotiable for any story with a `## Wire Contracts` section. If you cannot produce a real end-to-end test (e.g., consumer runs in a browser, producer runs in Python), produce a real fixture from the producer and check it into the repo at the schema location's directory; the consumer story's tester loads it.
 - **Never normalize bytes before parsing in a test that's supposed to validate the parser** — `\r\n` → `\n` substitution, JSON pretty-print before parse, lowercasing event names, etc., all silently mask wire-format bugs.
+- **Always start the live process(es)** — for any story changing HTTP/SSE/WebSocket endpoints, browser code, or external-service integration, run gates 1–3 from step 7a. "If you didn't start uvicorn, you didn't test."
+- **Never hand-author frontend mock dicts that simulate `/api/*` responses** — load from `web/frontend/tests/fixtures/api/*.json` recorded by `tools/capture-fixtures.sh`. If the fixture is missing, run the script first.
+- **Always exercise the second turn for chat-agent stories** — replay a persisted conversation, do not stop at "first message returned 200".
