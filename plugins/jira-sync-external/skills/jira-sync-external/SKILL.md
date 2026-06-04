@@ -38,7 +38,7 @@ Before answering anything substantive, run a sanity check:
 echo "SIDE=$SIDE"
 echo "JIRA_URL=$JIRA_URL"
 echo "EXTERNAL_STORE_PATH=$EXTERNAL_STORE_PATH"
-echo "PROJECT_KEY=${PROJECT_KEY:-CSI}"
+echo "PROJECT_KEY=${PROJECT_KEY:-JS}"
 ls -la "${EXTERNAL_STORE_PATH:-/Users/maorb/git-dev/jira-filebased-sync/.manual-test/external_store}/sync.db" 2>/dev/null
 ```
 
@@ -80,7 +80,7 @@ prefix when actually running.
 
 The external `.env` file at `/Users/maorb/git-dev/jira-filebased-sync/.manual-test/external.env`
 provides: `SIDE=external`, `JIRA_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`, `EXTERNAL_STORE_PATH`,
-`PACKAGE_DIR`, `PROJECT_KEY=CSI`. Treat the API token as secret — never paste it into Jira
+`PACKAGE_DIR`, `PROJECT_KEY=JS`. Treat the API token as secret — never paste it into Jira
 comments, never commit `.env`.
 
 ## Pulling from Jira Cloud
@@ -96,7 +96,11 @@ What it does:
 - Diffs each issue against the local store and appends events
 - Advances the `external_pull_cursor` watermark only on success (re-runs are idempotent)
 
-Output: `{"issues_seen": N, "events": M, "skipped_duplicates": K, "last_updated": "...", "project_key": "CSI"}`
+Output: `{"issues_seen": N, "events": M, "skipped_duplicates": K, "last_updated": "...", "project_key": "JS"}`
+
+> **Project key:** Sync work uses Jira project **`JS`** (jira-sync). All test/dev tickets and
+> packages should live in `JS-*`. Older notes may reference `CSI-*` — that was the previous
+> dev project; do not push or pull against it.
 
 ### Narrowing the pull (first-time on a big project)
 
@@ -145,10 +149,10 @@ sqlite3 -header -column "$EXTERNAL_STORE_PATH/sync.db" \
 
 # Single issue with comments
 sqlite3 -header -column "$EXTERNAL_STORE_PATH/sync.db" \
-  "SELECT key, status, summary FROM issues WHERE key='CSI-523';"
+  "SELECT key, status, summary FROM issues WHERE key='JS-1';"
 sqlite3 -header -column "$EXTERNAL_STORE_PATH/sync.db" \
   "SELECT created, json_extract(author_json,'\$.display_name') AS author, body
-   FROM comments WHERE issue_key='CSI-523' ORDER BY created DESC LIMIT 10;"
+   FROM comments WHERE issue_key='JS-1' ORDER BY created DESC LIMIT 10;"
 
 # Pull cursor — what's the watermark?
 sqlite3 "$EXTERNAL_STORE_PATH/sync.db" \
@@ -220,13 +224,13 @@ What it does (per event, in `(timestamp, event_id)` order):
 | `StatusTransitioned` | resolves status name → transition id, then `set_issue_status_by_transition_id` |
 | `IssueCreated` | `create_issue`; binds returned key to the `LOCAL-*` key in `local_key_map` |
 
-Returns: `{successes, failure_count, failures: [{event_id, error}], created_keys: {LOCAL-*: CSI-*}}`.
+Returns: `{successes, failure_count, failures: [{event_id, error}], created_keys: {LOCAL-*: JS-*}}`.
 
 Per-event failures are logged to push state and **do not abort the run**. Re-pushing the same
 package is safe — already-applied events are skipped via the event-id ledger.
 
 If `created_keys` is non-empty, the next pull will refresh the local issue rows for the new
-`CSI-*` keys.
+`JS-*` keys.
 
 ### Verifying a push landed
 
@@ -236,7 +240,7 @@ After `push`, confirm with the live Jira API (don't trust just the local count):
 # Show the live status of an issue you transitioned
 SSL_CERT_FILE=/Users/maorb/.config/uv/ca-bundle.pem \
   curl -s -u "$JIRA_EMAIL:$JIRA_API_TOKEN" \
-    "$JIRA_URL/rest/api/3/issue/CSI-523?fields=status,summary" \
+    "$JIRA_URL/rest/api/3/issue/JS-1?fields=status,summary" \
   | jq '{key, status: .fields.status.name, summary: .fields.summary}'
 ```
 

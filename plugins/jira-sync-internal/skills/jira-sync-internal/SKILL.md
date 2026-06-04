@@ -6,7 +6,7 @@ description: |
   edits (edit fields, add comments, transition status, create new issues), ingest a package zip
   brought across the gap from the external side, or export an outbound delta package to ship back.
 
-  Also trigger for: "show me my local Jira", "what's in CSI-523", "edit summary offline",
+  Also trigger for: "show me my local Jira", "what's in JS-1", "what's in this issue", "edit summary offline",
   "add an offline comment", "transition this ticket", "create a new offline issue", "ingest the
   package", "export my changes", "make a delta zip", "what did the external side send", "I'm on
   the internal side", "internal terminal".
@@ -37,7 +37,7 @@ Before answering anything substantive, run a sanity check:
 ```bash
 echo "SIDE=$SIDE"
 echo "INTERNAL_STORE_PATH=$INTERNAL_STORE_PATH"
-echo "PROJECT_KEY=${PROJECT_KEY:-CSI}"
+echo "PROJECT_KEY=${PROJECT_KEY:-JS}"
 ls -la "${INTERNAL_STORE_PATH:-/Users/maorb/git-dev/jira-filebased-sync/.manual-test/internal_store}/sync.db" 2>/dev/null
 ```
 
@@ -70,7 +70,7 @@ For brevity below, this is shown as `sync-engine <subcommand>`. Always expand to
 prefix when actually running.
 
 The internal `.env` file at `/Users/maorb/git-dev/jira-filebased-sync/.manual-test/internal.env`
-provides: `SIDE=internal`, `INTERNAL_STORE_PATH`, `PACKAGE_DIR`, `PROJECT_KEY=CSI`. The internal
+provides: `SIDE=internal`, `INTERNAL_STORE_PATH`, `PACKAGE_DIR`, `PROJECT_KEY=JS`. The internal
 side does NOT need real Jira credentials — the included `JIRA_API_TOKEN` is a placeholder.
 
 ## Local store schema (you'll query this directly)
@@ -98,7 +98,7 @@ Use `-header -column` or `-json` for nicer output:
 
 ```bash
 sqlite3 -json "$INTERNAL_STORE_PATH/sync.db" \
-  "SELECT key, summary, status FROM issues WHERE key='CSI-523';" | jq .
+  "SELECT key, summary, status FROM issues WHERE key='JS-1';" | jq .
 ```
 
 ### Common reads
@@ -110,15 +110,15 @@ sqlite3 -header -column "$INTERNAL_STORE_PATH/sync.db" \
 
 # One issue + its comments (latest 10)
 sqlite3 -header -column "$INTERNAL_STORE_PATH/sync.db" \
-  "SELECT key, status, summary FROM issues WHERE key='CSI-523';"
+  "SELECT key, status, summary FROM issues WHERE key='JS-1';"
 sqlite3 -header -column "$INTERNAL_STORE_PATH/sync.db" \
   "SELECT created, json_extract(author_json,'\$.display_name') AS author, body
-   FROM comments WHERE issue_key='CSI-523' ORDER BY created DESC LIMIT 10;"
+   FROM comments WHERE issue_key='JS-1' ORDER BY created DESC LIMIT 10;"
 
 # History of a single ticket (events ordered)
 sqlite3 -header -column "$INTERNAL_STORE_PATH/sync.db" \
   "SELECT timestamp, source_side, op_type, json_extract(payload_json,'\$') AS payload
-   FROM events WHERE issue_key='CSI-523' ORDER BY seq;"
+   FROM events WHERE issue_key='JS-1' ORDER BY seq;"
 
 # Outbound queue — what hasn't been exported yet
 sqlite3 -header -column "$INTERNAL_STORE_PATH/sync.db" \
@@ -142,9 +142,13 @@ sqlite3 -header -column "$INTERNAL_STORE_PATH/sync.db" \
    FROM comments ORDER BY created DESC LIMIT 20;"
 ```
 
-When the user asks free-form questions ("what's in CSI-523", "who commented last week",
+When the user asks free-form questions ("what's in JS-1", "who commented last week",
 "how many bugs are in progress"), translate to SQL against the schema above. Show the SQL you
 ran so the user can adjust it.
+
+> **Project key:** Sync work uses Jira project **`JS`** (jira-sync). All test/dev tickets and
+> packages should live in `JS-*`. Older notes may reference `CSI-*` — that was the previous
+> dev project; do not create new tickets there.
 
 ## Making offline edits (writes)
 
@@ -154,8 +158,8 @@ until you explicitly `export`.
 ### Edit fields
 
 ```bash
-sync-engine edit CSI-523 -f 'summary=new summary text'
-sync-engine edit CSI-523 -f 'priority=High' -f 'labels=["urgent","triage"]'
+sync-engine edit JS-1 -f 'summary=new summary text'
+sync-engine edit JS-1 -f 'priority=High' -f 'labels=["urgent","triage"]'
 ```
 
 `-f` accepts `key=value` (string) or `key={JSON}` for non-string values. Repeatable.
@@ -163,7 +167,7 @@ sync-engine edit CSI-523 -f 'priority=High' -f 'labels=["urgent","triage"]'
 ### Add a comment
 
 ```bash
-sync-engine comment CSI-523 \
+sync-engine comment JS-1 \
   --body "offline comment from internal side" \
   --author "Maor Ben Aroosh"
 ```
@@ -173,7 +177,7 @@ sync-engine comment CSI-523 \
 ### Transition status
 
 ```bash
-sync-engine transition CSI-523 --to "In Progress"
+sync-engine transition JS-1 --to "In Progress"
 ```
 
 Supply the **target status name** as it appears in Jira ("In Progress", "Done", "Selected for
@@ -190,8 +194,8 @@ sync-engine create \
 ```
 
 Returns a `LOCAL-*` key (e.g. `LOCAL-2b73adda`). You can immediately reference it in further
-edits in this same package — the external side will substitute the real Jira key (`CSI-523` →
-`CSI-524` etc) once the push lands.
+edits in this same package — the external side will substitute the real Jira key (`LOCAL-*` →
+`JS-N` etc) once the push lands.
 
 After making edits, the new events are visible in the `events` table with
 `source_side='internal'` and not yet in `exported_events`.
