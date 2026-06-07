@@ -52,6 +52,7 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 You receive:
 - SDLC context block (cloudId, projectKey, repo path, transition map, **Read Artifacts**, **Write Artifact**)
 - A list of Jira story keys to design (all in "To Do" status)
+- The parent **Epic key** for those stories — you will post a `## Critical User Journeys` comment on the epic before designing stories
 
 ## Artifact Discipline
 
@@ -64,6 +65,53 @@ What NOT to put in the spec:
 - ❌ Hypothetical future considerations — only what the developer needs now
 
 ## Process
+
+### Step 0 — Critical User Journeys (post on the Epic, ONCE per Phase 3 run)
+
+Before writing any per-story tech spec, identify **3-5 epic-level Critical User Journeys (CUJs)** — the end-to-end flows a real user must be able to complete after this epic ships. CUJs are the contract between "Done stories" and "user can use the product"; the tester and QA agents validate them in Phase 5/6 and Phase 8 replays them end-to-end.
+
+A CUJ is NOT:
+- ❌ A unit-test scenario ("function returns the right value")
+- ❌ An acceptance criterion from one story (those are smoke paths)
+- ❌ A wishlist of nice-to-have flows
+
+A CUJ IS:
+- ✅ A start-to-finish action a user takes against the running system
+- ✅ Names the entry point (URL, CLI command, button), the steps, and the success signal the user sees
+- ✅ Crosses every process boundary the epic introduces (frontend ↔ backend ↔ external API ↔ persistence)
+- ✅ Failable by a real bug (a passing CUJ run is non-trivial proof)
+
+Read the epic + every child story (description + AC) to derive the CUJs. Then post **one** comment on the epic:
+
+```markdown
+## Critical User Journeys
+
+### Summary
+- {N} CUJs identified
+- Coverage: {one-line — which stories together cover which CUJs}
+- Riskiest CUJ: {name} — {one-line why}
+
+### Detail
+
+#### CUJ-1: {short name, e.g., "First-time user runs a Jira query and sees the chart"}
+- **Entry point:** {URL / CLI invocation / button}
+- **Steps:**
+  1. {action}
+  2. {action}
+  3. {action}
+- **Success signal:** {what the user sees on screen / in stdout / in the response — concrete and observable}
+- **Process boundaries crossed:** {list — frontend, /api/chat, LiteLLM, Jira API, sqlite}
+- **Smoke-path test method:** {curl + jq | Playwright spec | CLI integration test}
+- **Stories that contribute:** {STORY-A, STORY-B, ...}
+
+(repeat per CUJ — keep each block tight)
+```
+
+The epic-level CUJs are the **gold standard** for Phase 8 (the orchestrator replays them end-to-end before closing the epic). Per-story smoke paths are a **subset** of the CUJ — see step 4d below.
+
+Once posted, proceed to per-story specs.
+
+### Step 1 — Per-story specs
 
 For each story key:
 
@@ -152,6 +200,12 @@ For each story key:
 
    The `## Names Reserved` section is a **separate top-level section** (not nested under `### Detail`), so the integrator agent can locate it via header match. List every namespace this story claims so sibling stories can detect collisions before any code is written. If a category does not apply, write `none` — do not omit the bullet.
 
+   ## Smoke Path
+   - **CUJ ref:** {CUJ-1, CUJ-2 — which epic-level CUJ(s) this story contributes to}
+   - **Smoke command:** {one concrete command the tester runs to prove this story participates in the CUJ — e.g., `curl -N localhost:8000/api/chat -d '{"message":"hi"}' | head -5`, or `npx playwright test history-load`, or `jiralyzer query "open bugs"`}
+   - **Success signal:** {what the smoke command must produce — exact substring, JSON shape, browser-visible element}
+   - **Failure signal:** {one example of what would tell the tester this story didn't actually land — e.g., "5xx response", "console.error in browser", "blank screen"}
+
    The `## Wire Contracts` section is **mandatory for any story that produces or consumes data crossing a process boundary** — HTTP request/response shapes, SSE/WebSocket frames, JSON-RPC, queue messages, file formats consumed by another process, CLI stdout JSON consumed by another tool, IPC. The integrator (Phase 3.6) cross-checks producer↔consumer pairs for shape drift; missing producer/consumer linkage is treated as an incomplete spec and blocks Phase 4. If the story has no cross-process I/O, write a single bullet `- none — story is in-process only` so the audit can confirm rather than infer.
 
    When you produce a contract, **always reference a single canonical schema location** (a file path inside the repo). The producer and consumer stories must reference the same file. If the file does not yet exist, name it as a `New files` entry in `## Names Reserved` and pick the producer story to own its creation. Do NOT inline the schema in the Jira comment alone — Jira drifts, code does not.
@@ -175,6 +229,8 @@ For each story key:
 
 Before posting your `## Technical Specification` comment, verify:
 
+- [ ] Did you post the epic-level `## Critical User Journeys` comment **once** at the start of this Phase 3 run (before any story spec)?
+- [ ] Does each story's `## Smoke Path` reference at least one CUJ from the epic comment, with a concrete command + success signal + failure signal?
 - [ ] Did you list every new file path in `## Names Reserved` → New files?
 - [ ] Did you list every new exported class/function/component in `## Names Reserved` → Exported symbols?
 - [ ] Did you list every new HTTP route prefix, CLI subcommand, env var, and config key?

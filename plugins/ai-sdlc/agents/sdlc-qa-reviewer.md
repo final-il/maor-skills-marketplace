@@ -119,6 +119,18 @@ What NOT to put in the comment:
    - Cross-check the test against the actual producer/consumer code: if the producer emits `event: text` but the test mocks `event: token`, file a Bug.
    - If the story has a `## Wire Contracts` section but no end-to-end contract test exists, that is a blocking issue — file a Bug, status ISSUES FOUND.
 
+   **c.1.5 Smoke-path artifact verification (MANDATORY when the tech spec has a `## Smoke Path` section)**
+
+   The tester (step 7a-pre in `sdlc-tester`) is required to run the smoke path against a real running system and commit an observable artifact under `tests/artifacts/{STORY-KEY}/`. Verify it exists and is real:
+
+   - `ls tests/artifacts/{STORY-KEY}/` — confirm the file exists in the worktree.
+   - **Read the artifact yourself.**
+     - For text/JSON: `cat` it (or use Read), confirm the success signal named in the tech spec's `## Smoke Path → Success signal` is present in the bytes.
+     - For a screenshot (`smoke.png`): use the Read tool on the image path. **Look at the screenshot.** Confirm the rendered content matches what the tech spec described (chart visible, list populated, button labeled correctly). A blank page or error overlay = ISSUES FOUND.
+   - Cross-check the artifact's command against the tech spec's `## Smoke Path → Smoke command`. If the tester ran a different command (e.g., a unit test instead of the named curl), that's ISSUES FOUND — file a Bug demanding the actual smoke path.
+   - If the `## Test Results` comment references a smoke artifact path but the file is missing on disk, that's a fabricated artifact — ISSUES FOUND, file a Bug, switch to full review.
+   - The smoke-path check is **never skipped, even in Fast Mode** — it is the single most reliable signal that the story actually participates in its CUJ.
+
    **c.2 Live-gates verification (MANDATORY when the diff touches HTTP/SSE/WebSocket endpoints, browser code, or external-service integration)**
 
    The tester (step 7a in `sdlc-tester`) is required to run live process gates for those story types. Verify they were actually run:
@@ -200,6 +212,7 @@ In Fast Mode, **still do**:
 - Verify each acceptance criterion is implemented (one-line check per AC is fine)
 - Spot-check for obvious bugs, security issues, or convention violations
 - **If the story has a `## Wire Contracts` section: verify at least one end-to-end contract test exists and is not parser-against-itself.** Wire verification is never skipped, even in Fast Mode — wire drift is the exact bug class that motivated this rule. If any banned pattern is present (fixture-against-parser, byte normalization before parse, event-name mismatch with the real producer), switch to a full review immediately.
+- **If the story has a `## Smoke Path` section: verify the smoke artifact exists at `tests/artifacts/{STORY-KEY}/` and visually contains the success signal.** Smoke-path verification is never skipped, even in Fast Mode — see step c.1.5 above.
 - Post a short QA comment + transition
 
 Fast Mode comment template (still follows artifact discipline — `## Summary` first):
@@ -228,3 +241,4 @@ If you find any blocking issue in Fast Mode, switch to a full review for that st
 - **One QA comment per review** — well-structured, scannable
 - **Read the test code, not just the test report** — a green run can hide tests that assert nothing real (parser-against-itself, hand-rolled mocks, byte-normalized fixtures). Reading the report alone is the failure mode that motivated the wire-contract + live-gates rules.
 - **Reject "no exception" assertions** — every test must name the wire shape or behavior it asserts. If a test only checks that something didn't throw, file a Bug requesting a real-shape assertion.
+- **Look at the screenshot, don't just read about it.** When a smoke artifact is a `.png`, open it with the Read tool. A blank page or error overlay must not pass review. The QA reviewer is the last line of defense before "Done" — if you didn't actually see the rendered content, you didn't QA the story.

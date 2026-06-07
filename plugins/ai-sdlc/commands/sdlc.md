@@ -77,7 +77,9 @@ When this document says "Spawn the `sdlc-X` agent", do this:
 
 | Role | Model |
 |---|---|
+| sdlc-researcher | opus |
 | sdlc-planner | opus |
+| sdlc-plan-challenger | opus |
 | sdlc-jira-creator | sonnet |
 | sdlc-architect | opus |
 | sdlc-designer | opus |
@@ -187,6 +189,37 @@ When the user (not an agent) reports a bug — typically while testing a Done st
 - ❌ Skip the test/QA phases after the fix — even small fixes go through the full loop.
 - ❌ File the Bug as a top-level issue without a parent — the bug-fixer needs the parent story for context.
 
+## Hotfix Pattern — User-Driven Manual Fix With Late Jira Reconciliation
+
+**When to use:** the user is hands-on in a session, says "just fix X", and the work is small enough that the full Jira ceremony (Bug ticket → bug-fixer agent → tester → QA → 7.5 merge) would be more overhead than the fix itself. The user is the human-in-the-loop, so the value of the ceremony (tracking, async coordination) is partially redundant.
+
+**Critical rule that DOES NOT relax:** the orchestrator still does NOT write code itself. It spawns `sdlc-bug-fixer` (or `sdlc-developer` for a tiny feature) directly, without first creating a Jira Bug. Jira is reconciled afterward.
+
+**Eligibility (all must hold):**
+- The user is actively driving the session (not a `/sdlc continue` resume).
+- The user explicitly opted in (e.g., "hotfix this", "just patch it", "skip the ceremony").
+- The fix touches ≤2 files and has an obvious test the agent can write.
+- There is no in-flight epic phase racing for the same files.
+
+**Flow:**
+1. **Identify the parent context.** Either the existing parent Story (if one is broken) or — for a tiny feature — the existing Epic the work belongs under. Hotfixes do NOT spawn a new epic.
+2. **Spawn the bug-fixer (or developer) directly.** Pass the standard SDLC context block, the user's description as the task, and a flag in the prompt: `Hotfix Mode: true`. The agent works on a worktree (create one off `{base_branch}` with a short slug like `hotfix/{short-desc}`) and follows the normal commit/test/PR flow.
+3. **Skip the agent-files-bug step.** The fixer normally expects an existing Bug key; in hotfix mode it operates against the parent story's branch (or a new hotfix branch) and reports back to the orchestrator.
+4. **Run Phase 5 (test) + 6 (QA) on the resulting PR.** These are NOT optional — even a hotfix must pass the smoke artifact + live-process gates. The shortcut is the Jira ceremony, not the verification gates.
+5. **Reconcile Jira after the user signal.** When the user says "merge it" or "ship it":
+   - Create a Bug ticket retroactively (`issue_type: "Bug"`, `parent: {STORY-KEY}` or `parent: {EPIC-KEY}` for tiny features), back-dated description: "Hotfix landed in PR #N — see commit {sha}". Labels: `["ai-sdlc", "{project_name}", "hotfix"]`.
+   - Move the Bug straight to `Done` in a single transition.
+   - If the parent Story was in `Done`, leave it there.
+   - Phase 7.5 merges the PR (or it was merged manually as part of the hotfix flow — either is fine).
+   - Update the auto-resume file as usual.
+
+**Why this pattern exists:** previous reform attempts had the orchestrator inline-fix bugs ("just one line, no need for a bug ticket"), which violates `feedback_orchestrator_no_code` and `feedback_orchestrator_no_shortcuts`. The hotfix pattern resolves the tension: the orchestrator never writes code, but the user can opt out of upfront Jira ceremony as long as the verification gates still run and Jira is reconciled before the session closes.
+
+**When NOT to use:**
+- ❌ The user is not in the loop (e.g., `/sdlc continue` background runs). Always full ceremony.
+- ❌ The fix touches >2 files or affects a wire contract → full bug-fix flow.
+- ❌ The parent epic is mid-flight (Phase 4-7 active stories) → conflicts with concurrent worktrees.
+
 ## Feedback Loop — Bugs and New Features from Testing
 
 When the product is already built and the user reports a bug or requests a feature discovered during testing:
@@ -253,7 +286,9 @@ This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader s
 4b. **Resolve agent file paths once.** Run **one Glob**: `**/ai-sdlc/agents/sdlc-*.md`. From the result, build the `Agent Paths` map:
    ```
    {
+     researcher:        "/.../plugins/ai-sdlc/agents/sdlc-researcher.md",
      planner:           "/.../plugins/ai-sdlc/agents/sdlc-planner.md",
+     plan-challenger:   "/.../plugins/ai-sdlc/agents/sdlc-plan-challenger.md",
      jira-creator:      "/.../plugins/ai-sdlc/agents/sdlc-jira-creator.md",
      architect:         "/.../plugins/ai-sdlc/agents/sdlc-architect.md",
      designer:          "/.../plugins/ai-sdlc/agents/sdlc-designer.md",
@@ -370,6 +405,22 @@ This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader s
    ```
    This is the artifact-discipline contract. Agents read only what is listed and write exactly one artifact. See `sdlc-conventions` skill, "Artifact Discipline" section, for the rules and rationale.
 
+## Phase 0.5: Research (Build-vs-Buy Survey)
+
+**Skip if resuming from a Jira epic key. Skip in feedback-loop mode (existing project, small delta).**
+
+The researcher surveys OSS libraries/frameworks/projects to put build-vs-buy on the table before the planner draws epic boundaries. This catches the failure mode where the planner produced "build chat from scratch" without surveying assistant-ui / Vercel AI SDK / etc.
+
+1. **Spawn `sdlc-researcher` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+   - Pointer to `Agent Paths.researcher`
+   - SDLC context block — note: no QBV/Jira keys yet; researcher does NOT touch Jira
+   - Task: the project description or plan file content + the repo path (if any)
+   - `model: "opus"`
+
+2. The researcher returns a build-vs-buy report (Summary + 3-7 candidates + verdict). Capture the report — it becomes input to Phase 1 (planner reads it) and Phase 1.5 (challenger reads it).
+
+3. **No user approval gate here** — the report goes through to the planner unmodified. The user sees it bundled with the plan in Phase 1's approval gate. The researcher's verdict is advisory; the planner may override it (and the challenger will flag the override if it's a bad call).
+
 ## Phase 1: Planning
 
 **Skip if resuming from a Jira epic key.**
@@ -377,18 +428,43 @@ This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader s
 1. **Spawn `sdlc-planner` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
    - Pointer to `Agent Paths.planner`
    - SDLC context block including:
+     - `Read Artifacts: Researcher report from Phase 0.5 (passed in the prompt)`
      - `Write Artifact: structured plan markdown returned to orchestrator (no Jira yet)` — keep it tight per the agent's artifact-discipline rules
-   - Task: the project description or plan file content + the repo path (so it can read existing code if any)
+   - Task: the project description or plan file content + the repo path (so it can read existing code if any) + **the full researcher report from Phase 0.5**
    - `model: "opus"`
 
 2. The planner returns a structured breakdown:
    - Epics with descriptions
    - Stories with acceptance criteria, dependencies, complexity
+   - The plan must explicitly note whether it adopts, partially adopts, or overrides the researcher's recommendation, and why.
 
-3. **PAUSE — Present the plan to the user for approval.**
-   - Show the epic/story breakdown clearly
-   - If `--auto`: log "Auto-approving plan" and proceed immediately
-   - Otherwise: Ask "Approve this plan? Or modify?" — do NOT proceed until the user approves
+3. **PAUSE here is moved to AFTER Phase 1.5** — the user reviews the plan + the challenger's findings together. Do NOT show the plan to the user yet.
+
+## Phase 1.5: Plan Challenge
+
+**Skip if resuming from a Jira epic key. Skip in feedback-loop mode.**
+
+The challenger adversarially reviews the plan before it goes to the user. Critical findings loop back to the planner; important and nice-to-have findings surface to the user with the plan.
+
+1. **Spawn `sdlc-plan-challenger` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
+   - Pointer to `Agent Paths.plan-challenger`
+   - SDLC context block — no Jira keys (challenger does NOT touch Jira)
+   - Task: the planner's plan markdown + the researcher's report + the original project description + the repo path (if any)
+   - `model: "opus"`
+
+2. The challenger returns a findings report (Summary + critical/important/nice-to-have findings + verdict).
+
+3. **Route on verdict:**
+   - **LOOPBACK** (any critical findings) → re-spawn the planner with the critical findings appended to its task. Cap at 2 challenge iterations per session; if the third iteration still produces critical findings, halt and ask the user to triage. Then re-run Phase 1.5 on the revised plan.
+   - **SURFACE** (no critical, ≥1 important) → proceed to step 4 (user approval) with the plan + challenger findings shown side-by-side.
+   - **CLEAR** (no findings worth raising) → proceed to step 4 with a one-line "challenger cleared" note.
+
+4. **PAUSE — Present plan + challenger findings to the user for approval.**
+   - Show the epic/story breakdown clearly.
+   - Show the challenger's `## Summary` and any `important` findings (skip nice-to-haves unless asked).
+   - Show the build-vs-buy alignment line.
+   - If `--auto`: log "Auto-approving plan (challenger verdict: {verdict})" and proceed immediately.
+   - Otherwise: Ask "Approve this plan? Or modify?" — do NOT proceed until the user approves. The user may accept individual important findings ("apply I1, skip I2") — capture those and pass them to the jira-creator as plan deltas.
 
 ## Phase 2: Jira Ticket Creation
 
@@ -423,14 +499,17 @@ The Jira project uses a 3-tier hierarchy:
 1. **Spawn `sdlc-architect` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
    - Pointer to `Agent Paths.architect`
    - SDLC context block, including:
-     - `Read Artifacts: Story description + AC ({STORY-KEY})`
-     - `Write Artifact: ## Technical Specification (comment on {STORY-KEY})`
-   - Task: all story keys in "To Do" status + the repo path
+     - `Read Artifacts: Epic description + AC ({EPIC-KEY}); Story description + AC ({STORY-KEY})`
+     - `Write Artifact: ## Critical User Journeys (comment on {EPIC-KEY}, ONCE per Phase 3 run); ## Technical Specification (comment on each {STORY-KEY})`
+   - Task: **the epic key** + all story keys in "To Do" status + the repo path
    - `model: "opus"`
 
-2. The architect reads each story from Jira, writes tech specs as comments, and transitions to "Ready for Dev"
+2. The architect:
+   - First posts a `## Critical User Journeys` comment on the epic (3-5 epic-level CUJs that the tester / QA / Phase 8 will validate end-to-end)
+   - Then writes a tech spec on each story — including a `## Smoke Path` section that references one or more CUJs
+   - Transitions each story to "Ready for Dev"
 
-3. Report to user which stories are now ready for development
+3. Report to user the CUJ comment on the epic + which stories are now ready for development
 
 ## Phase 3.5: Design (Optional)
 
@@ -651,6 +730,18 @@ The orchestrator resumes only after the user has either merged the backlog manua
 1. Query Jira for all stories in the epic
 2. **Assert all Done stories have merged PRs.** For each story in `Done`, verify its PR is merged (`gh pr view {N} --json state` returns `MERGED`). Phase 7.5 should have handled this continuously; this is the final safety check.
    - If any Done story still has an open PR: re-run Phase 7.5 on those PRs (single batch). If the conflict-resolver still cannot merge them, halt and ask the user to investigate. Do NOT report epic completion while Done PRs are unmerged.
+
+2.5. **Epic-level CUJ replay.** The architect's `## Critical User Journeys` comment on the epic names 3-5 end-to-end flows. Per-story smoke paths cover each in isolation; the epic CUJ replay confirms they still work **together** with everything merged.
+
+   - Read the epic's `## Critical User Journeys` comment (delegate to `sdlc-jira-reader` if not already in your context).
+   - For each CUJ, run its smoke command against the running system. The system should already be runnable from `dev` (or `main` in single-branch model) since all stories are Done + merged.
+     - Backend CUJ → start the backend, run the curl, verify the success signal in the response.
+     - Browser CUJ → run the Playwright spec named in the CUJ's `Smoke-path test method`, capture the screenshot, **look at it**.
+     - CLI CUJ → invoke the CLI, capture stdout, verify the success signal.
+   - Save the replay artifacts to `tests/artifacts/epic-{EPIC-KEY}/cuj-{N}.{ext}` and commit them on `{base_branch}` (or open a small "epic CUJ replay" PR if branch protection requires it).
+   - **Do NOT delegate this to a fresh agent.** The orchestrator runs CUJ replay directly using Bash, since by Phase 8 there is no story worktree to spawn an agent into. (Future: a dedicated `sdlc-cuj-runner` agent if this gets heavy.)
+   - **If any CUJ fails:** the epic is NOT done. File a Bug under the parent QBV (or the most-likely-culprit story), surface to the user, and ask whether to spawn `sdlc-bug-fixer` against the failure. Do not pretend the epic is closed when a real-user flow is broken.
+
 3. Summarize:
    - Stories completed (Done)
    - Stories blocked or failed (with reasons)

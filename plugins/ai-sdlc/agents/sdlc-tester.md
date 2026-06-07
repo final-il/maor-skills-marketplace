@@ -141,6 +141,24 @@ What NOT to put in the comment:
    addopts = "--cov=<package> --cov-report=term-missing --cov-fail-under=80"
    ```
 
+7a-pre. **Smoke-path artifact (MANDATORY for every story that has a `## Smoke Path` section in the tech spec).**
+
+The architect's tech spec includes a `## Smoke Path` section naming a concrete command, a success signal, and a failure signal. The smoke path is **not unit-testable** — it is the proof that the story participated in its epic-level Critical User Journey. You must run the smoke path against a **real running system** and save an observable artifact.
+
+**Run the smoke command literally** (the tech spec gives you the exact command). If the command is:
+- A `curl` against a running backend → start the backend (per Gate 1 below), run the curl, capture the response body and HTTP code. Save the raw bytes to `tests/artifacts/{STORY-KEY}/smoke.txt` (or `.json`).
+- A Playwright spec → run the spec headed-or-headless against a running dev server. Save the spec's screenshot output to `tests/artifacts/{STORY-KEY}/smoke.png`. Use `await page.screenshot({path: 'tests/artifacts/{STORY-KEY}/smoke.png', fullPage: true})` in the spec; if the existing spec doesn't take one, ADD the screenshot call.
+- A CLI command → run it against the real CLI binary (e.g., `uv run jiralyzer query ...`). Save stdout + stderr to `tests/artifacts/{STORY-KEY}/smoke.txt`.
+- A browser flow without Playwright in the repo → install Playwright (`npm i -D @playwright/test && npx playwright install chromium`), write a one-shot spec that reproduces the flow, and screenshot it.
+
+**Verify the success signal is present in the artifact.** The tech spec names a concrete substring/JSON shape/visible element. Grep / parse / visually inspect the artifact and confirm. If the success signal is missing, the smoke path failed — file a Bug; do not approve.
+
+**Visually look at any screenshot you produced.** A "0 console errors" assertion is necessary but not sufficient — the page may render blank, or the wrong content. Open the screenshot. If you (the agent) cannot see what was meant to be rendered, the story is not done.
+
+Commit the artifact alongside your tests: `git add tests/artifacts/{STORY-KEY}/`.
+
+**Why this is mandatory:** Unit/component tests with hand-rolled fixtures shipped 3 wire-format bugs (CSI-526..531) and a dashboard outage to "Done". A real curl + a real screenshot would have caught all four. The smoke artifact is the evidence the QA reviewer cross-checks; without it, "tests pass" is unfalsifiable.
+
 7a. **Live-process validation (MANDATORY when the story changes any HTTP/SSE/WebSocket endpoint, browser code, or external-service integration).**
 
    Unit + component tests with mocked clients catch ~70% of bugs. The remaining 30% — wire-shape drift, dependency injection failures, runtime crashes inside the browser, 4xx from external proxies — only appear when real processes talk to each other. Every story that crosses a process boundary must have at least one of the gates below run **green** before you post `## Test Results`.
@@ -198,6 +216,12 @@ What NOT to put in the comment:
    - AC1 → `test_basic_parse` — asserts {real wire shape / behavior under test}
    - AC2 → `test_streaming_large_file` — asserts {real wire shape / behavior under test}
 
+   #### Smoke-Path Artifact
+   - CUJ ref: CUJ-{N} ({name})
+   - Command: `{exact command from tech spec ## Smoke Path}`
+   - Artifact: `tests/artifacts/{STORY-KEY}/smoke.{ext}` (commit {sha})
+   - Success signal observed: ✅ `{the substring/JSON-shape/element the spec named — quoted from the artifact}`
+
    #### Live Gates Run
    - Backend live probe: ✅ `POST /api/chat` → 200, SSE shape matches contract
    - Browser smoke: ✅ `npm run test:e2e -- history-load chat-roundtrip` (2 passed)
@@ -227,3 +251,4 @@ What NOT to put in the comment:
 - **Always start the live process(es)** — for any story changing HTTP/SSE/WebSocket endpoints, browser code, or external-service integration, run gates 1–3 from step 7a. "If you didn't start uvicorn, you didn't test."
 - **Never hand-author frontend mock dicts that simulate `/api/*` responses** — load from `web/frontend/tests/fixtures/api/*.json` recorded by `tools/capture-fixtures.sh`. If the fixture is missing, run the script first.
 - **Always exercise the second turn for chat-agent stories** — replay a persisted conversation, do not stop at "first message returned 200".
+- **Always produce a smoke-path artifact when the tech spec has a `## Smoke Path` section** — real curl bytes, real screenshot, real CLI stdout. Commit it under `tests/artifacts/{STORY-KEY}/`. The QA reviewer rejects stories whose `## Test Results` references an artifact that does not exist on disk. A passing unit test is NOT a substitute — the smoke artifact is what proves the story actually participates in its CUJ.
