@@ -117,6 +117,25 @@ Downstream agents read the **summary first** and drill into detail only when the
 
 Roughly 40-60% reduction per agent run, no quality loss — detail is one targeted read away.
 
+## E2E Testing Requirement
+
+**Every story with user-facing changes MUST have at least one Playwright E2E spec** that drives a real headless browser. This applies to any story that modifies:
+- Frontend code (React components, pages, layouts, styles)
+- HTTP/SSE endpoints consumed by the frontend
+- CLI commands that produce user-visible output
+
+The E2E spec must:
+1. Exercise the primary user flow the story implements
+2. Assert zero `pageerror` and zero `console.error`
+3. Assert expected DOM elements are visible with non-zero bounding-box dimensions
+4. Save a screenshot to `tests/artifacts/{STORY-KEY}/`
+
+**Rationale:** Unit tests with hand-rolled fixtures shipped 5 wire-format bugs (CSI-526..531) and a dashboard outage (CSI-536/537) to "Done" without catching them. A real browser screenshot would have caught all of them. The smoke artifact is the evidence QA cross-checks.
+
+**Exemptions:** Stories that are purely backend-internal (no user-facing surface — e.g., schema migrations, DuckDB queries, background jobs) are exempt.
+
+**Enforcement:** The orchestrator checks `## Test Results` for the phrase "E2E:" or "Playwright:" on any story with frontend changes. If absent, the tester is re-spawned with explicit instructions to add browser coverage before the story can advance to Testing.
+
 ## Pipeline Phases
 
 ```

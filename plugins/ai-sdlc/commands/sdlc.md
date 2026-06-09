@@ -624,6 +624,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 - If pass: transitions Story to "Testing"
 - If fail: creates a child Bug issue (`issue_type: "Bug"`, `parent: {STORY-KEY}`) AND transitions parent Story to **"In Progress"**.
 
+**E2E gate (mandatory for stories with user-facing changes):** The tester MUST produce at least one Playwright E2E spec that drives a real headless browser for any story that modifies frontend code, HTTP endpoints consumed by the frontend, or CLI output. The spec must: (a) exercise the primary user flow the story implements, (b) assert zero `pageerror` / `console.error`, (c) assert expected DOM elements are visible with non-zero dimensions, and (d) save a screenshot to `tests/artifacts/{STORY-KEY}/`. Stories that are purely backend-internal (no user-facing surface) are exempt. The orchestrator checks `## Test Results` for the phrase "E2E:" or "Playwright:" — if absent on a frontend story, the tester is re-spawned with explicit instructions to add browser coverage.
+
 ### Step 6: QA Review
 - **Spawn `sdlc-qa-reviewer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
   - Pointer to `Agent Paths.qa-reviewer`
