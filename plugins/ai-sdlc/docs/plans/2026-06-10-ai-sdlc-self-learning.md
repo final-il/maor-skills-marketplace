@@ -57,6 +57,67 @@ For probes that run a real `/sdlc` session, use a disposable epic. Detailed scen
 
 Build the new agent file and the orchestrator's plumbing for lesson-extractor spawning, before touching any existing agent.
 
+### Task A0: Toggle plumbing — resume-file field and SDLC Context line
+
+This task lays the deterministic on/off rails the rest of the plan depends on. After A0, every subsequent task can rely on `Self-Learning: ON|OFF` being present in every spawned agent's prompt.
+
+**Files:**
+- Modify: `plugins/ai-sdlc/commands/sdlc.md` (auto-resume save block + SDLC Context block template)
+
+- [ ] **Step 1: Locate the auto-resume save section in `commands/sdlc.md`**
+
+Run: `grep -n "## Mode\|sdlc-resume-\|auto-resume" plugins/ai-sdlc/commands/sdlc.md`
+
+Expected: a section that documents the resume file's structure, including a `## Mode` field. The new `## Self-Learning` field goes adjacent.
+
+- [ ] **Step 2: Add `## Self-Learning` to the auto-resume file template**
+
+In the resume-file template within `commands/sdlc.md`, add this block right after `## Mode`:
+
+```markdown
+## Self-Learning
+enabled: true
+```
+
+Document in the orchestrator: "Default `true` if the field or file is missing. Persisted on every auto-save. Read on Phase 0 fast resume; restores in-memory toggle state."
+
+- [ ] **Step 3: Locate the SDLC Context block template**
+
+Run: `grep -n "SDLC Context\|Transition Map\|Agent Paths" plugins/ai-sdlc/commands/sdlc.md`
+
+Expected: the template enumerating the lines passed to every agent spawn (Project Name, Transition Map, Agent Paths, Worktree Path, etc.).
+
+- [ ] **Step 4: Add `Self-Learning: ON|OFF` to the SDLC Context block**
+
+Add a new line in the template, near `Mode:` (or near the end of the deterministic-state lines):
+
+```
+Self-Learning: ON
+```
+
+Document: "Built from the in-memory toggle state, which is restored from the resume file's `## Self-Learning` field on Phase 0. Default ON. Every agent spawn includes this line verbatim."
+
+- [ ] **Step 5: Add toggle-state initialization rule for new sessions**
+
+Document somewhere readable from Phase 0: "If the resume file has no `## Self-Learning` field, treat the toggle as ON. On first auto-save, write `enabled: true` so subsequent reads are explicit."
+
+- [ ] **Step 6: Smoke probe — read the file back**
+
+Run: `grep -A2 "## Self-Learning" plugins/ai-sdlc/commands/sdlc.md`
+
+Expected: the new template block visible in `commands/sdlc.md`.
+
+Run: `grep "Self-Learning: ON" plugins/ai-sdlc/commands/sdlc.md`
+
+Expected: the new context-block line visible.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git -C ~/git-dev/maor-skills-marketplace add plugins/ai-sdlc/commands/sdlc.md
+git -C ~/git-dev/maor-skills-marketplace commit -m "feat(ai-sdlc): self-learning toggle plumbing (state + context line)"
+```
+
 ### Task A1: Create the `sdlc-lesson-extractor` agent file
 
 **Files:**
@@ -106,13 +167,19 @@ You do NOT touch Jira. You do NOT need MCP tools. Your only inputs are local fil
 ## Process
 
 1. **Read your role definition** (this file) — done if you're reading this.
-2. **Parse the prompt.** It contains:
+2. **Self-learning toggle gate (belt-and-suspenders).** Read the SDLC Context block in your prompt. Find the line `Self-Learning: ON` or `Self-Learning: OFF`. If `OFF`, return immediately with this exact verdict and exit:
+   ```
+   ## Verdict: nothing-learnable
+   Reason: self-learning disabled in caller
+   ```
+   Read no candidate file. Read no journal. Write nothing. The orchestrator should never spawn you when OFF; this gate exists so a misbuilt prompt cannot cause silent capture.
+3. **Parse the prompt.** It contains:
    - `Source`: `user-correction` | `agent-self-report`
    - `Evidence`: verbatim text — user message + recent actions, or the agent's `### Lesson` block
    - `Context`: agent name, story key, epic key, phase
    - `Target candidate`: orchestrator's best guess at the canonical file to edit
    - `Journal Path`: absolute path to `sdlc-events.jsonl`
-3. **Classify fix type.** Decide which of these is the highest-leverage, lowest-risk fix:
+4. **Classify fix type.** Decide which of these is the highest-leverage, lowest-risk fix:
    - `instruction-edit` — agent role file (`plugins/ai-sdlc/agents/sdlc-*.md`), orchestrator command file (`plugins/ai-sdlc/commands/sdlc.md`)
    - `memory-feedback` — `~/.claude/projects/.../memory/feedback_*.md` (cross-cutting principle)
    - `project-claudemd` — repo-local `CLAUDE.md` (project-specific rule)
@@ -121,12 +188,12 @@ You do NOT touch Jira. You do NOT need MCP tools. Your only inputs are local fil
    - `script` — shell wrapper (e.g., `uv-zs` that always sets `SSL_CERT_FILE`)
    - `slash-command` — new `/sdlc-X` style command
    - `manual` — none of the above; user must decide
-4. **Read ONE candidate canonical file** (the one your fix targets, if it's `instruction-edit` / `memory-feedback` / `project-claudemd`). Skip this step for non-text fix types.
-5. **Detect existing rule.** Scan the candidate file for related wording. If found, classify failure mode:
+5. **Read ONE candidate canonical file** (the one your fix targets, if it's `instruction-edit` / `memory-feedback` / `project-claudemd`). Skip this step for non-text fix types.
+6. **Detect existing rule.** Scan the candidate file for related wording. If found, classify failure mode:
    - **wording** — existing rule is vague, hedged, buried, or contradicted by another rule. Fix: rewrite.
    - **repetition** — existing rule is fine but agents keep violating it. Read the journal: count prior events with same `target_file` and overlapping `existing_rule.location` (same line ±5 or same section header), status in `{approved, proposed, raw}`, latest line per id. If count ≥2 → repetition.
    - **scope** — rule is in the wrong file/section.
-6. **Draft the verdict and output.**
+7. **Draft the verdict and output.**
 
 ## Verdicts
 
@@ -327,6 +394,8 @@ This is appended near the end of each agent's role body, AFTER the existing "Out
 ```markdown
 ## Lessons (optional, append at end of return text)
 
+**Self-learning toggle gate.** Read your prompt's SDLC Context block. If the line `Self-Learning: OFF` is present, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction. Only emit lessons when `Self-Learning: ON` (or when no `Self-Learning` line is present, which means the orchestrator is pre-toggle and self-learning is implicitly on).
+
 If during your run you:
 - Retried a tool/command after a failure and the second-or-later attempt succeeded
 - Worked around a non-obvious problem (missing env var, wrong path, contract mismatch with an artifact you read)
@@ -456,6 +525,24 @@ new_string: |
   The orchestrator captures lessons in-flow from two sources (v1): user corrections and agent `## Lessons` self-reports. Each event spawns the `sdlc-lesson-extractor` sub-agent, which classifies fix type and returns a structured verdict. Approved text-edit verdicts apply directly to canonical files; non-text verdicts (hook / script / skill / slash-command) surface as recommendations the user implements manually.
 
   See `docs/specs/2026-06-10-ai-sdlc-self-learning-design.md` for the full design.
+
+  ### Toggle (on/off) — gate this entire section
+
+  **State:** held in orchestrator memory, persisted to the auto-resume file under `## Self-Learning` → `enabled: true|false`. Default `true` when missing. Restored on Phase 0 fast resume.
+
+  **Propagation:** every agent spawn's SDLC Context block includes the line `Self-Learning: ON` (or `OFF`). Built deterministically from the in-memory state.
+
+  **Hard gate:** if the toggle is OFF for the current session, the orchestrator MUST:
+  - skip user-correction intent classification,
+  - skip the `## Lessons` return-scan,
+  - NOT spawn `sdlc-lesson-extractor`,
+  - NOT write to `sdlc-events.jsonl`,
+  - and continue normal phase routing as if this section did not exist.
+
+  **Toggling:**
+  - **Slash command:** `/sdlc lessons on|off` flips state, persists, confirms in one line. `/sdlc lessons` (no arg) reports current state.
+  - **LLM intent:** classify free-form user text as `disable` ("turn off self-learning", "too noisy, stop capturing"), `enable` ("turn lessons back on"), or `irrelevant`. On `disable`/`enable`: confirm in one line, update state, persist on next auto-save.
+  - On every flip, the next agent spawn's context line reflects the new value.
 
   ### Mode
 
@@ -989,7 +1076,17 @@ Each follows the same shape as D1 (reset journal → trigger scenario → verify
   ```
   Trigger an event that reads the journal (D8's near-duplicate scan needs a journal read). Pass: orchestrator surfaces a one-time warning ("Skipped 1 unparseable line"), continues normally, completes the scan. No halt.
 
-After D10: all smoke tests pass → v1 is shippable. Any failures: triage and patch the relevant Phase C task; do not move to v2.
+- [ ] **D11: Toggle OFF — orchestrator silence.** Run `/sdlc lessons off`. Send a clear user correction ("always use git -C, never cd && git"). Pass: no extractor spawn (no `Agent()` call to lesson-extractor), no journal write, no surfaced proposal. Phase routing unaffected. The auto-resume file shows `enabled: false`.
+
+- [ ] **D12: Toggle OFF — agent silence.** Run `/sdlc lessons off`. Run a story with deliberately-failing setup that would normally cause the agent to retry and emit `## Lessons`. Pass: the agent's return text contains no `## Lessons` section. Verify by reading the agent's return verbatim.
+
+- [ ] **D13: Toggle OFF — extractor safety net.** With toggle OFF, manually craft an extractor spawn (simulating a misbuilt orchestrator that ignored its own gate). Pass: extractor returns the exact verdict body `## Verdict: nothing-learnable\nReason: self-learning disabled in caller`, reads no candidate file (verify by absence of any Read tool call), writes no journal line.
+
+- [ ] **D14: Toggle persistence across resume.** With an active epic, run `/sdlc lessons off`. Verify the resume file shows `enabled: false`. Open a fresh Claude Code session and run `/sdlc continue {EPIC-KEY}`. Pass: resume reads `enabled: false`, the loop stays off without re-prompting; first agent spawn's context line is `Self-Learning: OFF`.
+
+- [ ] **D15: Toggle via LLM intent.** With toggle ON, send "this lesson stuff is too noisy, kill it for now". Pass: orchestrator confirms in one line and flips state to OFF (auto-resume file updated on next save). Then send "turn lessons back on". Pass: orchestrator flips state to ON. Verify by spot-checking the SDLC Context line value in the next agent spawn.
+
+After D15: all smoke tests pass → v1 is shippable. Any failures: triage and patch the relevant Phase C task; do not move to v2.
 
 ---
 

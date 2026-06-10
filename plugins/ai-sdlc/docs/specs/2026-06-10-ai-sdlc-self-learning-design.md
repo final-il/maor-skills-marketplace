@@ -252,6 +252,87 @@ The orchestrator scans returns for the literal `## Lessons` header. Each `### Le
 
 **Mid-flush switch:** if user says "mode 1" while a mode-2 flush is mid-flight, finish the current flush first, then switch.
 
+## Self-Learning toggle (on/off)
+
+The entire self-learning loop is gated by a single boolean. Default: **ON**. The toggle must be **deterministic across the orchestrator, all 13 agents, the extractor, and any future skill** — flipping it off should mean *no* component still tries to capture, classify, or surface lessons.
+
+### State location (single source of truth)
+
+Held in the auto-resume file at `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-resume-{EPIC-KEY}.md`, alongside `## Mode`, as a new top-level field:
+
+```
+## Self-Learning
+enabled: true
+```
+
+- Default `true` if the field or file is missing (matches "default ON, opt out when noisy").
+- Persisted on every auto-save the orchestrator already performs.
+- Survives `/sdlc continue` the same way `## Mode` does.
+- Before any epic exists, the orchestrator holds the value in in-memory state and writes it out on first auto-save.
+
+### Propagation (the SDLC Context block)
+
+The orchestrator already builds an SDLC Context block once per session and includes it verbatim in every `Agent()` spawn prompt. The toggle gains one line in that block:
+
+```
+Self-Learning: ON | OFF
+```
+
+This line is the *only* signal agents read for the toggle. They never read the resume file, never call back to the orchestrator, never infer state from anything else. Because the orchestrator builds the block deterministically from the resume-file state, every spawn in the same session sees the same value — components cannot disagree.
+
+### Per-component gates
+
+Each component performs a literal string check against the context block it received and short-circuits when the value is `OFF`.
+
+**Orchestrator (`commands/sdlc.md`, top of `## Self-Learning Loop` section):**
+> If self-learning is OFF (resume-file `enabled: false`, or context-block `Self-Learning: OFF`), skip user-correction intent classification, skip the `## Lessons` return-scan, do NOT spawn `sdlc-lesson-extractor`, and do NOT write to `sdlc-events.jsonl`. Continue normal phase routing as if the loop did not exist.
+
+**All 13 agent role files (top of the new `## Lessons` block):**
+> If your prompt's SDLC Context line shows `Self-Learning: OFF`, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction.
+
+**`sdlc-lesson-extractor.md` (belt-and-suspenders):**
+The extractor is unreachable when off (orchestrator gates first), but as a safety net its first step reads the `Self-Learning` line in its own context block. If `OFF`, it returns:
+```
+## Verdict: nothing-learnable
+Reason: self-learning disabled in caller
+```
+and exits without reading any candidate file or journal. This catches a misbuilt orchestrator prompt without requiring the orchestrator alone to be correct.
+
+**Skills:** v1 has no skill that emits `## Lessons`. When/if one does, the same context-read pattern applies — read the `Self-Learning` line, skip emission when `OFF`. No skill changes are required for v1.
+
+### Toggling at runtime
+
+Two channels — both deterministic, both update the resume-file state and the orchestrator's in-memory value:
+
+1. **Slash command** (unambiguous control):
+   - `/sdlc lessons off` — flips state to `false`, confirms in one line, takes effect on the next agent spawn.
+   - `/sdlc lessons on` — flips state to `true`, confirms in one line.
+   - `/sdlc lessons` (no arg) — reports current state.
+
+2. **LLM intent classification** (matches the same pattern as user-correction detection and mode switching). The orchestrator classifies the user's free-form text as one of:
+   - `disable` — *"turn off self-learning"*, *"stop capturing lessons"*, *"disable feedback loop"*, *"too noisy, kill it"*
+   - `enable` — *"turn lessons back on"*, *"re-enable self-learning"*
+   - `irrelevant` — anything else, no action.
+   On `disable`/`enable`, orchestrator confirms in one line, updates state, persists on next auto-save.
+
+### Why this is deterministic
+
+- **One state location** (the resume file). No ambient/inherited state.
+- **One propagation point** (the SDLC Context block, already deterministically built).
+- **Every component reads the same string from its own prompt** — they cannot drift because they're all reading the same input.
+- **Default ON applies only when the field is absent** (new project, first session). Once written, the file is the source of truth.
+- **Two independent disable paths** (gate at orchestrator + gate at extractor) — even a misbuilt prompt won't silently capture lessons.
+
+### Behavior matrix
+
+| Component | `Self-Learning: ON` | `Self-Learning: OFF` |
+|---|---|---|
+| Orchestrator | Run user-correction classifier; scan returns for `## Lessons`; spawn extractor; write journal. | Skip all four. Phase routing unaffected. |
+| Any of the 13 agents | Emit `## Lessons` when in-flow friction warrants. | Omit `## Lessons` entirely. |
+| `sdlc-lesson-extractor` | Normal flow. | Return `nothing-learnable` (reason: disabled), no reads, no journal write. |
+| Slash command `/sdlc lessons on\|off` | Flips state, persists, confirms. | Flips state, persists, confirms. |
+| Resume from cached file | Read `## Self-Learning` field; default `true` if missing. | Read `## Self-Learning` field; default `true` if missing. |
+
 ## Persistence — `sdlc-events.jsonl`
 
 Append-only JSONL at `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl`. One JSON object per line.
@@ -352,6 +433,11 @@ If yes → append a `status: suppressed-duplicate-rejection` line; do not spawn 
 8. **Near-duplicate suppression.** Reject a proposal. Trigger the same friction again. Verify `suppressed-duplicate-rejection` and no spawn.
 9. **Stale diff handling.** Trigger event, manually edit target file before approving. Approve. Verify `stale` status, surface shows current content, no Edit applied.
 10. **Journal corruption resilience.** Hand-corrupt one line. Trigger an event reading the journal. Verify warning fires once, no halt.
+11. **Toggle OFF — orchestrator silence.** `/sdlc lessons off`. Send a clear user correction. Verify: no extractor spawn, no journal write, no `## Lessons` parsing, no surfaced proposal. Phase routing unaffected.
+12. **Toggle OFF — agent silence.** `/sdlc lessons off`. Run a story with deliberately-failing test where the agent normally would emit `## Lessons`. Verify the agent's return contains no `## Lessons` section.
+13. **Toggle OFF — extractor safety net.** Manually craft an extractor spawn while disabled (simulating a misbuilt orchestrator). Verify extractor returns `nothing-learnable` with reason "self-learning disabled in caller", reads no candidate file, writes no journal line.
+14. **Toggle persistence across resume.** `/sdlc lessons off`, then `/sdlc continue {EPIC-KEY}` in a fresh session. Verify resume reads `enabled: false` and the loop stays off without re-prompting.
+15. **Toggle via LLM intent.** Send "this is too noisy, kill the lesson capture for now". Verify orchestrator confirms in one line and flips state to OFF. Send "turn lessons back on". Verify it flips back.
 
 ### Manual evaluation (1-2 real epics after smoke tests pass)
 
