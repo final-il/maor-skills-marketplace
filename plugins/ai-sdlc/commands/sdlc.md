@@ -264,6 +264,8 @@ Before doing anything else, check if a cached resume file exists for this epic:
    - **If any status drifted** → update the routing table in-place (re-route only the changed stories). No need to re-discover transitions or agent paths — those are stable.
    - **If the file is missing or malformed** → fall through to full Phase 0 below.
 
+   **Self-Learning toggle restore.** While parsing the resume file, look for a top-level `## Self-Learning` block with an `enabled: true|false` line. Restore that boolean into in-memory orchestrator state and use it to build the `Self-Learning: ON|OFF` line of the SDLC Context block. **If the resume file has no `## Self-Learning` field (or the file is missing entirely), treat the toggle as ON by default.** On the next auto-save, write `enabled: true` explicitly so subsequent reads are no longer implicit. This is the only place the toggle is read; agents never read the resume file.
+
 This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader spawn).
 
 ---
@@ -396,7 +398,10 @@ This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader s
    QBV Key: {qbv_key or "to be created"}
    Transition Map: {status=id, ...}
    Agent Paths: {role=path, ...}     ← from step 4b
+   Self-Learning: ON
    ```
+
+   **`Self-Learning` line.** Built deterministically from the in-memory toggle state, which is restored from the resume file's `## Self-Learning` field on Phase 0 (see "Fast Resume from Memory" above). Default ON. Every agent spawn includes this line verbatim — agents and the lesson-extractor read this single string and short-circuit when it says `OFF`. There is no other state mechanism (no env var, no feature flag) — the resume-file field plus this context-block line are the only signals.
 
    When spawning an agent, you ALSO append per-phase artifact metadata to its context block:
    ```
@@ -811,7 +816,12 @@ Write ~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-resume-{EPIC-KEY}.md w
 - ## Story Routing Table (key, status, next phase, branch, notes)
 - ## Last Action (date, completed, next)
 - ## Active Worktrees (paths + branches)
+- ## Mode (current operating mode, e.g. `feedback-loop`, `hotfix`, or `normal`)
+- ## Self-Learning
+  enabled: true
 ```
+
+**`## Self-Learning` block.** This is the single source of truth for the self-learning toggle. Default `true` if the field or file is missing (Phase 0 fast-resume treats absence as ON). Persisted on every auto-save. Read on Phase 0 fast-resume to restore the in-memory toggle state, which is then propagated into every agent spawn via the `Self-Learning: ON|OFF` line of the SDLC Context block. On the **first auto-save** after a session that started without the field, write `enabled: true` explicitly so subsequent reads are unambiguous. There is no other state mechanism — no env var, no feature flag, no ambient state.
 
 Update MEMORY.md pointer if missing. Report one line to user: "State saved. Resume: `/sdlc continue {EPIC-KEY}`"
 
