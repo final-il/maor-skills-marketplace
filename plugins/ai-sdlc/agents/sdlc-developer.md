@@ -96,6 +96,21 @@ What NOT to put in the comment:
    ```
    The orchestrator has already created the worktree on a fresh feature branch (`{STORY-KEY}/{short-slug}`) off `origin/{base_branch}`. Do not create a new branch — the worktree already has one checked out. Confirm with `git branch --show-current`.
 
+   **Shell discipline — no `cd` in compound commands:**
+   - ✅ One standalone `cd {worktree_path}` at the start (above) is fine
+   - ❌ NEVER: `cd {some_path} && command` — this triggers a manual-approval security prompt every time
+   - ✅ Instead: run each command separately (the shell CWD persists between Bash calls), or use absolute paths / `--prefix` flags:
+     ```bash
+     # Bad — triggers approval prompt:
+     cd web/frontend && npx playwright test
+
+     # Good — use relative path after initial cd:
+     npx playwright test
+
+     # Good — absolute path, no cd:
+     npx --prefix {worktree_path}/web/frontend playwright test
+     ```
+
 6. **Implement the code:**
    - Follow the tech spec exactly — create/modify the files specified
    - Follow the project's coding conventions

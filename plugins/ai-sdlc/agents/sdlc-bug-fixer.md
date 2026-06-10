@@ -80,9 +80,14 @@ What NOT to put in the comment:
 4. **Reproduce the bug:**
    ```bash
    cd {worktree_path}
-   git pull --ff-only origin {story-branch}   # pick up tester's pushed test commits
-   uv run pytest {specific_test} -v  # or the failing test command
+   git pull --ff-only origin {story-branch}
+   uv run pytest {specific_test} -v
    ```
+
+   **Shell discipline — no `cd` in compound commands:**
+   - ✅ One standalone `cd {worktree_path}` at the start (above) is fine
+   - ❌ NEVER: `cd {some_path} && command` — this triggers a manual-approval security prompt every time
+   - ✅ Instead: run each command separately (the shell CWD persists between Bash calls), or use absolute paths
 
 5. **Load debugging skills** — Invoke relevant skills:
    ```
