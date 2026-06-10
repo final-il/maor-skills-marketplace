@@ -238,7 +238,7 @@ Suggested fix type: <instruction-edit | memory-feedback | hook | skill | script 
 Suggested target: <file path or artifact, your best guess — extractor may override>
 ```
 
-If your run had no friction worth a lesson, omit the section entirely. Do NOT include lessons for things that are already covered by your role definition.
+If your run had no friction worth a lesson, omit the section entirely. If something IS covered by your role definition but still caused friction — that's a red flag worth reporting (the definition may be unclear, outdated, or not being followed).
 ```
 
 (Note the inner code fence is plain ``` — no language tag — to avoid markdown nesting issues. The outer block in this plan uses regular markdown so the actual file content is the inner block plus the surrounding prose.)
