@@ -90,6 +90,7 @@ When this document says "Spawn the `sdlc-X` agent", do this:
 | sdlc-bug-fixer | sonnet |
 | sdlc-conflict-resolver | sonnet |
 | sdlc-jira-reader | sonnet |
+| sdlc-lesson-extractor | sonnet |
 
 This ensures agents get ToolSearch, MCP tools, and the Skill tool (for invoking skills like tavily-search, systematic-debugging, etc.), and keeps the orchestrator's context lean.
 
@@ -301,6 +302,7 @@ This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader s
      bug-fixer:         "/.../plugins/ai-sdlc/agents/sdlc-bug-fixer.md",
      conflict-resolver: "/.../plugins/ai-sdlc/agents/sdlc-conflict-resolver.md",
      reader:            "/.../plugins/ai-sdlc/agents/sdlc-jira-reader.md",
+     lesson-extractor:  "/.../plugins/ai-sdlc/agents/sdlc-lesson-extractor.md",
    }
    ```
    If multiple matches per role exist (e.g., dev marketplace + cached prod marketplace), pick the path under the active marketplace (`maor-skills-marketplace-dev` if `~/git-dev/.claude/settings.json` enables it, else `maor-skills-marketplace`). Do NOT Read these files — agents Read their own role definition.
