@@ -117,10 +117,10 @@ Body: |
 Reasoning: <one sentence — why instruction failed and why this enforces>
 ```
 
-### `## Verdict: nothing learnable`
+### `## Verdict: nothing-learnable`
 
 ```
-## Verdict: nothing learnable
+## Verdict: nothing-learnable
 Reason: <one sentence — already covered with no failure pattern, OR not generalizable>
 ```
 

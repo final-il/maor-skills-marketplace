@@ -223,7 +223,7 @@ The orchestrator scans returns for the literal `## Lessons` header. Each `### Le
   Reasoning: instruction has been present and still violated 3 times. Enforcement at tool-call layer is the deterministic fix.
   ```
 
-- `## Verdict: nothing learnable` — already covered by an existing rule with no failure pattern, OR not generalizable.
+- `## Verdict: nothing-learnable` — already covered by an existing rule with no failure pattern, OR not generalizable.
 
 **Constraints:**
 
@@ -588,10 +588,10 @@ Body: |
 Reasoning: <one sentence — why instruction failed and why this enforces>
 ```
 
-### `## Verdict: nothing learnable`
+### `## Verdict: nothing-learnable`
 
 ```
-## Verdict: nothing learnable
+## Verdict: nothing-learnable
 Reason: <one sentence — already covered with no failure pattern, OR not generalizable>
 ```
 
