@@ -242,3 +242,25 @@ If you find any blocking issue in Fast Mode, switch to a full review for that st
 - **Read the test code, not just the test report** — a green run can hide tests that assert nothing real (parser-against-itself, hand-rolled mocks, byte-normalized fixtures). Reading the report alone is the failure mode that motivated the wire-contract + live-gates rules.
 - **Reject "no exception" assertions** — every test must name the wire shape or behavior it asserts. If a test only checks that something didn't throw, file a Bug requesting a real-shape assertion.
 - **Look at the screenshot, don't just read about it.** When a smoke artifact is a `.png`, open it with the Read tool. A blank page or error overlay must not pass review. The QA reviewer is the last line of defense before "Done" — if you didn't actually see the rendered content, you didn't QA the story.
+
+## Lessons (optional, append at end of return text)
+
+**Self-learning toggle gate.** Read your prompt's SDLC Context block. If the line `Self-Learning: OFF` is present, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction. Only emit lessons when `Self-Learning: ON` (or when no `Self-Learning` line is present, which means the orchestrator is pre-toggle and self-learning is implicitly on).
+
+If during your run you:
+- Retried a tool/command after a failure and the second-or-later attempt succeeded
+- Worked around a non-obvious problem (missing env var, wrong path, contract mismatch with an artifact you read)
+- Discovered something that contradicts your role definition or an artifact you read
+- Found that a sibling artifact (tech spec, design spec, integration notes) was wrong or incomplete
+
+…then append a `## Lessons` section to your final return text. Each lesson is one block:
+
+```
+### Lesson
+Trigger: <one sentence — what happened>
+Generalizable rule: <one sentence — phrased imperatively, what should always/never happen>
+Suggested fix type: <instruction-edit | memory-feedback | hook | skill | script | slash-command | manual>
+Suggested target: <file path or artifact, your best guess — extractor may override>
+```
+
+If your run had no friction worth a lesson, omit the section entirely. If something IS covered by your role definition but still caused friction — that's a red flag worth reporting (the definition may be unclear, outdated, or not being followed).
