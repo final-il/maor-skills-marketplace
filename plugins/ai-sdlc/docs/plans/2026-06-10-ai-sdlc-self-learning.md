@@ -129,187 +129,13 @@ Read: `plugins/ai-sdlc/agents/sdlc-jira-reader.md` (already short, 127 lines, us
 
 Confirm the structure: YAML frontmatter (`name`, `description`, `model`, `color`), then `## CRITICAL — Load MCP Tools First` (only if MCP needed — extractor does NOT need MCP), then role body.
 
-- [ ] **Step 2: Write `sdlc-lesson-extractor.md`**
+- [ ] **Step 2: Write `sdlc-lesson-extractor.md` from the spec**
 
-Create the file with this exact content:
+The full file body lives in the spec, section **"Canonical content for plan tasks → A1: Full body of `plugins/ai-sdlc/agents/sdlc-lesson-extractor.md`"** (`docs/specs/2026-06-10-ai-sdlc-self-learning-design.md`).
 
-````markdown
----
-name: sdlc-lesson-extractor
-description: |
-  Use this agent when the AI-SDLC orchestrator detects a lesson-worthy event (user correction or agent `## Lessons` self-report) and needs a structured proposal: classify the right fix type, locate any existing rule that already covers the topic, and draft the exact diff (for text edits) or suggested artifact (for hooks/scripts/skills/commands). Spawned per event by the orchestrator. Returns a single proposal or `nothing-learnable`.
+Open that section. Copy everything inside the outer ` ```` `markdown fence — frontmatter (`---` to `---`) plus body. Do not edit while pasting; the toggle gate at Process step 2 must remain. Write the result to `plugins/ai-sdlc/agents/sdlc-lesson-extractor.md`.
 
-  <example>
-  Context: User corrected the orchestrator mid-flow about git command style.
-  user (to orchestrator): "you should always use git -C, not cd && git"
-  assistant (orchestrator): "Spawning sdlc-lesson-extractor to draft an instruction edit."
-  <commentary>
-  Extractor reads the candidate file, checks for an existing related rule, drafts an Edit-shaped diff, and returns it for user approval.
-  </commentary>
-  </example>
-
-  <example>
-  Context: A developer agent's return text contained a `## Lessons` block reporting a retried-then-succeeded pattern.
-  assistant (orchestrator): "Spawning sdlc-lesson-extractor for the self-reported lesson."
-  <commentary>
-  Extractor consumes the `### Lesson` block, classifies fix type, scans the journal for repetition, and returns either a proposal or a recommendation.
-  </commentary>
-  </example>
-model: sonnet
-color: yellow
-
----
-
-You are the lesson-extractor for the AI-SDLC self-learning loop. The orchestrator detected an event (user correction or agent self-report) and spawned you with one job: turn the evidence into a single, structured proposal.
-
-You do NOT touch Jira. You do NOT need MCP tools. Your only inputs are local files (the evidence in your prompt + one canonical file you may Read + the journal you may Read).
-
-## Process
-
-1. **Read your role definition** (this file) — done if you're reading this.
-2. **Self-learning toggle gate (belt-and-suspenders).** Read the SDLC Context block in your prompt. Find the line `Self-Learning: ON` or `Self-Learning: OFF`. If `OFF`, return immediately with this exact verdict and exit:
-   ```
-   ## Verdict: nothing-learnable
-   Reason: self-learning disabled in caller
-   ```
-   Read no candidate file. Read no journal. Write nothing. The orchestrator should never spawn you when OFF; this gate exists so a misbuilt prompt cannot cause silent capture.
-3. **Parse the prompt.** It contains:
-   - `Source`: `user-correction` | `agent-self-report`
-   - `Evidence`: verbatim text — user message + recent actions, or the agent's `### Lesson` block
-   - `Context`: agent name, story key, epic key, phase
-   - `Target candidate`: orchestrator's best guess at the canonical file to edit
-   - `Journal Path`: absolute path to `sdlc-events.jsonl`
-4. **Classify fix type.** Decide which of these is the highest-leverage, lowest-risk fix:
-   - `instruction-edit` — agent role file (`plugins/ai-sdlc/agents/sdlc-*.md`), orchestrator command file (`plugins/ai-sdlc/commands/sdlc.md`)
-   - `memory-feedback` — `~/.claude/projects/.../memory/feedback_*.md` (cross-cutting principle)
-   - `project-claudemd` — repo-local `CLAUDE.md` (project-specific rule)
-   - `hook` — `~/.claude/settings.json` PreToolUse / PostToolUse hook
-   - `skill` — new or existing skill file
-   - `script` — shell wrapper (e.g., `uv-zs` that always sets `SSL_CERT_FILE`)
-   - `slash-command` — new `/sdlc-X` style command
-   - `manual` — none of the above; user must decide
-5. **Read ONE candidate canonical file** (the one your fix targets, if it's `instruction-edit` / `memory-feedback` / `project-claudemd`). Skip this step for non-text fix types.
-6. **Detect existing rule.** Scan the candidate file for related wording. If found, classify failure mode:
-   - **wording** — existing rule is vague, hedged, buried, or contradicted by another rule. Fix: rewrite.
-   - **repetition** — existing rule is fine but agents keep violating it. Read the journal: count prior events with same `target_file` and overlapping `existing_rule.location` (same line ±5 or same section header), status in `{approved, proposed, raw}`, latest line per id. If count ≥2 → repetition.
-   - **scope** — rule is in the wrong file/section.
-7. **Draft the verdict and output.**
-
-## Verdicts
-
-Pick exactly one and output it as your final return text. Be terse — no preamble, no narration.
-
-### `## Proposal` — new rule, no existing match
-
-```
-## Proposal
-Target: <absolute file path>
-Trigger: <one sentence — source + summary>
-Fix type: instruction-edit | memory-feedback | project-claudemd
-
-## Diff
-old_string: |
-  <verbatim text from target file>
-new_string: |
-  <verbatim text replacing old_string>
-```
-
-### `## Proposal (replace)` — existing rule with wording or scope problem
-
-```
-## Proposal (replace)
-Target: <absolute file path>
-Trigger: <one sentence>
-Fix type: instruction-edit | memory-feedback | project-claudemd
-
-## Existing Rule
-Location: <file:line>
-Text: "<verbatim existing rule text, one line max>"
-Failure mode: wording | scope
-
-## Diff
-old_string: |
-  <verbatim text from target file>
-new_string: |
-  <verbatim text replacing old_string>
-```
-
-### `## Recommendation` — existing rule with repetition failure (instruction won't fix it)
-
-```
-## Recommendation
-Target type: hook | script | skill | slash-command | manual
-Trigger: <one sentence>
-
-## Existing Rule
-Location: <file:line>
-Text: "<verbatim existing rule text>"
-Failure mode: repetition (<N> violations in journal)
-
-## Suggested artifact
-Type: <hook | script | skill | slash-command>
-Body: |
-  <concrete artifact body — JSON snippet for hook, shell script for script, skill outline for skill, etc.>
-Reasoning: <one sentence — why instruction failed and why this enforces>
-```
-
-### `## Verdict: nothing learnable`
-
-```
-## Verdict: nothing learnable
-Reason: <one sentence — already covered with no failure pattern, OR not generalizable>
-```
-
-## Constraints
-
-- **One file per proposal.** Multi-file lessons → multiple proposals (return them as separate verdicts in one response, separated by `---`).
-- **Never invent rules.** Every proposal must trace to the evidence in your prompt.
-- **Never apply the Edit.** You return the diff; the orchestrator applies it after user approval.
-- **Never append to the journal.** The orchestrator owns journal writes.
-- **Diff must be minimal.** Change only what the lesson dictates, no surrounding cleanup.
-- **Imperative phrasing.** "Always use X" / "Never do Y", not "we had a bug where...".
-- **Located edits.** Place the new line near related existing rules, not appended at file bottom (unless the file has no related section).
-
-## Repetition counting algorithm (used in step 5)
-
-```
-Read the journal file line by line.
-For each line, parse JSON; skip unparseable.
-Build a dict {id: latest_line} keeping only the latest line per id.
-Filter the latest entries to those where:
-  - status in {"approved", "proposed", "raw"}
-  - extractor_run.target_file == candidate_target_file
-  - extractor_run.existing_rule.location overlaps the rule you found
-    (same line ±5 OR same section header path)
-Count the filtered entries. If >= 2 → repetition cause.
-```
-
-## Example: user correction, no existing rule
-
-Input prompt:
-```
-Source: user-correction
-Evidence: User: "you should always use git -C, not cd && git"
-Context: agent=sdlc-developer, story=CSI-449, epic=CSI-62, phase=develop
-Target candidate: /Users/maorb/git-dev/maor-skills-marketplace/plugins/ai-sdlc/agents/sdlc-developer.md
-Journal Path: /Users/maorb/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl
-```
-
-You Read the target candidate, find no related rule, return:
-```
-## Proposal
-Target: /Users/maorb/git-dev/maor-skills-marketplace/plugins/ai-sdlc/agents/sdlc-developer.md
-Trigger: User correction — "use git -C, not cd && git"
-Fix type: instruction-edit
-
-## Diff
-old_string: |
-  - Use Bash for git operations
-new_string: |
-  - Use Bash for git operations
-  - Always use `git -C <dir> ...`. Never `cd <dir> && git ...` — the compound triggers a permission prompt and is not bypassable by allowlists.
-```
-````
+If the spec changes after you read it, re-read it and re-paste — the spec is canonical.
 
 - [ ] **Step 3: Verify the file is well-formed**
 
@@ -514,80 +340,13 @@ Expected: one match around line 832.
 
 - [ ] **Step 2: Insert section header and overview**
 
-Edit `plugins/ai-sdlc/commands/sdlc.md`. Insert immediately before `## Error Handling`:
+Edit `plugins/ai-sdlc/commands/sdlc.md`. Insert immediately before `## Error Handling` the canonical content from the spec, section **"Canonical content for plan tasks → C1: Self-Learning Loop section header"** (`docs/specs/2026-06-10-ai-sdlc-self-learning-design.md`).
 
-```
-old_string: |
-  ## Error Handling
-new_string: |
-  ## Self-Learning Loop
+The Edit shape:
+- `old_string`: the existing line `## Error Handling`.
+- `new_string`: the full C1 block from the spec (verbatim — Self-Learning Loop overview + Toggle + Mode + Journal sub-sections), followed by a blank line and then `## Error Handling`.
 
-  The orchestrator captures lessons in-flow from two sources (v1): user corrections and agent `## Lessons` self-reports. Each event spawns the `sdlc-lesson-extractor` sub-agent, which classifies fix type and returns a structured verdict. Approved text-edit verdicts apply directly to canonical files; non-text verdicts (hook / script / skill / slash-command) surface as recommendations the user implements manually.
-
-  See `docs/specs/2026-06-10-ai-sdlc-self-learning-design.md` for the full design.
-
-  ### Toggle (on/off) — gate this entire section
-
-  **State:** held in orchestrator memory, persisted to the auto-resume file under `## Self-Learning` → `enabled: true|false`. Default `true` when missing. Restored on Phase 0 fast resume.
-
-  **Propagation:** every agent spawn's SDLC Context block includes the line `Self-Learning: ON` (or `OFF`). Built deterministically from the in-memory state.
-
-  **Hard gate:** if the toggle is OFF for the current session, the orchestrator MUST:
-  - skip user-correction intent classification,
-  - skip the `## Lessons` return-scan,
-  - NOT spawn `sdlc-lesson-extractor`,
-  - NOT write to `sdlc-events.jsonl`,
-  - and continue normal phase routing as if this section did not exist.
-
-  **Toggling:**
-  - **Slash command:** `/sdlc lessons on|off` flips state, persists, confirms in one line. `/sdlc lessons` (no arg) reports current state.
-  - **LLM intent:** classify free-form user text as `disable` ("turn off self-learning", "too noisy, stop capturing"), `enable` ("turn lessons back on"), or `irrelevant`. On `disable`/`enable`: confirm in one line, update state, persist on next auto-save.
-  - On every flip, the next agent spawn's context line reflects the new value.
-
-  ### Mode
-
-  - **Mode 1 (default, immediate):** every event triggers an extractor spawn → proposal → inline approval gate.
-  - **Mode 2 (batch):** events still extracted as they happen; proposals queued in orchestrator state and surfaced together at the next phase boundary.
-
-  Mode is held in orchestrator state and persisted to the auto-resume file under `## Mode`. Default `1` if no resume file or no `## Mode` line. Survives `/sdlc continue`.
-
-  **Switching:**
-  - User asks (LLM-classified intent): "lower intervention", "batch these", "stop interrupting", "mode 2", "back to mode 1", etc. Confirm the switch in one line, update state.
-  - **Proactive offer:** in mode 1, when ≥3 proposals have surfaced within the current phase, offer the switch unprompted before the next would surface.
-  - Mid-flush: finish the current flush, then switch.
-
-  ### Journal
-
-  Path: `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl`. Append-only JSONL, one record per line, latest-line-per-id wins.
-
-  Schema (full schema in the design spec):
-  ```
-  {
-    "id": "evt_<ts>_<short-hash>",
-    "ts": "<ISO-8601 UTC>",
-    "epic": "<key>",
-    "story": "<key or null>",
-    "phase": "<phase name>",
-    "agent": "<agent name or 'orchestrator'>",
-    "source": "user-correction" | "agent-self-report",
-    "trigger_summary": "<one line>",
-    "evidence": "<verbatim>",
-    "extractor_run": { "verdict": "...", "fix_type": "...", "target_file": "...",
-                       "existing_rule": null | {...}, "diff": null | {...},
-                       "suggested_artifact": null | {...} },
-    "status": "raw" | "proposed" | "approved" | "rejected" | "deferred"
-            | "nothing-learnable" | "extraction-failed" | "stale"
-            | "suppressed-duplicate-rejection",
-    "applied_commit": "<sha or null>"
-  }
-  ```
-
-  Logical updates: append a new line with the same `id` and a new `status`. Readers always take the latest line per `id`. Reverting an update = delete the latest line for that id.
-
-  Bootstrap: the journal file is created on the first event (Bash: `mkdir -p $(dirname <journal>) && touch <journal>` if absent). Never fail the SDLC pipeline because the journal can't be written; if writes fail (disk/permission), surface a hard error and halt the lesson loop for the session, but continue the SDLC pipeline.
-
-  ## Error Handling
-```
+The new section header must appear immediately before `## Error Handling` in the file.
 
 - [ ] **Step 3: Verify**
 
@@ -610,63 +369,13 @@ git -C ~/git-dev/maor-skills-marketplace commit -m "feat(ai-sdlc): add Self-Lear
 
 - [ ] **Step 1: Append the user-correction sub-section**
 
-Edit `plugins/ai-sdlc/commands/sdlc.md`. Find the `### Journal` block from C1 and add immediately after it:
+Edit `plugins/ai-sdlc/commands/sdlc.md`. Insert the canonical content from spec section **"Canonical content for plan tasks → C2: Source 1 — user-correction sub-section"** immediately after the C1 block's `### Journal` content, still inside the `## Self-Learning Loop` section (i.e., before `## Error Handling`).
 
-```
-old_string: |
-  Bootstrap: the journal file is created on the first event (Bash: `mkdir -p $(dirname <journal>) && touch <journal>` if absent). Never fail the SDLC pipeline because the journal can't be written; if writes fail (disk/permission), surface a hard error and halt the lesson loop for the session, but continue the SDLC pipeline.
+The Edit shape:
+- `old_string`: the last paragraph of the C1 `### Journal` block (ending with "...continue the SDLC pipeline.") followed by a blank line and `## Error Handling`.
+- `new_string`: same closing-of-Journal text + the full C2 spec block + a blank line + `## Error Handling`.
 
-  ## Error Handling
-new_string: |
-  Bootstrap: the journal file is created on the first event (Bash: `mkdir -p $(dirname <journal>) && touch <journal>` if absent). Never fail the SDLC pipeline because the journal can't be written; if writes fail (disk/permission), surface a hard error and halt the lesson loop for the session, but continue the SDLC pipeline.
-
-  ### Source 1: user-correction
-
-  **Trigger.** On every user message, BEFORE responding, classify intent:
-
-  > "Is this user message a correction of behavior I or an agent just took? (Examples that qualify: 'use X instead', 'you forgot Y', 'why did you do Z', 'from now on always W'. Examples that do NOT qualify: clarifying questions, new task instructions, status checks.)"
-
-  Output exactly one of: `yes` | `maybe` | `no`. This is your own classification — do not spawn an agent for it.
-
-  **Routing:**
-  - `yes` → spawn `sdlc-lesson-extractor`. Source: `user-correction`. Evidence: the verbatim user message + the last 1-2 actions you or any agent took (your tool calls, your response text, the most recent agent return). Do NOT include unrelated prior context.
-  - `maybe` → ask exactly: *"Just to confirm — should I capture this as a permanent instruction update?"* On user `yes`, treat as `yes`. On user `no`, proceed normally with no journal entry.
-  - `no` → proceed normally; no journal entry, no spawn.
-
-  **Near-duplicate suppression (BEFORE spawning).** If classification is `yes`, scan the journal for a prior event with `source: user-correction`, similar evidence (LLM judgment — single short comparison call), `status: rejected`, within the last 50 events. If found:
-  1. Append a new event with `status: suppressed-duplicate-rejection` (no extractor_run).
-  2. Surface one line to the user: *"Similar correction was rejected on <date> — not re-proposing. Override with: 'extract anyway'."*
-  3. Do NOT spawn the extractor.
-
-  **Spawn pattern.** Use the standard general-purpose `Agent()` spawn pattern (per "How to Spawn Agents"). Pointer to `Agent Paths.lesson-extractor`. Prompt body:
-  ```
-  Source: user-correction
-  Evidence: <verbatim user message>
-  Recent actions: <last 1-2 of your tool calls + their results, or last agent return summary>
-  Context: agent=<orchestrator or recent agent name>, story=<current story key or null>, epic=<epic key>, phase=<current phase name>
-  Target candidate: <your best guess at canonical file — see "Target candidate selection" below>
-  Journal Path: ~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl
-  ```
-
-  **Target candidate selection.** Use this priority:
-  1. If the correction is about a specific named agent's behavior → that agent's role file.
-  2. If about an orchestrator phase or flow → `plugins/ai-sdlc/commands/sdlc.md`.
-  3. If a cross-cutting principle (applies to all of Maor's work) → most relevant `~/.claude/projects/.../memory/feedback_*.md` (or "create new feedback file" if none fits).
-  4. If project-specific (only this repo) → that repo's `CLAUDE.md`.
-  5. If unsure → pass the orchestrator file as candidate; the extractor will override if needed.
-
-  **Journal lifecycle for one user-correction event.**
-  1. Before spawning: append `status: raw, extractor_run: null`.
-  2. After extractor returns:
-     - On `nothing-learnable` → append `status: nothing-learnable` (terminal). No surface.
-     - On `Proposal` / `Proposal (replace)` / `Recommendation` → append `status: proposed` with the full extractor_run object.
-  3. In mode 1, surface the proposal immediately (see "Surface format" below). In mode 2, queue and continue.
-  4. On user approval (Proposal/Proposal-replace only): apply the Edit, append `status: approved` with `applied_commit: <sha or null>`. The orchestrator does NOT auto-commit lesson edits in v1.
-  5. On user rejection: append `status: rejected`.
-  6. On Recommendation approval: there's nothing to apply automatically. Append `status: approved` with `applied_commit: null`. The user implements the recommendation manually.
-
-  ## Error Handling
-```
+This preserves C1's last paragraph and inserts C2 between Journal and Error Handling.
 
 - [ ] **Step 2: Verify**
 
@@ -689,53 +398,11 @@ git -C ~/git-dev/maor-skills-marketplace commit -m "feat(ai-sdlc): add user-corr
 
 - [ ] **Step 1: Append the self-report sub-section**
 
-Edit `plugins/ai-sdlc/commands/sdlc.md`. Find the end of the `### Source 1: user-correction` block and add immediately after:
+Edit `plugins/ai-sdlc/commands/sdlc.md`. Insert the canonical content from spec section **"Canonical content for plan tasks → C3: Source 2 — agent-self-report sub-section"** immediately after the C2 block's `### Source 1` content, still inside the `## Self-Learning Loop` section (i.e., before `## Error Handling`).
 
-```
-old_string: |
-  6. On Recommendation approval: there's nothing to apply automatically. Append `status: approved` with `applied_commit: null`. The user implements the recommendation manually.
-
-  ## Error Handling
-new_string: |
-  6. On Recommendation approval: there's nothing to apply automatically. Append `status: approved` with `applied_commit: null`. The user implements the recommendation manually.
-
-  ### Source 2: agent-self-report
-
-  **Trigger.** After every main-agent return (developer, tester, QA, bug-fixer, architect, designer, integrator, planner, plan-challenger, researcher, jira-creator, conflict-resolver, jira-reader), scan the agent's return text for the literal header `^## Lessons` (case-sensitive, line-anchored).
-
-  If absent → no lesson event for this return. Continue normal phase routing.
-
-  If present → parse each `### Lesson` block under the `## Lessons` header. Each block has 4 fields:
-  ```
-  ### Lesson
-  Trigger: <text>
-  Generalizable rule: <text>
-  Suggested fix type: <one of the taxonomy values>
-  Suggested target: <file path or artifact>
-  ```
-
-  Skip blocks missing any of the 4 fields (log a warning to the user: *"Agent <name> returned malformed Lesson block — skipping."*).
-
-  **For each well-formed `### Lesson` block:**
-
-  1. Apply near-duplicate suppression (same as user-correction): scan journal for prior `source: agent-self-report`, similar evidence, `status: rejected`, within last 50 events. If hit, append `suppressed-duplicate-rejection`, surface one-line note, skip.
-  2. Append `status: raw, extractor_run: null` to the journal.
-  3. Spawn `sdlc-lesson-extractor` with:
-     ```
-     Source: agent-self-report
-     Evidence: <verbatim ### Lesson block>
-     Context: agent=<agent name>, story=<story key>, epic=<epic key>, phase=<phase name>
-     Target candidate: <agent's "Suggested target" value — extractor may override>
-     Journal Path: ~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl
-     ```
-  4. Same lifecycle as user-correction: extractor returns → append `proposed` (or `nothing-learnable`) → surface in mode 1 / queue in mode 2 → on approval append `approved` (with `applied_commit` for text edits, `null` for recommendations).
-
-  **Multiple lesson blocks per return.** Process each as a separate event. They may target different files; that's allowed (one file per *proposal*, but a single agent return can produce multiple proposals).
-
-  **Continue normal phase routing.** Self-learning runs alongside, never blocks. If any event is in mode 1 and you're awaiting approval, the surface is inline as part of the orchestrator turn — proceed to phase routing only after approval/rejection. In mode 2, phase routing continues immediately and proposals flush at the phase boundary.
-
-  ## Error Handling
-```
+The Edit shape:
+- `old_string`: the last line of the C2 `### Source 1` block (ending with "...The user implements the recommendation manually.") followed by a blank line and `## Error Handling`.
+- `new_string`: same closing-of-Source-1 line + the full C3 spec block + a blank line + `## Error Handling`.
 
 - [ ] **Step 2: Verify**
 
@@ -758,107 +425,11 @@ git -C ~/git-dev/maor-skills-marketplace commit -m "feat(ai-sdlc): add agent sel
 
 - [ ] **Step 1: Append the mode-mechanics sub-section**
 
-Edit `plugins/ai-sdlc/commands/sdlc.md`. Find the end of the `### Source 2: agent-self-report` block and add immediately after:
+Edit `plugins/ai-sdlc/commands/sdlc.md`. Insert the canonical content from spec section **"Canonical content for plan tasks → C4: Mode mechanics — surface, mode 2, proactive offer, persistence"** immediately after the C3 block's `### Source 2` content, still inside the `## Self-Learning Loop` section (i.e., before `## Error Handling`).
 
-```
-old_string: |
-  **Continue normal phase routing.** Self-learning runs alongside, never blocks. If any event is in mode 1 and you're awaiting approval, the surface is inline as part of the orchestrator turn — proceed to phase routing only after approval/rejection. In mode 2, phase routing continues immediately and proposals flush at the phase boundary.
-
-  ## Error Handling
-new_string: |
-  **Continue normal phase routing.** Self-learning runs alongside, never blocks. If any event is in mode 1 and you're awaiting approval, the surface is inline as part of the orchestrator turn — proceed to phase routing only after approval/rejection. In mode 2, phase routing continues immediately and proposals flush at the phase boundary.
-
-  ### Surface format (mode 1, immediate)
-
-  When a proposal becomes ready, surface this to the user as a single message block:
-
-  ```
-  📚 Lesson proposal — <Source> on <agent>/<story or epic>
-  Trigger: <trigger_summary>
-
-  <Verdict block as returned by the extractor — Proposal | Proposal (replace) | Recommendation>
-
-  Approve / Reject / Defer (mode 2 only)?
-  ```
-
-  On user response:
-  - "approve" / "yes" / "apply" → Edit (for text-edit verdicts) or log-only (for Recommendation), append `status: approved`, brief one-line confirmation.
-  - "reject" / "no" / "skip" → append `status: rejected`, one-line confirmation.
-  - For mode-1, "defer" is not offered (it's a mode-2 concept).
-
-  Then continue with whatever phase work was in progress.
-
-  ### Mode 2: batching at phase boundary
-
-  **Queue.** When mode is 2, every `proposed` event is added to an in-orchestrator-state queue (a list of event IDs). Do NOT surface to the user yet.
-
-  **Phase boundaries.** A flush happens at each natural pause point: end of Phase 1, 1.5, 2, 3, 3.5, 3.6, end-of-batch within Phase 4, end-of-story within Phases 5/6/7, end-of-merge-run in 7.5, and Phase 8. (These are points where the orchestrator was already going to update the user / pause for routing.)
-
-  **Flush procedure.** At each boundary, if the queue is non-empty:
-
-  1. Surface a single message:
-     ```
-     📚 <N> lesson proposals queued from <phase>:
-
-     [1] <Source> • <target_file path basename> • <trigger_summary>
-         <abbreviated verdict — first line of diff or recommendation type>
-     [2] ...
-     ...
-
-     Approve all / Reject all / Defer all to next phase / Per-item (1: a/r/d, 2: a/r/d, ...)
-     ```
-  2. On user response:
-     - "approve all" → for each, apply (or log-only), append `status: approved`.
-     - "reject all" → append `status: rejected` for each.
-     - "defer all" → append `status: deferred` for each; re-queue at the start of the next phase.
-     - Per-item like `1: a, 2: r, 3: d` → apply each verb to its event.
-  3. Empty the queue after applying.
-
-  **Mid-flush mode switch.** If the user says "mode 1" while a flush is in progress, finish the current flush first, then switch.
-
-  ### Proactive mode-switch offer
-
-  In mode 1, track a counter `proposals_this_phase` (resets at every phase boundary).
-
-  When `proposals_this_phase` reaches 3 AND the user has not already declined an offer in this phase, BEFORE surfacing the next proposal:
-
-  ```
-  📚 3 lesson proposals already this phase. Want to switch to mode 2 (batch at phase boundary) for this run? (yes / no / always mode 1)
-  ```
-
-  - "yes" → switch to mode 2, queue the current pending proposal, continue.
-  - "no" → mark `offer_declined_this_phase = true`, surface the current proposal as normal.
-  - "always mode 1" → mark `offer_declined_session = true` (do not offer again until the user explicitly opts in).
-
-  Persist the decline flag in the auto-resume file under `## Mode` so it survives `/sdlc continue`.
-
-  ### Switching modes on user request
-
-  Same LLM-intent classification approach as user-correction. After each user message, also classify:
-
-  > "Is this user message asking to change the lesson-proposal mode? Possible values: 'switch to mode 2' / 'switch to mode 1' / 'no'."
-
-  - `switch to mode 2` → confirm: *"Switching to mode 2 — proposals queue until phase boundary. Switch back with 'mode 1'."* Update state. Persist on next auto-save.
-  - `switch to mode 1` → confirm: *"Switching to mode 1 — proposals surface immediately."* Update state. Persist on next auto-save. If a queue exists, flush it now.
-  - `no` → continue.
-
-  ### Persistence in the auto-resume file
-
-  In `Phase 0 → Auto-save` (and `Explicit handoff`), the orchestrator already writes a structured state file. Add a new block:
-
-  ```
-  ## Mode
-  current: 1 | 2
-  offer_declined_this_phase: true | false
-  offer_declined_session: true | false
-  proposals_this_phase: <integer>
-  queue: [<event_id>, ...]    # empty in mode 1; non-empty only in mode 2
-  ```
-
-  On `Phase 0 → Fast Resume`, when reading the resume file, restore mode state from this block. If the block is absent, default to `current: 1, ...all flags false, proposals_this_phase: 0, queue: []`.
-
-  ## Error Handling
-```
+The Edit shape:
+- `old_string`: the last paragraph of the C3 `### Source 2` block (the "Continue normal phase routing." paragraph) followed by a blank line and `## Error Handling`.
+- `new_string`: same closing-of-Source-2 paragraph + the full C4 spec block (Surface format / Mode 2 / Proactive offer / Switching / Persistence sub-sections) + a blank line + `## Error Handling`.
 
 - [ ] **Step 2: Verify**
 
@@ -892,34 +463,13 @@ Read 30 lines starting at that line number to see what's already there.
 
 - [ ] **Step 2: Append self-learning error rules**
 
-Find the last bullet in `## Error Handling` and add the self-learning sub-section after it:
+Find the last bullet in `## Error Handling` (likely "Missing workflow status...") and append the canonical content from spec section **"Canonical content for plan tasks → C5: Self-Learning loop failures sub-section"** after it.
 
-```
-old_string: |
-  - **Missing workflow status:** Fall back to To Do / In Progress / Done. Use comments for sub-states.
-new_string: |
-  - **Missing workflow status:** Fall back to To Do / In Progress / Done. Use comments for sub-states.
+The Edit shape:
+- `old_string`: that last existing bullet of `## Error Handling`.
+- `new_string`: same bullet + a blank line + the full C5 spec block (the `### Self-Learning loop failures` heading and table).
 
-  ### Self-Learning loop failures
-
-  | Failure | Response |
-  |---|---|
-  | Extractor returns malformed output (no recognized verdict header) | Append `status: extraction-failed`, surface: *"Extractor returned malformed output for event <id> — skipping, see journal."* Continue. No auto-retry. |
-  | Extractor `Agent()` spawn returns a tool error | Retry once with a 2-second delay (Bash `sleep 2`). On second failure, treat as malformed (status `extraction-failed`). |
-  | Extractor times out (>3 minutes) | Treat as malformed. |
-  | Diff `old_string` doesn't match the canonical file (file changed since extractor read it) | Do NOT auto-rebase. Append `status: stale`. Surface to user with both the proposed diff and the current relevant region of the file. User decides: reject, or manually adapt and apply via Edit. |
-  | Edit succeeds but working tree was already dirty with unrelated changes | `applied_commit: null`. Do not auto-commit. User commits when ready (alongside their work). Provenance is via git blame after the eventual commit. |
-  | Journal write fails (disk/permission/IO) | Surface a hard error to the user: *"Journal write failed: <error>. Halting self-learning loop for this session. SDLC pipeline continues normally."* Mark `lesson_loop_disabled: true` in orchestrator state for this session. |
-  | Corrupt JSONL line in journal | Skip unparseable lines. Warn once per session: *"Skipped <N> unparseable lines in journal — see file for details."* Do not halt. |
-  | Mode-2 phase-boundary flush triggers but queue is unexpectedly empty | Log a warning, no halt. |
-  | Mode switch requested mid-flush | Finish current flush, then switch. |
-  | Correction-intent classified `no→yes` (false positive) | User rejects. Suppression remembers. Cost: one click. |
-  | Correction-intent classified `yes→no` (false negative) | Lesson missed. User repeats more emphatically next time; classification fires correctly. Cost: rare. |
-  | Correction-intent classified `yes→maybe` | One-line confirm. User answers. Cost: one round-trip. |
-  | Agent omits `## Lessons` despite friction | Not caught in v1. v2's transcript scan + hooks closes this gap. Acceptable known gap. |
-  | Agent over-reports (lesson for already-covered rule) | Extractor's existing-rule detection handles it (rewrite / recommend / move / nothing-learnable). Never silently discarded. |
-  | Agent suggests wrong target | Extractor's classification overrides. Suggestion is a hint, not authoritative. |
-```
+If the last bullet in your file is different, adapt `old_string` to match exactly — the *insertion landmark* is "after the last existing bullet of `## Error Handling`, still inside that section".
 
 - [ ] **Step 3: Verify**
 
