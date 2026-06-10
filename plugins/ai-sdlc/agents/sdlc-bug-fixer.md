@@ -84,10 +84,11 @@ What NOT to put in the comment:
    uv run pytest {specific_test} -v
    ```
 
-   **Shell discipline — no `cd` in compound commands:**
-   - ✅ One standalone `cd {worktree_path}` at the start (above) is fine
-   - ❌ NEVER: `cd {some_path} && command` — this triggers a manual-approval security prompt every time
-   - ✅ Instead: run each command separately (the shell CWD persists between Bash calls), or use absolute paths
+   **Shell discipline:**
+   - ❌ NEVER `cd {path} && command` — triggers manual-approval prompt
+   - ❌ NEVER write files via heredoc (`cat > file << 'EOF'`) — triggers security prompt on braces/quotes
+   - ✅ Use the **Write** tool to create/edit files, then run them with Bash
+   - ✅ One standalone `cd {worktree_path}` at start is fine; subsequent commands use relative paths
 
 5. **Load debugging skills** — Invoke relevant skills:
    ```

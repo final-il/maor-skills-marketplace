@@ -78,20 +78,11 @@ What NOT to put in the comment:
    ```
    The story branch is already checked out in this worktree (the developer worked here). `git pull` picks up any commits the developer pushed.
 
-   **Shell discipline — no `cd` in compound commands:**
-   - ✅ One standalone `cd {worktree_path}` at the start (above) is fine
-   - ❌ NEVER: `cd {some_path} && command` — this triggers a manual-approval security prompt every time
-   - ✅ Instead: run each command separately (the shell CWD persists between Bash calls), or use absolute paths / `--prefix` flags:
-     ```bash
-     # Bad — triggers approval prompt:
-     cd web/frontend && npx playwright test
-
-     # Good — use relative path after initial cd:
-     npx playwright test
-
-     # Good — absolute path, no cd:
-     npx --prefix {worktree_path}/web/frontend playwright test
-     ```
+   **Shell discipline:**
+   - ❌ NEVER `cd {path} && command` — triggers manual-approval prompt
+   - ❌ NEVER write files via heredoc (`cat > file << 'EOF'`) — triggers security prompt on braces/quotes
+   - ✅ Use the **Write** tool to create/edit files, then run them with Bash
+   - ✅ One standalone `cd {worktree_path}` at start is fine; subsequent commands use relative paths
 
 3. **Read the code changes:**
    ```bash
