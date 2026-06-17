@@ -232,6 +232,90 @@ Useful flags:
 
 The dashboard reads the database **read-only** — concurrent `./run.sh sync` calls are safe. While the dashboard is open, you can run `./run.sh sync --project <KEY>` in another terminal and the charts refresh within ~5 seconds.
 
+## Promoting Custom Fields to Filterable Columns
+
+By default, Jira custom fields live only in the `custom_fields` key-value table —
+they're awkward to query (a join + a `field_id` filter) and they can't be used as
+a Grafana dropdown or a dashboard sidebar filter. **Custom-field promotion** lifts a
+chosen custom field into a real native column on `tickets`, where it behaves like
+any built-in column.
+
+You (the skill agent) **cannot edit the mapping file mid-chat** — that's a
+user/CLI action. Your job is to *discover* candidate fields, *guide* the user
+through editing the map, and *run the re-load* for them. Walk the user through the
+steps below; don't pretend to self-serve the edit.
+
+### 1. Discover what custom fields exist
+
+```bash
+run.sh custom-fields                  # table (default)
+run.sh custom-fields --format json    # JSON array, for programmatic use
+run.sh custom-fields --format table   # explicit table
+```
+
+Columns: `field_id | human_name | sample_values | mapped`. The `mapped` column is
+`yes`/`no` — whether the field is already promoted to a native column. Use this to
+find the `customfield_XXXXX` id behind a human field name (e.g. "Team", "Quarter").
+
+### 2. Map the field (user edits the YAML)
+
+The mapping lives in the **jiralyzer package**, not this skill:
+`src/jiralyzer/custom_fields_map.yaml` (override the path with the
+`JIRALYZER_CUSTOM_FIELDS_MAP` env var, mirroring `JIRALYZER_PINS_DIR`). Tell the
+user to add a line mapping the `field_id` to a snake_case column name:
+
+```yaml
+customfield_10001: team
+customfield_10105: dest_team
+customfield_10257: quarter
+customfield_10268: year
+```
+
+- Column names **must** match `^[a-z][a-z0-9_]*$` (snake_case). Invalid names are
+  **silently skipped** — this is an SQL-injection guard, so a typo means the field
+  just won't appear, with no error.
+- Order is preserved top-to-bottom.
+
+### 3. Re-load the data (mandatory)
+
+Promotion takes effect at **load time** — columns are both added (idempotent
+`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS <name> VARCHAR`) and populated during
+ingest/sync. After editing the map you **must re-load**:
+
+```bash
+run.sh sync --project <KEY>     # re-fetch from Jira + load
+run.sh ingest <export.json>     # or re-load from a saved export
+```
+
+- Re-loading is **idempotent** — no duplicate columns; values just update.
+- A ticket missing the mapped field gets `NULL` (no error).
+- Promotion is **purely additive** — the raw value also stays in the
+  `custom_fields` key-value table; nothing is removed.
+- **Write-lock caveat:** ingest/sync need **exclusive write access**. If the
+  Streamlit dashboard or the web app is running, it holds a read lock — stop it
+  first (`run.sh stop`), then re-load.
+
+### 4. Verify
+
+```bash
+run.sh schema                                              # new column appears on tickets
+run.sh custom-fields                                       # mapped now shows "yes"
+run.sh query "SELECT team, COUNT(*) FROM tickets GROUP BY team"
+```
+
+### Payoff
+
+Once promoted, the field is a real column on `tickets`, so:
+
+- **Direct SQL:** filter/group with `WHERE team = '...'` — no join into
+  `custom_fields`.
+- **Grafana dropdown (automatic):** the Grafana filter allowlist is *base columns
+  ∪ mapped column names*. Base columns are `project, issue_type, status, priority,
+  assignee, reporter, resolution`. After mapping `team`, you can build a Grafana
+  dashboard filtered by `team` exactly like by `status`.
+- **Dashboard sidebar filter:** the promoted column can drive a Streamlit sidebar
+  filter too.
+
 ## Pinning Analyses
 
 After producing a useful analysis (SQL + chart), offer to pin it so it shows up in the
@@ -324,6 +408,12 @@ run.sh export-parquet ./exports/ --compression zstd  # Better compression
 - Never access the database directly — always use the CLI via `run.sh`
 - **If `run.sh` fails with ".env not found", tell the user to run `setup.sh` first.** Do not attempt workarounds.
 - **Always identify the target project first.** Check which projects are loaded, sync if needed, and filter all queries with `WHERE project = '<KEY>'` when multiple projects exist
+- **Proactively suggest promoting a custom field** when the user wants to filter,
+  group, or build a Grafana/dashboard dropdown by something that currently only
+  lives in the `custom_fields` table (e.g. "filter by team", "group by quarter").
+  Run `run.sh custom-fields` to find the field, then guide the user through editing
+  `custom_fields_map.yaml` and re-loading (see "Promoting Custom Fields to
+  Filterable Columns"). You cannot edit the YAML yourself — walk the user through it.
 - When generating SQL, prefer CTEs over subqueries for readability
 - Always LIMIT results for exploratory queries (LIMIT 20 default)
 - If a query fails, check the schema and adjust — column names are exact
