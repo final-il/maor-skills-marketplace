@@ -501,6 +501,8 @@ The Jira project uses a 3-tier hierarchy:
    - Story keys and titles
    - Link to the Jira board
 
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+
 ## Phase 3: Architecture
 
 1. **Spawn `sdlc-architect` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
@@ -517,6 +519,8 @@ The Jira project uses a 3-tier hierarchy:
    - Transitions each story to "Ready for Dev"
 
 3. Report to user the CUJ comment on the epic + which stories are now ready for development
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 ## Phase 3.5: Design (Optional)
 
@@ -570,6 +574,8 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
    - If `Action required > 0` → stories listed under "Action required" have already been transitioned back to `Backlog` by the integrator. Re-run **Phase 3** (architect) on ONLY those stories with the integrator's recommended renames in the spawn prompt. Then re-run Phase 3.6 on the same epic. Cap at 2 audit iterations per epic; if a third iteration is needed, halt and ask the user to triage.
    - If the integrator reports any INCOMPLETE stories (missing `## Names Reserved`) → re-run Phase 3 (architect) on them, then re-run Phase 3.6.
 5. The integrator does NOT need a worktree (read-only on Jira, no code).
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 **Read-Artifact addendum for downstream agents:** When an affected story has a current `## Integration Notes` comment, every downstream agent prompt for that story (developer, tester, QA, bug-fixer) MUST include `## Integration Notes (Summary) on {STORY-KEY}` in `Read Artifacts`. Stories with no notes get the standard `Read Artifacts` list.
 
@@ -633,6 +639,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 
 **E2E gate (mandatory for stories with user-facing changes):** The tester MUST produce at least one Playwright E2E spec that drives a real headless browser for any story that modifies frontend code, HTTP endpoints consumed by the frontend, or CLI output. The spec must: (a) exercise the primary user flow the story implements, (b) assert zero `pageerror` / `console.error`, (c) assert expected DOM elements are visible with non-zero dimensions, and (d) save a screenshot to `tests/artifacts/{STORY-KEY}/`. Stories that are purely backend-internal (no user-facing surface) are exempt. The orchestrator checks `## Test Results` for the phrase "E2E:" or "Playwright:" — if absent on a frontend story, the tester is re-spawned with explicit instructions to add browser coverage.
 
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+
 ### Step 6: QA Review
 - **Spawn `sdlc-qa-reviewer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
   - Pointer to `Agent Paths.qa-reviewer`
@@ -650,6 +658,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 - If pass: transitions Story to "Done"
 - If issues: creates a child Bug issue (`issue_type: "Bug"`, `parent: {STORY-KEY}`) AND transitions parent Story to **"In Progress"**.
 
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+
 ### Step 7: Bug Fix (if needed)
 - Detection: query `parent = {STORY-KEY} AND issuetype = Bug AND status != Done`. If any row returns, the Story is in the bug-fix loop (the parent Story will be in **In Progress**).
 - For each open child Bug:
@@ -663,6 +673,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
   - Bug fixer fixes the issue, transitions the Bug issue to "Done", and transitions the parent Story back to "In Review"
   - **Loop back to Step 5** (re-test)
   - **Maximum 3 bug-fix loops per story.** After that, add a Jira comment and move on.
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 ### Parallelism
 - Independent stories (no dependency between them) can be developed in parallel — **each in its own worktree** (see "Workspace isolation" above)
@@ -734,7 +746,11 @@ After every Phase 7.5 run, count remaining open PRs targeting `{base_branch}` fr
 
 The orchestrator resumes only after the user has either merged the backlog manually or cleared the escalated Bugs (whichever applies).
 
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+
 ## Phase 8: Completion
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 1. Query Jira for all stories in the epic
 2. **Assert all Done stories have merged PRs.** For each story in `Done`, verify its PR is merged (`gh pr view {N} --json state` returns `MERGED`). Phase 7.5 should have handled this continuously; this is the final safety check.
@@ -845,7 +861,7 @@ Invoke the full skill: `Skill("ai-sdlc:sdlc-handoff")`. This does everything aut
 
 ## Self-Learning Loop
 
-The orchestrator captures lessons in-flow from two sources (v1): user corrections and agent `## Lessons` self-reports. Each event spawns the `sdlc-lesson-extractor` sub-agent, which classifies fix type and returns a structured verdict. Approved text-edit verdicts apply directly to canonical files; non-text verdicts (hook / script / skill / slash-command) surface as recommendations the user implements manually.
+Lessons come from two sources (v1): user corrections and agent `## Lessons` self-reports. **Capture is done by the hooks, not the orchestrator.** The `UserPromptSubmit` hook (CSI-639) classifies user corrections at submit time; the `SubagentStop` hook (CSI-638) scans each agent's transcript for `## Lessons`. Both deterministically append `status: "raw"` events to the journal regardless of whether the orchestrator was paying attention. The orchestrator's only job is to **drain the raw queue**: read those `raw` events, spawn the `sdlc-lesson-extractor` sub-agent per event (it classifies fix type and returns a structured verdict), and drive each through the proposed→approved/rejected lifecycle. Approved text-edit verdicts apply directly to canonical files; non-text verdicts (hook / script / skill / slash-command) surface as recommendations the user implements manually.
 
 See `docs/specs/2026-06-10-ai-sdlc-self-learning-design.md` for the full design.
 
@@ -856,15 +872,17 @@ See `docs/specs/2026-06-10-ai-sdlc-self-learning-design.md` for the full design.
 **Propagation:** every agent spawn's SDLC Context block includes the line `Self-Learning: ON` (or `OFF`). Built deterministically from the in-memory state.
 
 **Hard gate:** if the toggle is OFF for the current session, the orchestrator MUST:
-- skip user-correction intent classification,
-- skip the `## Lessons` return-scan,
+- skip the raw-queue drain entirely (do not read or process `raw` events),
 - NOT spawn `sdlc-lesson-extractor`,
 - NOT write to `sdlc-events.jsonl`,
+- ensure the hook-readable disable flag file `~/.claude/projects/-Users-maorb-git-dev/memory/.sdlc-lessons-disabled` **exists** (so the capture hooks are silent too — they gate on this same file),
 - and continue normal phase routing as if this section did not exist.
 
+**Flag-file ownership (the toggle bridge).** The resume-file `## Self-Learning` → `enabled:` line is the human-readable state; the `.sdlc-lessons-disabled` flag file is the hook-readable state (defined by CSI-638). The orchestrator owns keeping them in sync: on **OFF**, `touch` the flag file; on **ON**, remove it (`rm -f`). Do this on every `/sdlc lessons on|off` flip and on every LLM-intent enable/disable, before continuing.
+
 **Toggling:**
-- **Slash command:** `/sdlc lessons on|off` flips state, persists, confirms in one line. `/sdlc lessons` (no arg) reports current state.
-- **LLM intent:** classify free-form user text as `disable` ("turn off self-learning", "too noisy, stop capturing"), `enable` ("turn lessons back on"), or `irrelevant`. On `disable`/`enable`: confirm in one line, update state, persist on next auto-save.
+- **Slash command:** `/sdlc lessons on|off` flips state, writes/removes the flag file, persists, confirms in one line. `/sdlc lessons` (no arg) reports current state.
+- **LLM intent:** classify free-form user text as `disable` ("turn off self-learning", "too noisy, stop capturing"), `enable` ("turn lessons back on"), or `irrelevant`. On `disable`/`enable`: confirm in one line, write/remove the flag file, update state, persist on next auto-save.
 - On every flip, the next agent spawn's context line reflects the new value.
 
 ### Mode
@@ -909,85 +927,67 @@ Logical updates: append a new line with the same `id` and a new `status`. Reader
 
 Bootstrap: the journal file is created on the first event (Bash: `mkdir -p $(dirname <journal>) && touch <journal>` if absent). Never fail the SDLC pipeline because the journal can't be written; if writes fail (disk/permission/IO), surface a hard error and halt the lesson loop for the session, but continue the SDLC pipeline.
 
+### Draining the raw queue
+
+The hooks (CSI-638 SubagentStop, CSI-639 UserPromptSubmit) deposit `status: "raw"` events into the journal asynchronously. The orchestrator does **not** watch every turn for lessons — it *drains* these raw events at deterministic points and advances each through the lifecycle. This is the orchestrator's only capture-adjacent responsibility; detection itself lives entirely in the hooks.
+
+**1. When to drain.** Run the drain as the FIRST action of this Self-Learning Loop whenever the orchestrator regains control — i.e. at the START of every orchestrator turn that follows agent work or a user message — AND at every phase boundary already enumerated for mode 2 (end of Phase 1, 1.5, 2, 3, 3.5, 3.6, per-batch in Phase 4, per-story in Phases 5/6/7, per-merge-run in 7.5, and Phase 8). This replaces the old "on every user message classify intent" and "after every agent return scan for `## Lessons`" behavior — those detections now happen in the hooks.
+
+**2. Toggle hard-gate.** If Self-Learning is OFF (see the Toggle sub-section), **skip the drain entirely** — do not read or process the journal — and ensure the `.sdlc-lessons-disabled` flag file exists so the capture hooks are silent too. Only proceed with steps 3-7 when Self-Learning is ON.
+
+**3. Read the queue.** Read the journal, build latest-line-per-`id`, and select the `id`s whose latest line has `status == "raw"`. Bash recipe:
+```bash
+J=~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl
+[ -f "$J" ] || exit 0
+# latest line per id, then keep only those whose latest status is "raw"
+tac "$J" | jq -c -s '
+  ([.[] | {id, line: .}] | group_by(.id) | map(.[0].line))
+  | map(select(.status == "raw"))' 2>/dev/null
+# (macOS lacks tac: use `tail -r` instead of `tac`.)
+```
+Each raw event already carries `source`, `evidence`, `agent`, `trigger_summary` (written by the hooks per the CSI-638 schema). Backfill `epic`/`phase`/`story` from current orchestrator state when the event has them `null`.
+
+**4. Per raw event — near-duplicate suppression (BEFORE spawn).** Scan the journal for a prior event with the SAME `source`, evidence-similar (single short comparison call), `status: rejected`, within the last 50 events. If found:
+1. Append a new event (same `id` as the raw one) with `status: suppressed-duplicate-rejection` (no `extractor_run`).
+2. Surface one line: *"Similar correction was rejected on <date> — not re-proposing. Override with: 'extract anyway'."*
+3. Do NOT spawn the extractor; move to the next raw event.
+
+**5. Spawn the extractor.** Use the standard general-purpose `Agent()` spawn pattern (per "How to Spawn Agents"). Pointer to `Agent Paths.lesson-extractor`. The hook already wrote the `status: raw` line, so do NOT append another `raw` line — proceed straight to the spawn. Build the prompt body from the raw event:
+```
+Source: <event.source>            # user-correction | agent-self-report
+Evidence: <event.evidence>         # verbatim — the ### Lesson block (self-report) or prompt + recent actions (correction)
+Context: agent=<event.agent>, story=<event.story or null>, epic=<event.epic or orchestrator state>, phase=<event.phase or orchestrator state>
+Target candidate: <see below>
+Journal Path: ~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl
+Self-Learning: ON
+```
+- For `agent-self-report`: parse the `Suggested target:` field out of the `### Lesson` evidence block and use it as `Target candidate` (extractor may override).
+- For `user-correction`: apply the "Target candidate selection" priority list (in the Source 1 sub-section below).
+
+**6. Lifecycle (unchanged).** After the extractor returns:
+- On `nothing-learnable` → append `status: nothing-learnable` (terminal). No surface.
+- On `Proposal` / `Proposal (replace)` / `Recommendation` → append `status: proposed` with the full `extractor_run` object.
+- In mode 1, surface the proposal immediately (see "Surface format"). In mode 2, queue and continue.
+- On user approval (Proposal/Proposal-replace): apply the Edit, append `status: approved` with `applied_commit: <sha or null>` (orchestrator does NOT auto-commit lesson edits in v1).
+- On Recommendation approval: nothing to apply automatically — append `status: approved` with `applied_commit: null`; the user implements it manually.
+- On user rejection: append `status: rejected`.
+
+**Multiple raw events.** Process each as a separate event (they may target different files). Self-learning runs alongside phase routing and never blocks it: in mode 1 an inline approval pauses the current turn until the user responds; in mode 2 routing continues and proposals flush at the next boundary.
+
 ### Source 1: user-correction
 
-**Trigger.** On every user message, BEFORE responding, classify intent:
+**Capture is done by the hook, not the orchestrator.** The `UserPromptSubmit` hook (CSI-639) classifies every user prompt out-of-band (keyword pre-filter → Haiku classifier) and, on a high-confidence correction, appends a `source: "user-correction"`, `status: "raw"` event to the journal. The orchestrator does **not** classify user messages for capture — it picks these events up in the drain step (see "Draining the raw queue" above). Do NOT re-implement intent classification here.
 
-> "Is this user message a correction of behavior I or an agent just took? (Examples that qualify: 'use X instead', 'you forgot Y', 'why did you do Z', 'from now on always W'. Examples that do NOT qualify: clarifying questions, new task instructions, status checks.)"
-
-Output exactly one of: `yes` | `maybe` | `no`. This is your own classification — do not spawn an agent for it.
-
-**Routing:**
-- `yes` → spawn `sdlc-lesson-extractor`. Source: `user-correction`. Evidence: the verbatim user message + the last 1-2 actions you or any agent took (your tool calls, your response text, the most recent agent return). Do NOT include unrelated prior context.
-- `maybe` → ask exactly: *"Just to confirm — should I capture this as a permanent instruction update?"* On user `yes`, treat as `yes`. On user `no`, proceed normally with no journal entry.
-- `no` → proceed normally; no journal entry, no spawn.
-
-**Near-duplicate suppression (BEFORE spawning).** If classification is `yes`, scan the journal for a prior event with `source: user-correction`, similar evidence (LLM judgment — single short comparison call), `status: rejected`, within the last 50 events. If found:
-1. Append a new event with `status: suppressed-duplicate-rejection` (no extractor_run).
-2. Surface one line to the user: *"Similar correction was rejected on <date> — not re-proposing. Override with: 'extract anyway'."*
-3. Do NOT spawn the extractor.
-
-**Spawn pattern.** Use the standard general-purpose `Agent()` spawn pattern (per "How to Spawn Agents"). Pointer to `Agent Paths.lesson-extractor`. Prompt body:
-```
-Source: user-correction
-Evidence: <verbatim user message>
-Recent actions: <last 1-2 of your tool calls + their results, or last agent return summary>
-Context: agent=<orchestrator or recent agent name>, story=<current story key or null>, epic=<epic key>, phase=<current phase name>
-Target candidate: <your best guess at canonical file — see "Target candidate selection" below>
-Journal Path: ~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl
-```
-
-**Target candidate selection.** Use this priority:
+**Target candidate selection.** The drain step needs a `Target candidate` for the extractor prompt on a user-correction event. Use this priority:
 1. If the correction is about a specific named agent's behavior → that agent's role file.
 2. If about an orchestrator phase or flow → `plugins/ai-sdlc/commands/sdlc.md`.
 3. If a cross-cutting principle (applies to all of Maor's work) → most relevant `~/.claude/projects/.../memory/feedback_*.md` (or "create new feedback file" if none fits).
 4. If project-specific (only this repo) → that repo's `CLAUDE.md`.
 5. If unsure → pass the orchestrator file as candidate; the extractor will override if needed.
 
-**Journal lifecycle for one user-correction event.**
-1. Before spawning: append `status: raw, extractor_run: null`.
-2. After extractor returns:
-   - On `nothing-learnable` → append `status: nothing-learnable` (terminal). No surface.
-   - On `Proposal` / `Proposal (replace)` / `Recommendation` → append `status: proposed` with the full extractor_run object.
-3. In mode 1, surface the proposal immediately (see "Surface format" below). In mode 2, queue and continue.
-4. On user approval (Proposal/Proposal-replace only): apply the Edit, append `status: approved` with `applied_commit: <sha or null>`. The orchestrator does NOT auto-commit lesson edits in v1.
-5. On user rejection: append `status: rejected`.
-6. On Recommendation approval: there's nothing to apply automatically. Append `status: approved` with `applied_commit: null`. The user implements the recommendation manually.
-
 ### Source 2: agent-self-report
 
-**Trigger.** After every main-agent return (developer, tester, QA, bug-fixer, architect, designer, integrator, planner, plan-challenger, researcher, jira-creator, conflict-resolver, jira-reader), scan the agent's return text for the literal header `^## Lessons` (case-sensitive, line-anchored).
-
-If absent → no lesson event for this return. Continue normal phase routing.
-
-If present → parse each `### Lesson` block under the `## Lessons` header. Each block has 4 fields:
-```
-### Lesson
-Trigger: <text>
-Generalizable rule: <text>
-Suggested fix type: <one of the taxonomy values>
-Suggested target: <file path or artifact>
-```
-
-Skip blocks missing any of the 4 fields (log a warning to the user: *"Agent <name> returned malformed Lesson block — skipping."*).
-
-**For each well-formed `### Lesson` block:**
-
-1. Apply near-duplicate suppression (same as user-correction): scan journal for prior `source: agent-self-report`, similar evidence, `status: rejected`, within last 50 events. If hit, append `suppressed-duplicate-rejection`, surface one-line note, skip.
-2. Append `status: raw, extractor_run: null` to the journal.
-3. Spawn `sdlc-lesson-extractor` with:
-   ```
-   Source: agent-self-report
-   Evidence: <verbatim ### Lesson block>
-   Context: agent=<agent name>, story=<story key>, epic=<epic key>, phase=<phase name>
-   Target candidate: <agent's "Suggested target" value — extractor may override>
-   Journal Path: ~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl
-   ```
-4. Same lifecycle as user-correction: extractor returns → append `proposed` (or `nothing-learnable`) → surface in mode 1 / queue in mode 2 → on approval append `approved` (with `applied_commit` for text edits, `null` for recommendations).
-
-**Multiple lesson blocks per return.** Process each as a separate event. They may target different files; that's allowed (one file per *proposal*, but a single agent return can produce multiple proposals).
-
-**Continue normal phase routing.** Self-learning runs alongside, never blocks. If any event is in mode 1 and you're awaiting approval, the surface is inline as part of the orchestrator turn — proceed to phase routing only after approval/rejection. In mode 2, phase routing continues immediately and proposals flush at the phase boundary.
+**Capture is done by the hook, not the orchestrator.** The `SubagentStop` hook (CSI-638) reconstructs each sub-agent's return text from its transcript, scans for the literal `## Lessons` header, parses every well-formed `### Lesson` block (Trigger / Generalizable rule / Suggested fix type / Suggested target — malformed blocks are skipped with a sidecar warning), and appends one `source: "agent-self-report"`, `status: "raw"` event per block to the journal. The orchestrator does **not** scan agent returns for `## Lessons` — it picks these events up in the drain step (see "Draining the raw queue" above). The `Suggested target:` field is preserved verbatim in the event's `evidence`, so the drain step can parse it for the extractor's `Target candidate`. Do NOT re-implement the return-scan or `### Lesson` parsing here.
 
 ### Surface format (mode 1, immediate)
 
@@ -1100,7 +1100,7 @@ On `Phase 0 → Fast Resume`, when reading the resume file, restore mode state f
 | Mode switch requested mid-flush | Finish current flush, then switch. |
 | Correction-intent classified `no→yes` (false positive) | User rejects. Suppression remembers. Cost: one click. |
 | Correction-intent classified `yes→no` (false negative) | Lesson missed. User repeats more emphatically next time; classification fires correctly. Cost: rare. |
-| Correction-intent classified `yes→maybe` | One-line confirm. User answers. Cost: one round-trip. |
+| Correction-intent classified `yes→maybe` | Hook emits no event (CSI-639: `maybe` is a no-op for schema parity). Lesson not captured. Acceptable: user can repeat more emphatically. |
 | Agent omits `## Lessons` despite friction | Not caught in v1. v2's transcript scan + hooks closes this gap. Acceptable known gap. |
 | Agent over-reports (lesson for already-covered rule) | Extractor's existing-rule detection handles it (rewrite / recommend / move / nothing-learnable). Never silently discarded. |
 | Agent suggests wrong target | Extractor's classification overrides. Suggestion is a hint, not authoritative. |
@@ -1108,6 +1108,8 @@ On `Phase 0 → Fast Resume`, when reading the resume file, restore mode state f
 ## Resume Support
 
 When `$ARGUMENTS` is a Jira epic key:
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 1. **Quick status scan (orchestrator does this directly):**
    Fetch the epic + child stories with one `jira_search` call, fields: `["summary", "status", "issuetype", "parent", "labels"]`. Do NOT pull descriptions or comments — agents fetch their own story when spawned.
