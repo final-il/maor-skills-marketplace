@@ -192,6 +192,73 @@ assert_eq "$lines" "0" "missing transcript → 0 journal lines"
 rm -rf "$T6"
 
 # ===========================================================================
+# Test 7 (AC4 fail-safe): journal write failure → exit 0, no crash.
+# We point SDLC_JOURNAL_OVERRIDE at a path inside a read-only directory.
+# ===========================================================================
+T7="$(mktemp -d)"
+export SDLC_LESSONS_FLAG_OVERRIDE="$T7/.disabled"
+READONLY_DIR="$T7/readonly"
+mkdir -p "$READONLY_DIR"
+chmod 555 "$READONLY_DIR"
+export SDLC_JOURNAL_OVERRIDE="$READONLY_DIR/journal.jsonl"
+make_transcript "$T7/transcript.jsonl" "$WELLFORMED"
+run_hook "$T7/transcript.jsonl" "sdlc-developer"
+rc=$?
+assert_eq "$rc" "0" "journal write failure → exit 0 (AC4 fail-safe)"
+# Journal must not exist (write was blocked)
+if [ ! -f "$SDLC_JOURNAL_OVERRIDE" ]; then
+  ok "journal write failure → no journal file created"
+else
+  fail "journal write failure → journal file unexpectedly created"
+fi
+chmod 755 "$READONLY_DIR"
+rm -rf "$T7"
+
+# ===========================================================================
+# Test 8 (AC1 hooks.json): hooks.json wires SubagentStop to the capture script.
+# ===========================================================================
+HOOKS_JSON="$HOOKS_DIR/hooks.json"
+if [ -f "$HOOKS_JSON" ]; then
+  ok "hooks.json exists"
+  if jq -e '.hooks.SubagentStop' "$HOOKS_JSON" >/dev/null 2>&1; then
+    ok "hooks.json: SubagentStop key present"
+  else
+    fail "hooks.json: SubagentStop key missing"
+  fi
+  if jq -r '.hooks.SubagentStop[0].hooks[0].command' "$HOOKS_JSON" 2>/dev/null | grep -q 'capture-subagent-lessons'; then
+    ok "hooks.json: SubagentStop command references capture-subagent-lessons"
+  else
+    fail "hooks.json: SubagentStop command does not reference capture-subagent-lessons"
+  fi
+else
+  fail "hooks.json not found at $HOOKS_JSON"
+fi
+
+# ===========================================================================
+# Test 9 (real transcript shape): last assistant entry with thinking+text
+# content blocks (realistic subagent shape) — text extracted, lessons parsed.
+# ===========================================================================
+T9="$(mktemp -d)"
+export SDLC_JOURNAL_OVERRIDE="$T9/journal.jsonl"
+export SDLC_LESSONS_FLAG_OVERRIDE="$T9/.disabled"
+TRANSCRIPT9="$T9/transcript.jsonl"
+: >"$TRANSCRIPT9"
+# Simulate real transcript shape: last assistant entry has thinking + text blocks
+jq -cn '{type:"user", message:{content:[{type:"text",text:"do the work"}]}}' >>"$TRANSCRIPT9"
+jq -cn '{type:"assistant", message:{content:[{type:"thinking",thinking:"some chain of thought"},{type:"text",text:"## Summary\nDid things.\n"}]}}' >>"$TRANSCRIPT9"
+jq -cn --arg lessons "$WELLFORMED" \
+  '{type:"assistant", message:{content:[{type:"thinking",thinking:"my reasoning"},{type:"text",text:$lessons}]}}' >>"$TRANSCRIPT9"
+run_hook "$TRANSCRIPT9" "sdlc-tester"
+lines=$([ -f "$SDLC_JOURNAL_OVERRIDE" ] && wc -l <"$SDLC_JOURNAL_OVERRIDE" | tr -d ' ' || echo 0)
+assert_eq "$lines" "1" "real shape (thinking+text blocks): well-formed lesson captured"
+if [ "$lines" = "1" ]; then
+  evt9="$(tail -1 "$SDLC_JOURNAL_OVERRIDE")"
+  assert_eq "$(printf '%s' "$evt9" | jq -r .status)" "raw" "real shape: status == raw"
+  assert_eq "$(printf '%s' "$evt9" | jq -r .agent)" "sdlc-tester" "real shape: agent == sdlc-tester"
+fi
+rm -rf "$T9"
+
+# ===========================================================================
 echo
 printf 'PASS=%d FAIL=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
