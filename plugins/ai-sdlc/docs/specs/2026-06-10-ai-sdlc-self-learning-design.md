@@ -1,8 +1,14 @@
 # AI-SDLC Self-Learning — Design Spec
 
-**Date:** 2026-06-10
+**Date:** 2026-06-10 (revised 2026-06-29: hook-based capture)
 **Status:** Approved (design phase). Implementation plan to follow.
-**Scope:** v1 — user-correction + agent self-report sources. v2 outlined as future work.
+**Scope:** v1 — user-correction + agent self-report sources, captured **deterministically by hooks** (not orchestrator attention). v2 outlined as future work.
+
+> **2026-06-29 reconciliation.** This spec was revised to match the hook-based capture architecture decided after the original draft. Capture is now performed by two Claude Code hooks under `plugins/ai-sdlc/hooks/` rather than by the orchestrator scanning every agent return and classifying every user message in-prompt:
+> - **SubagentStop hook** (`capture-subagent-lessons.sh`, CSI-638 — landed) captures each agent's `## Lessons` self-report.
+> - **UserPromptSubmit hook** (CSI-639) captures user corrections via a keyword pre-filter → Haiku classifier.
+>
+> Both hooks append `status:"raw"` events to the journal. The orchestrator then *drains the raw queue* (CSI-640) and spawns the extractor per event — it no longer does the detection itself. Prose below that described attention-dependent capture has been updated; the extractor contract, verdicts, mode/toggle mechanics, and journal schema are unchanged.
 
 ## Problem
 
@@ -23,22 +29,35 @@ Non-goals (v1):
 
 ## Architecture
 
-A new sub-agent `sdlc-lesson-extractor` plus thin orchestrator integration. No code changes outside `plugins/ai-sdlc/` and the user's memory directory.
+Two capture **hooks** (under `plugins/ai-sdlc/hooks/`) feed a journal; a new sub-agent `sdlc-lesson-extractor` plus thin orchestrator integration consume it. No code changes outside `plugins/ai-sdlc/` and the user's memory directory.
+
+**Capture is deterministic.** It happens at the Claude Code hook layer, independent of whether the orchestrator is paying attention to a given return or user turn. The orchestrator's only capture-adjacent job is to *drain* the raw events the hooks produced (CSI-640) and spawn the extractor per event.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
+│ Capture hooks (plugins/ai-sdlc/hooks/, deterministic)            │
+│                                                                  │
+│   ─── SubagentStop hook (capture-subagent-lessons.sh, CSI-638):  │
+│       │  on every subagent stop, reconstruct the agent's final   │
+│       │  text from `transcript_path` (NOT passed return text),   │
+│       │  scan for `## Lessons`, parse each `### Lesson` block,    │
+│       │  append one status:"raw" event per well-formed block.    │
+│                                                                  │
+│   ─── UserPromptSubmit hook (CSI-639):                           │
+│       │  on every user message, keyword pre-filter → Haiku       │
+│       │  classifier; on a likely correction, append a            │
+│       │  status:"raw" event (source: user-correction).           │
+│                                                                  │
+│   Both: best-effort, fail-safe (exit 0 always), toggle-gated.    │
+└──────────────────────────────────────────────────────────────────┘
+                               │  status:"raw" events
+                               ▼
+┌──────────────────────────────────────────────────────────────────┐
 │ Orchestrator (commands/sdlc.md)                                  │
 │                                                                  │
-│   ─── On every user message:                                     │
-│       │  classify correction intent (LLM judgment, not regex):   │
-│       │    yes  → spawn extractor (Source: user-correction)      │
-│       │    maybe→ ask one-line confirm; route on answer          │
-│       │    no   → proceed normally                               │
-│                                                                  │
-│   ─── On every main-agent return:                                │
-│       │  scan for `## Lessons` section.                          │
-│       │  For each `### Lesson` block:                            │
-│       │    spawn extractor (Source: agent-self-report)           │
+│   ─── Drain the raw queue (CSI-640):                             │
+│       │  read journal for status:"raw" events not yet processed; │
+│       │  for each, spawn extractor with the captured evidence.   │
 │                                                                  │
 │   ─── Mode (1=immediate, 2=batch). Default 1.                    │
 │       │  Mode 1: extractor runs, proposes, user approves inline. │
@@ -72,32 +91,52 @@ A new sub-agent `sdlc-lesson-extractor` plus thin orchestrator integration. No c
 
 **New:**
 - `plugins/ai-sdlc/agents/sdlc-lesson-extractor.md`
+- `plugins/ai-sdlc/hooks/hooks.json` + `plugins/ai-sdlc/hooks/capture-subagent-lessons.sh` + `plugins/ai-sdlc/hooks/lib/journal-append.sh` — the SubagentStop capture hook and its shared journal helpers (CSI-638, landed).
+- `plugins/ai-sdlc/hooks/` UserPromptSubmit capture hook — user-correction capture (CSI-639).
 - Data file (created on first event): `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl`
 
 **Edited:**
-- `plugins/ai-sdlc/commands/sdlc.md` — orchestrator gains correction-intent classification, return-scan for `## Lessons`, extractor spawn pattern, mode logic, journal append, near-duplicate suppression, `Agent Paths.lesson-extractor` resolution.
+- `plugins/ai-sdlc/commands/sdlc.md` — orchestrator gains a *drain-the-raw-queue* step (read `status:"raw"` events the hooks produced; CSI-640), extractor spawn pattern, mode logic, journal append for non-raw lifecycle transitions, near-duplicate suppression, `Agent Paths.lesson-extractor` resolution. The orchestrator no longer performs detection itself — correction-intent classification and the `## Lessons` return-scan now live in the hooks.
 - All existing agent role files in `plugins/ai-sdlc/agents/sdlc-*.md` (currently 13: researcher, planner, plan-challenger, jira-creator, architect, designer, integrator, developer, tester, qa-reviewer, bug-fixer, conflict-resolver, jira-reader) — append the standard `## Lessons` self-report contract block.
 
 ## Detection sources (v1)
 
-Source-weighted bar: each source has its own threshold for proposing.
+Source-weighted bar: each source has its own threshold for proposing. In v1 both sources are **captured by hooks** — the deterministic capture layer replaces the orchestrator-attention model from the original draft.
 
-| Source | v1? | Bar |
-|---|---|---|
-| User correction | ✅ | Always propose. Maybe-class triggers a one-line confirm. |
-| Agent self-report `## Lessons` | ✅ | Always propose (agent already pre-filtered). |
-| Hooks (tool-call instrumentation) | ❌ v2 | Propose on ≥2 repeats. |
-| Transcript pattern-match | ❌ v2 | Propose on extractor-confidence high. |
+| Source | v1? | Captured by | Bar |
+|---|---|---|---|
+| User correction | ✅ | UserPromptSubmit hook (CSI-639) — keyword pre-filter → Haiku classifier | Always propose. Maybe-class triggers a one-line confirm. |
+| Agent self-report `## Lessons` | ✅ | SubagentStop hook (CSI-638) — `transcript_path` reconstruction | Always propose (agent already pre-filtered). |
+| Tool-call instrumentation (retry-resolved patterns) | ❌ v2 | (future hook) | Propose on ≥2 repeats. |
+| Transcript pattern-match (un-self-reported retries) | ❌ v2 | (future scan) | Propose on extractor-confidence high. |
+
+> **v1 hooks vs v2 hooks.** v1 hooks capture the *same two sources* the original draft captured — they just do it deterministically at the hook layer instead of via orchestrator attention. The v2 rows above are genuinely new *sources* (tool-call instrumentation, transcript pattern-match for retries the agent never self-reported), not a re-implementation of v1 capture.
+
+### Hook contracts (v1)
+
+Both hooks live under `plugins/ai-sdlc/hooks/` and are registered in `plugins/ai-sdlc/hooks/hooks.json`. Both share `lib/journal-append.sh` (journal path resolution, toggle check, event-id generation, append). Both are **best-effort and fail-safe**: any error (toggle off, missing input, parse failure, IO error, missing `jq`) results in `exit 0` with at most a sidecar-log warning. A capture hook must never break the SDLC pipeline. Both honor the same toggle: presence of the flag file `~/.claude/projects/-Users-maorb-git-dev/memory/.sdlc-lessons-disabled` means OFF.
+
+Both hooks emit the canonical raw-event shape (full schema in **Persistence — `sdlc-events.jsonl`** below): one JSON line per event with `status: "raw"`, `extractor_run: null`, `source` set, `trigger_summary`/`evidence` populated from the captured material. The orchestrator's drain step (CSI-640) picks these up and advances them through the lifecycle.
+
+**SubagentStop hook — `capture-subagent-lessons.sh` (CSI-638, landed).**
+- **Input reality:** Claude Code does **not** pass the subagent's return text on stdin. It passes `transcript_path` (a session JSONL). The hook reconstructs the agent's final assistant message by reading the last `type:"assistant"` line in that transcript and concatenating its `text` content parts. It does not receive the return text directly.
+- **Behavior:** scans the reconstructed text for a line-anchored, case-sensitive `## Lessons` header; slices to the next `## ` heading; splits into `### Lesson` blocks; for each block, extracts the four fields (`Trigger`, `Generalizable rule`, `Suggested fix type`, `Suggested target`). A block missing any field is skipped with a warning (malformed). Each well-formed block becomes one `status:"raw"`, `source:"agent-self-report"` event.
+- **What it does NOT do:** it cannot capture a lesson the agent never emitted. If the agent omits `## Lessons`, there is nothing in the transcript to find. The hook makes capture *deterministic given an emitted block*; it does not make the agent emit one. See the error-handling table.
+
+**UserPromptSubmit hook (CSI-639).**
+- **Input:** the user's submitted prompt text.
+- **Behavior:** a cheap keyword pre-filter rejects the obvious non-corrections; surviving prompts go to a Haiku classifier that judges "is this a correction of behavior I or an agent just took?" On a likely correction, the hook appends one `status:"raw"`, `source:"user-correction"` event with the verbatim prompt as evidence. The pre-filter keeps the classifier off the hot path for most turns; the classifier replaces the brittle regex approach for the rest.
+- This deterministically captures user corrections regardless of whether the orchestrator was mid-phase, busy, or otherwise inattentive when the message arrived.
 
 ### User-correction detection
 
-The orchestrator's main loop, after parsing each user turn and before responding, performs an LLM classification: *"Is this a correction of behavior I or an agent just did?"* — output `yes`/`maybe`/`no`.
+Detection runs in the **UserPromptSubmit hook** (CSI-639), not in the orchestrator's main loop. On each user message the hook applies a keyword pre-filter and then a Haiku classification: *"Is this a correction of behavior I or an agent just did?"* — yielding correction / maybe / not-a-correction.
 
-- `yes` → spawn extractor with `Source: user-correction`, evidence = verbatim user message + last 1-2 orchestrator/agent actions.
-- `maybe` → orchestrator asks: *"Just to confirm — should I capture this as a permanent instruction update?"* User's yes/no routes accordingly.
-- `no` → proceed normally; no journal entry.
+- correction → append a `status:"raw"`, `source:"user-correction"` event with the verbatim user message as evidence. The orchestrator picks it up on its next drain (CSI-640) and spawns the extractor.
+- maybe → captured as `raw` too; the orchestrator surfaces the one-line confirm (*"Just to confirm — should I capture this as a permanent instruction update?"*) when it drains, and routes on the user's yes/no.
+- not-a-correction → no event written.
 
-This explicitly replaces a regex approach. Phrasings like *"use git -C instead"*, *"you forgot to commit"*, *"the right way is..."*, *"why did you..."*, and pure additive instructions like *"from now on, always X"* all qualify without requiring any keyword.
+This is deterministic: the prompt is classified at submit time regardless of orchestrator attention. The Haiku classifier replaces a regex approach — phrasings like *"use git -C instead"*, *"you forgot to commit"*, *"the right way is..."*, *"why did you..."*, and pure additive instructions like *"from now on, always X"* all qualify without requiring any keyword (the keyword pre-filter only short-circuits the clear non-corrections cheaply; ambiguous prompts still reach the classifier).
 
 ### Agent self-report contract
 
@@ -127,7 +166,7 @@ If your run had no friction worth a lesson, omit the section entirely. Do NOT in
 
 This block — verbatim, including the toggle-gate paragraph — is what gets pasted into every agent role file in plan Phase B.
 
-The orchestrator scans returns for the literal `## Lessons` header. Each `### Lesson` block becomes one event.
+The **SubagentStop hook** (not the orchestrator) scans for the literal `## Lessons` header. It reconstructs the agent's final text from `transcript_path` (Claude Code does not pass the return text to the hook directly), then turns each well-formed `### Lesson` block into one `status:"raw"` event. The orchestrator only sees these events when it drains the queue (CSI-640).
 
 ## `sdlc-lesson-extractor` agent contract
 
@@ -416,10 +455,11 @@ If yes → append a `status: suppressed-duplicate-rejection` line; do not spawn 
 | Corrupt journal line | Skip unparseable lines, warn once per session, continue. |
 | Mode-2 queue empty at flush | Log warning, no halt. |
 | Mode switch mid-flush | Finish flush, then switch. |
-| Correction-intent misclassified `no→yes` | False-positive proposal. User rejects. Suppression remembers. Cost: one click. |
-| Correction-intent misclassified `yes→no` | Lesson missed. User repeats more emphatically. Cost: rare. |
-| Correction-intent misclassified `yes→maybe` | One-line confirm. User answers. Cost: one round-trip. |
-| Agent forgets `## Lessons` despite friction | Not caught in v1. v2's transcript scan + hooks closes this gap. |
+| Correction capture depends on orchestrator attention | **CLOSED by the UserPromptSubmit hook (CSI-639).** Detection runs at prompt-submit time in the hook, not in the orchestrator loop, so a correction is captured even if the orchestrator was mid-phase or inattentive. |
+| Correction-intent misclassified `no→yes` | False-positive `raw` event → proposal. User rejects. Suppression remembers. Cost: one click. |
+| Correction-intent misclassified `yes→no` | Lesson missed (Haiku classifier returned not-a-correction). User repeats more emphatically. Cost: rare. |
+| Correction-intent misclassified `yes→maybe` | Captured as `raw`; orchestrator surfaces a one-line confirm on drain. User answers. Cost: one round-trip. |
+| Agent omits `## Lessons` despite friction | **Capture is no longer attention-dependent** — the SubagentStop hook (CSI-638) deterministically captures any `## Lessons` block the agent *does* emit, from the transcript. But the hook can only capture what the agent emitted; if the agent never writes the block, there is nothing in the transcript to find. Closing *that* residual gap (catching un-self-reported friction) is v2's transcript pattern-match source. |
 | Agent over-reports already-covered rule | Extractor's existing-rule detection handles it (rewrite / recommend / move / nothing-learnable). Never silently discarded. |
 | Agent suggests wrong target | Extractor's classification overrides. Suggestion is a hint. |
 
@@ -929,20 +969,21 @@ Implementer in plan Task C5: append this block to the existing `## Error Handlin
 | Corrupt JSONL line in journal | Skip unparseable lines. Warn once per session: *"Skipped <N> unparseable lines in journal — see file for details."* Do not halt. |
 | Mode-2 phase-boundary flush triggers but queue is unexpectedly empty | Log a warning, no halt. |
 | Mode switch requested mid-flush | Finish current flush, then switch. |
+| Correction capture depends on orchestrator attention | **CLOSED by the UserPromptSubmit hook (CSI-639).** Detection runs at prompt-submit time in the hook (keyword pre-filter → Haiku classifier), independent of orchestrator attention. The orchestrator only drains the resulting `raw` events. |
 | Correction-intent classified `no→yes` (false positive) | User rejects. Suppression remembers. Cost: one click. |
-| Correction-intent classified `yes→no` (false negative) | Lesson missed. User repeats more emphatically next time; classification fires correctly. Cost: rare. |
-| Correction-intent classified `yes→maybe` | One-line confirm. User answers. Cost: one round-trip. |
-| Agent omits `## Lessons` despite friction | Not caught in v1. v2's transcript scan + hooks closes this gap. Acceptable known gap. |
+| Correction-intent classified `yes→no` (false negative) | Lesson missed (Haiku classifier returned not-a-correction). User repeats more emphatically next time. Cost: rare. |
+| Correction-intent classified `yes→maybe` | Captured `raw`; orchestrator surfaces a one-line confirm on drain. User answers. Cost: one round-trip. |
+| Agent omits `## Lessons` despite friction | **Capture is no longer attention-dependent:** the SubagentStop hook (CSI-638) deterministically captures any `## Lessons` block the agent emits, reconstructed from `transcript_path`. The hook cannot capture a block the agent never wrote — catching un-self-reported friction is v2's transcript pattern-match. Residual gap, not a capture-reliability gap. |
 | Agent over-reports (lesson for already-covered rule) | Extractor's existing-rule detection handles it (rewrite / recommend / move / nothing-learnable). Never silently discarded. |
 | Agent suggests wrong target | Extractor's classification overrides. Suggestion is a hint, not authoritative. |
 ````
 
 ## Future work (v2)
 
-Outline only.
+Outline only. Note: hook-based *capture* is v1, not v2 (see Architecture). The v2 items below are new *sources*, not a re-implementation of v1 capture.
 
-- **Third source — hooks.** Tool-call instrumentation in `~/.claude/settings.json`. Emit structured events on retry-resolved patterns (e.g., 3rd Bash failure on same command → emit `retry-resolved` event). ≥2 repeats fires extractor with `Source: hook`.
-- **Fourth source — transcript pattern-match.** Lightweight regex/LLM scan over the agent's transcript file after return. Catches retries the agent didn't self-report. Fires extractor only on extractor-confidence high.
+- **Third source — tool-call instrumentation.** A PreToolUse/PostToolUse hook that emits structured events on retry-resolved patterns (e.g., 3rd Bash failure on the same command → emit `retry-resolved` event). ≥2 repeats fires the extractor with `Source: hook`. New signal beyond the two v1 capture hooks.
+- **Fourth source — transcript pattern-match.** Lightweight regex/LLM scan over the agent's transcript file after return. Catches friction the agent did **not** self-report in a `## Lessons` block (which the v1 SubagentStop hook cannot capture, since there's nothing in the transcript to find). Fires the extractor only on extractor-confidence high.
 - **Auto-proposers for non-text fix types.** Hook proposer: drafts a working `settings.json` snippet and validates it via dry-run before surfacing. Skill proposer: scaffolds the new skill file. Script proposer: writes the wrapper, sets executable bit, suggests PATH addition.
 - **`/sdlc lessons` command family.** `review` (list recent), `revert {commit-sha}` (undo a lesson edit, mark journal `reverted`), `retry {id}` (re-run extractor on a specific event after fixing the underlying cause).
 - **Cross-session repetition signal made explicit.** Currently in v1, repetition counting works across sessions because the journal is per-host-and-project, not per-session. Make this an explicit feature with stats (e.g., "this rule has been violated N times across M sessions over the last X days").

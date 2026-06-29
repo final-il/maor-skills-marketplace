@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add in-flow lesson capture to the AI-SDLC pipeline. v1 sources: user corrections + agent self-reports. New `sdlc-lesson-extractor` sub-agent classifies fix type and proposes diffs (or recommends non-text fixes); orchestrator owns approval, edits, and journal writes.
+> **2026-06-29 reconciliation.** Capture is **hook-based and v1** (not v2, not orchestrator-attention-based). Two Claude Code hooks under `plugins/ai-sdlc/hooks/` perform deterministic capture: the **SubagentStop hook** (`capture-subagent-lessons.sh`, CSI-638 — landed) captures agent `## Lessons` self-reports by reconstructing the agent's final text from `transcript_path`; the **UserPromptSubmit hook** (CSI-639) captures user corrections via keyword pre-filter → Haiku classifier. Both append `status:"raw"` events. The orchestrator's job is to **drain the raw queue** (CSI-640) and spawn the extractor per event — it no longer classifies corrections or scans returns itself. Tasks C2/C3 below are superseded by the hooks + drain step; they remain documented for the lifecycle they describe but the *detection* they specify now lives in the hooks. See the design spec's Architecture and Hook-contracts sections.
 
-**Architecture:** One new agent role file. The orchestrator command file (`commands/sdlc.md`) gains five integration blocks: correction-intent classification, return-scan for `## Lessons`, mode 1/2 state + switching, journal mechanics (append, repetition, near-duplicate suppression), and a phase-boundary flush hook. All 13 existing agent role files gain an identical `## Lessons` self-report block. Persistence: append-only JSONL at `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl`, latest-line-per-id.
+**Goal:** Add in-flow lesson capture to the AI-SDLC pipeline. v1 sources: user corrections + agent self-reports, both **captured deterministically by hooks**. New `sdlc-lesson-extractor` sub-agent classifies fix type and proposes diffs (or recommends non-text fixes); orchestrator owns the drain step, approval, edits, and journal lifecycle writes.
+
+**Architecture:** Two capture hooks + one new agent role file. The hooks (`plugins/ai-sdlc/hooks/`) capture both v1 sources deterministically and append `status:"raw"` events. The orchestrator command file (`commands/sdlc.md`) gains: a *drain-the-raw-queue* step (CSI-640), mode 1/2 state + switching, journal lifecycle mechanics (append non-raw transitions, repetition, near-duplicate suppression), and a phase-boundary flush. (Detection — correction-intent classification and the `## Lessons` return-scan — now lives in the hooks, not the orchestrator.) All 13 existing agent role files gain an identical `## Lessons` self-report block. Persistence: append-only JSONL at `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl`, latest-line-per-id.
 
 **Tech Stack:** Markdown plugin files (orchestrator command + agent role files). JSONL for the journal. No code in the conventional sense — the "implementation" is structured LLM instructions read by the runtime. Verification is via real `/sdlc` runs against scripted scenarios, not unit tests.
 
@@ -29,8 +31,12 @@ For probes that run a real `/sdlc` session, use a disposable epic. Detailed scen
 
 ## File Structure
 
-**Files created (1):**
+**Files created (1 agent + hooks):**
 - `plugins/ai-sdlc/agents/sdlc-lesson-extractor.md` — new agent role file
+- `plugins/ai-sdlc/hooks/hooks.json` — hook registration (SubagentStop + UserPromptSubmit)
+- `plugins/ai-sdlc/hooks/capture-subagent-lessons.sh` — SubagentStop capture hook (CSI-638, landed)
+- `plugins/ai-sdlc/hooks/lib/journal-append.sh` — shared journal helpers (path, toggle, event-id, append)
+- `plugins/ai-sdlc/hooks/` UserPromptSubmit capture hook — user-correction capture (CSI-639)
 
 **Files modified (14):**
 - `plugins/ai-sdlc/commands/sdlc.md` — orchestrator integration (5 blocks)
@@ -674,8 +680,8 @@ Cross-referencing every section of the spec against the tasks:
 | Architecture diagram | A1 (extractor agent) + C1-C5 (orchestrator integration) |
 | `sdlc-lesson-extractor` agent contract | A1 |
 | Inputs / verdicts / constraints | A1 |
-| Source 1: user-correction (LLM intent classification, maybe-confirm gate) | C2 |
-| Source 2: agent self-report (`## Lessons` block, parse rules) | B1-B13 (block in agents) + C3 (orchestrator scan) |
+| Source 1: user-correction (intent classification, maybe-confirm gate) | UserPromptSubmit hook (CSI-639) for capture + orchestrator drain (CSI-640); C2 documents the downstream lifecycle |
+| Source 2: agent self-report (`## Lessons` block, parse rules) | B1-B13 (block in agents) + SubagentStop hook (CSI-638) for capture + orchestrator drain (CSI-640); C3 documents the downstream lifecycle |
 | Source-weighted bar (always propose for v1 sources) | C2, C3 (no thresholds applied for these sources) |
 | Existing-rule detection (wording / repetition / scope causes) | A1 (extractor process step 5 + repetition algorithm) |
 | Verdict outputs (Proposal / replace / Recommendation / nothing-learnable) | A1 |
@@ -690,7 +696,8 @@ Cross-referencing every section of the spec against the tasks:
 | Hygiene (no auto-rotation, manual archive) | C1 |
 | Error handling (all 14 rows in spec table) | C5 |
 | Smoke tests 1-10 | D1-D10 |
-| v2 future work (hooks, transcript scan, /sdlc lessons commands) | Out of scope; design spec retains the outline |
+| Hook-based capture (SubagentStop CSI-638, UserPromptSubmit CSI-639) + drain (CSI-640) | v1; landed/tracked separately — design spec Architecture + Hook-contracts sections |
+| v2 future work (tool-call instrumentation, transcript scan for un-self-reported friction, /sdlc lessons commands) | Out of scope; design spec retains the outline |
 
 **Gaps found and addressed inline:**
 - The spec mentions persisting mode state in the auto-resume file but doesn't specify the format. Plan task C4 specifies the `## Mode` block format explicitly.
