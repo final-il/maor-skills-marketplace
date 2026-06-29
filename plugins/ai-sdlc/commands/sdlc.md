@@ -501,6 +501,8 @@ The Jira project uses a 3-tier hierarchy:
    - Story keys and titles
    - Link to the Jira board
 
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+
 ## Phase 3: Architecture
 
 1. **Spawn `sdlc-architect` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
@@ -517,6 +519,8 @@ The Jira project uses a 3-tier hierarchy:
    - Transitions each story to "Ready for Dev"
 
 3. Report to user the CUJ comment on the epic + which stories are now ready for development
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 ## Phase 3.5: Design (Optional)
 
@@ -570,6 +574,8 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
    - If `Action required > 0` → stories listed under "Action required" have already been transitioned back to `Backlog` by the integrator. Re-run **Phase 3** (architect) on ONLY those stories with the integrator's recommended renames in the spawn prompt. Then re-run Phase 3.6 on the same epic. Cap at 2 audit iterations per epic; if a third iteration is needed, halt and ask the user to triage.
    - If the integrator reports any INCOMPLETE stories (missing `## Names Reserved`) → re-run Phase 3 (architect) on them, then re-run Phase 3.6.
 5. The integrator does NOT need a worktree (read-only on Jira, no code).
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 **Read-Artifact addendum for downstream agents:** When an affected story has a current `## Integration Notes` comment, every downstream agent prompt for that story (developer, tester, QA, bug-fixer) MUST include `## Integration Notes (Summary) on {STORY-KEY}` in `Read Artifacts`. Stories with no notes get the standard `Read Artifacts` list.
 
@@ -633,6 +639,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 
 **E2E gate (mandatory for stories with user-facing changes):** The tester MUST produce at least one Playwright E2E spec that drives a real headless browser for any story that modifies frontend code, HTTP endpoints consumed by the frontend, or CLI output. The spec must: (a) exercise the primary user flow the story implements, (b) assert zero `pageerror` / `console.error`, (c) assert expected DOM elements are visible with non-zero dimensions, and (d) save a screenshot to `tests/artifacts/{STORY-KEY}/`. Stories that are purely backend-internal (no user-facing surface) are exempt. The orchestrator checks `## Test Results` for the phrase "E2E:" or "Playwright:" — if absent on a frontend story, the tester is re-spawned with explicit instructions to add browser coverage.
 
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+
 ### Step 6: QA Review
 - **Spawn `sdlc-qa-reviewer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
   - Pointer to `Agent Paths.qa-reviewer`
@@ -650,6 +658,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 - If pass: transitions Story to "Done"
 - If issues: creates a child Bug issue (`issue_type: "Bug"`, `parent: {STORY-KEY}`) AND transitions parent Story to **"In Progress"**.
 
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+
 ### Step 7: Bug Fix (if needed)
 - Detection: query `parent = {STORY-KEY} AND issuetype = Bug AND status != Done`. If any row returns, the Story is in the bug-fix loop (the parent Story will be in **In Progress**).
 - For each open child Bug:
@@ -663,6 +673,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
   - Bug fixer fixes the issue, transitions the Bug issue to "Done", and transitions the parent Story back to "In Review"
   - **Loop back to Step 5** (re-test)
   - **Maximum 3 bug-fix loops per story.** After that, add a Jira comment and move on.
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 ### Parallelism
 - Independent stories (no dependency between them) can be developed in parallel — **each in its own worktree** (see "Workspace isolation" above)
@@ -734,7 +746,11 @@ After every Phase 7.5 run, count remaining open PRs targeting `{base_branch}` fr
 
 The orchestrator resumes only after the user has either merged the backlog manually or cleared the escalated Bugs (whichever applies).
 
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+
 ## Phase 8: Completion
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 1. Query Jira for all stories in the epic
 2. **Assert all Done stories have merged PRs.** For each story in `Done`, verify its PR is merged (`gh pr view {N} --json state` returns `MERGED`). Phase 7.5 should have handled this continuously; this is the final safety check.
@@ -936,9 +952,7 @@ Each raw event already carries `source`, `evidence`, `agent`, `trigger_summary` 
 2. Surface one line: *"Similar correction was rejected on <date> — not re-proposing. Override with: 'extract anyway'."*
 3. Do NOT spawn the extractor; move to the next raw event.
 
-**5. `maybe`-confirm (user-correction only).** If a `user-correction` raw event carries `"classifier": "maybe"`, ask exactly *"Just to confirm — should I capture this as a permanent instruction update?"* BEFORE spawning. On user `no` → append `status: rejected` and skip. On user `yes` → proceed to spawn. (High-confidence `yes` corrections from the hook carry no `maybe` marker and spawn directly.)
-
-**6. Spawn the extractor.** Use the standard general-purpose `Agent()` spawn pattern (per "How to Spawn Agents"). Pointer to `Agent Paths.lesson-extractor`. The hook already wrote the `status: raw` line, so do NOT append another `raw` line — proceed straight to the spawn. Build the prompt body from the raw event:
+**5. Spawn the extractor.** Use the standard general-purpose `Agent()` spawn pattern (per "How to Spawn Agents"). Pointer to `Agent Paths.lesson-extractor`. The hook already wrote the `status: raw` line, so do NOT append another `raw` line — proceed straight to the spawn. Build the prompt body from the raw event:
 ```
 Source: <event.source>            # user-correction | agent-self-report
 Evidence: <event.evidence>         # verbatim — the ### Lesson block (self-report) or prompt + recent actions (correction)
@@ -950,7 +964,7 @@ Self-Learning: ON
 - For `agent-self-report`: parse the `Suggested target:` field out of the `### Lesson` evidence block and use it as `Target candidate` (extractor may override).
 - For `user-correction`: apply the "Target candidate selection" priority list (in the Source 1 sub-section below).
 
-**7. Lifecycle (unchanged).** After the extractor returns:
+**6. Lifecycle (unchanged).** After the extractor returns:
 - On `nothing-learnable` → append `status: nothing-learnable` (terminal). No surface.
 - On `Proposal` / `Proposal (replace)` / `Recommendation` → append `status: proposed` with the full `extractor_run` object.
 - In mode 1, surface the proposal immediately (see "Surface format"). In mode 2, queue and continue.
@@ -1086,7 +1100,7 @@ On `Phase 0 → Fast Resume`, when reading the resume file, restore mode state f
 | Mode switch requested mid-flush | Finish current flush, then switch. |
 | Correction-intent classified `no→yes` (false positive) | User rejects. Suppression remembers. Cost: one click. |
 | Correction-intent classified `yes→no` (false negative) | Lesson missed. User repeats more emphatically next time; classification fires correctly. Cost: rare. |
-| Correction-intent classified `yes→maybe` | One-line confirm. User answers. Cost: one round-trip. |
+| Correction-intent classified `yes→maybe` | Hook emits no event (CSI-639: `maybe` is a no-op for schema parity). Lesson not captured. Acceptable: user can repeat more emphatically. |
 | Agent omits `## Lessons` despite friction | Not caught in v1. v2's transcript scan + hooks closes this gap. Acceptable known gap. |
 | Agent over-reports (lesson for already-covered rule) | Extractor's existing-rule detection handles it (rewrite / recommend / move / nothing-learnable). Never silently discarded. |
 | Agent suggests wrong target | Extractor's classification overrides. Suggestion is a hint, not authoritative. |
@@ -1094,6 +1108,8 @@ On `Phase 0 → Fast Resume`, when reading the resume file, restore mode state f
 ## Resume Support
 
 When `$ARGUMENTS` is a Jira epic key:
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 1. **Quick status scan (orchestrator does this directly):**
    Fetch the epic + child stories with one `jira_search` call, fields: `["summary", "status", "issuetype", "parent", "labels"]`. Do NOT pull descriptions or comments — agents fetch their own story when spawned.
