@@ -1,0 +1,17 @@
+{
+  "description": "AI-SDLC self-learning capture hooks",
+  "hooks": {
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/capture-subagent-lessons.sh\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
