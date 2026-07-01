@@ -81,3 +81,119 @@ append_event_json() {
   printf '%s\n' "$line" >>"$jp" 2>/dev/null || return 1
   return 0
 }
+
+# Parse a `## Lessons` section out of an assistant/agent message and append one
+# raw event per well-formed `### Lesson` block. Shared by the SubagentStop hook
+# (CSI-638) and the PostToolUse/Agent hook (CSI-644) so the block grammar lives
+# in exactly one place.
+#
+# Args:  $1 = full message text, $2 = agent label, $3 = source
+#        ("agent-self-report" | "agent-tool-return")
+# Echoes: "<emitted> <malformed>" counts. Never returns non-zero.
+# Requires jq (caller must have verified it). Best-effort throughout.
+emit_lessons_from_text() {
+  local agent_text="$1" agent="$2" source="$3"
+  local emitted=0 malformed=0
+
+  [ -z "$agent_text" ] && { printf '0 0'; return 0; }
+
+  # Must contain a line-anchored `## Lessons` header.
+  if ! printf '%s\n' "$agent_text" | grep -qE '^## Lessons[[:space:]]*$'; then
+    printf '0 0'; return 0
+  fi
+
+  # Slice from the ## Lessons header to the next H2 (or end-of-text).
+  local lessons_body
+  lessons_body="$(
+    printf '%s\n' "$agent_text" | awk '
+      /^## Lessons[[:space:]]*$/ { capture = 1; next }
+      capture && /^## / { capture = 0 }
+      capture { print }
+    '
+  )"
+  [ -z "$lessons_body" ] && { printf '0 0'; return 0; }
+
+  # Read one field value by line-prefix from a block of text. Tolerates an
+  # optional leading list marker ("- ", "* ") and leading whitespace, since
+  # agents emit fields as "- Trigger: ..." bullets.
+  _elt_field() {
+    printf '%s\n' "$1" \
+      | grep -m1 -E "^[[:space:]]*[-*]?[[:space:]]*${2}:" \
+      | sed -E "s/^[[:space:]]*[-*]?[[:space:]]*${2}:[[:space:]]*//" \
+      | sed -E 's/[[:space:]]+$//'
+  }
+
+  # Split into blocks delimited by ^### Lesson, using \036 as a record sentinel.
+  local blocks
+  blocks="$(
+    printf '%s\n' "$lessons_body" | awk '
+      /^### Lesson([[:space:]].*)?$/ {
+        if (started) print "\036";
+        started = 1
+      }
+      started { print }
+      END { if (started) print "\036" }
+    '
+  )"
+
+  local block trigger rule fixtype target evidence evt_id ts line
+  local OLD_IFS="$IFS"
+  while IFS= read -r -d $'\036' block; do
+    [ -z "${block//[$'\n\t ']/}" ] && continue
+
+    trigger="$(_elt_field "$block" 'Trigger')"
+    rule="$(_elt_field "$block" 'Generalizable rule')"
+    fixtype="$(_elt_field "$block" 'Suggested fix type')"
+    target="$(_elt_field "$block" 'Suggested target')"
+
+    if [ -z "$trigger" ] || [ -z "$rule" ] || [ -z "$fixtype" ] || [ -z "$target" ]; then
+      malformed=$((malformed + 1))
+      warn "emit_lessons_from_text: skipped malformed ### Lesson block (agent=$agent source=$source; missing one of Trigger/Generalizable rule/Suggested fix type/Suggested target)"
+      continue
+    fi
+
+    evidence="$(printf '%s' "$block" | sed -E 's/[[:space:]]+$//')"
+    evt_id="$(gen_event_id)"
+    ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    line="$(
+      jq -cn \
+        --arg id "$evt_id" \
+        --arg ts "$ts" \
+        --arg agent "$agent" \
+        --arg source "$source" \
+        --arg trigger "$trigger" \
+        --arg evidence "$evidence" \
+        '{
+          id: $id,
+          ts: $ts,
+          epic: null,
+          story: null,
+          phase: null,
+          agent: $agent,
+          source: $source,
+          trigger_summary: $trigger,
+          evidence: $evidence,
+          extractor_run: null,
+          status: "raw",
+          applied_commit: null
+        }' 2>/dev/null || true
+    )"
+
+    if [ -z "$line" ]; then
+      warn "emit_lessons_from_text: jq failed to serialize event (agent=$agent source=$source)"
+      continue
+    fi
+
+    if append_event_json "$line"; then
+      emitted=$((emitted + 1))
+    else
+      warn "emit_lessons_from_text: journal append failed (agent=$agent source=$source); event dropped"
+    fi
+  done <<EOF
+$blocks
+EOF
+  IFS="$OLD_IFS"
+
+  printf '%s %s' "$emitted" "$malformed"
+}

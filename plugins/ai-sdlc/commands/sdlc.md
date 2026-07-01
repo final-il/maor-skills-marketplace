@@ -140,6 +140,7 @@ Transition Map: {status=id, ...}
 - Design gate: checking which stories have approved designs before Phase 4
 - Bug-fix loop: need to know last failing test or iteration count
 - Any time you catch yourself about to call `jira_get_issue` — stop and delegate
+- **A `jira_search` result comes back as a compressed stub** (`<<ccr:...>>`, or `[N items compressed to M … hash=…]`). The local token-compression proxy (RTK / claude-view-hook) replaced the body — it is NOT empty and NOT a Jira error. **Do NOT re-issue the same `jira_search` call** (it regenerates another stub). Spawn `sdlc-jira-reader` with your question — it expands the content in its own ephemeral context and returns a bounded summary, keeping the blob out of orchestrator history.
 
 **Follow-up pattern:** If the reader's answer shows "More available", spawn a second reader with a narrower question. Cumulative cost of 2-3 focused spawns (~500-800 tokens each) is far cheaper than one unbounded read (5-15k tokens inline).
 
@@ -861,7 +862,7 @@ Invoke the full skill: `Skill("ai-sdlc:sdlc-handoff")`. This does everything aut
 
 ## Self-Learning Loop
 
-Lessons come from two sources (v1): user corrections and agent `## Lessons` self-reports. **Capture is done by the hooks, not the orchestrator.** The `UserPromptSubmit` hook (CSI-639) classifies user corrections at submit time; the `SubagentStop` hook (CSI-638) scans each agent's transcript for `## Lessons`. Both deterministically append `status: "raw"` events to the journal regardless of whether the orchestrator was paying attention. The orchestrator's only job is to **drain the raw queue**: read those `raw` events, spawn the `sdlc-lesson-extractor` sub-agent per event (it classifies fix type and returns a structured verdict), and drive each through the proposed→approved/rejected lifecycle. Approved text-edit verdicts apply directly to canonical files; non-text verdicts (hook / script / skill / slash-command) surface as recommendations the user implements manually.
+Lessons come from two sources (v1): user corrections and agent `## Lessons` self-reports. **Capture is done by the hooks, not the orchestrator.** The `UserPromptSubmit` hook (CSI-639) classifies user corrections at submit time. Agent self-reports are captured by **two** hooks so the source doesn't matter: the `PostToolUse`/`Agent` hook (CSI-644) reads each sub-agent's return text from the tool payload's `tool_response.content`, and the `SubagentStop` hook (CSI-638) reconstructs it from the transcript. **`/sdlc` spawns every sub-agent via the `Agent` tool (never `subagent_type`), so `SubagentStop` never fires for it — the `PostToolUse`/`Agent` hook is the one that actually captures `## Lessons` in this pipeline.** `SubagentStop` remains only for `Task`-tool typed subagents. All three deterministically append `status: "raw"` events to the journal regardless of whether the orchestrator was paying attention. The orchestrator's only job is to **drain the raw queue**: read those `raw` events, spawn the `sdlc-lesson-extractor` sub-agent per event (it classifies fix type and returns a structured verdict), and drive each through the proposed→approved/rejected lifecycle. Approved text-edit verdicts apply directly to canonical files; non-text verdicts (hook / script / skill / slash-command) surface as recommendations the user implements manually.
 
 See `docs/specs/2026-06-10-ai-sdlc-self-learning-design.md` for the full design.
 
@@ -929,7 +930,7 @@ Bootstrap: the journal file is created on the first event (Bash: `mkdir -p $(dir
 
 ### Draining the raw queue
 
-The hooks (CSI-638 SubagentStop, CSI-639 UserPromptSubmit) deposit `status: "raw"` events into the journal asynchronously. The orchestrator does **not** watch every turn for lessons — it *drains* these raw events at deterministic points and advances each through the lifecycle. This is the orchestrator's only capture-adjacent responsibility; detection itself lives entirely in the hooks.
+The hooks (CSI-644 PostToolUse/Agent, CSI-638 SubagentStop, CSI-639 UserPromptSubmit) deposit `status: "raw"` events into the journal asynchronously. The orchestrator does **not** watch every turn for lessons — it *drains* these raw events at deterministic points and advances each through the lifecycle. This is the orchestrator's only capture-adjacent responsibility; detection itself lives entirely in the hooks.
 
 **1. When to drain.** Run the drain as the FIRST action of this Self-Learning Loop whenever the orchestrator regains control — i.e. at the START of every orchestrator turn that follows agent work or a user message — AND at every phase boundary already enumerated for mode 2 (end of Phase 1, 1.5, 2, 3, 3.5, 3.6, per-batch in Phase 4, per-story in Phases 5/6/7, per-merge-run in 7.5, and Phase 8). This replaces the old "on every user message classify intent" and "after every agent return scan for `## Lessons`" behavior — those detections now happen in the hooks.
 
@@ -987,7 +988,11 @@ Self-Learning: ON
 
 ### Source 2: agent-self-report
 
-**Capture is done by the hook, not the orchestrator.** The `SubagentStop` hook (CSI-638) reconstructs each sub-agent's return text from its transcript, scans for the literal `## Lessons` header, parses every well-formed `### Lesson` block (Trigger / Generalizable rule / Suggested fix type / Suggested target — malformed blocks are skipped with a sidecar warning), and appends one `source: "agent-self-report"`, `status: "raw"` event per block to the journal. The orchestrator does **not** scan agent returns for `## Lessons` — it picks these events up in the drain step (see "Draining the raw queue" above). The `Suggested target:` field is preserved verbatim in the event's `evidence`, so the drain step can parse it for the extractor's `Target candidate`. Do NOT re-implement the return-scan or `### Lesson` parsing here.
+**Capture is done by the hooks, not the orchestrator.** Two hooks share one parser (`emit_lessons_from_text` in `hooks/lib/journal-append.sh`) that scans for the literal `## Lessons` header and parses every well-formed `### Lesson` block (Trigger / Generalizable rule / Suggested fix type / Suggested target — an optional `- `/`* ` bullet marker is tolerated; malformed blocks are skipped with a sidecar warning), appending one `status: "raw"` event per block:
+- **`PostToolUse`/`Agent` (CSI-644, source `agent-tool-return`)** — reads the sub-agent's return text from the payload's `tool_response.content` content-block array. **This is the hook that fires for `/sdlc`**, because `/sdlc` spawns agents via the `Agent` tool.
+- **`SubagentStop` (CSI-638, source `agent-self-report`)** — reconstructs the return text from the transcript. Fires only for `Task`-tool typed subagents (kept for compatibility; does NOT fire for `/sdlc`).
+
+The orchestrator does **not** scan agent returns for `## Lessons` — it picks these events up in the drain step (see "Draining the raw queue" above). The `Suggested target:` field is preserved verbatim in the event's `evidence`, so the drain step can parse it for the extractor's `Target candidate`. Do NOT re-implement the return-scan or `### Lesson` parsing here.
 
 ### Surface format (mode 1, immediate)
 
