@@ -379,6 +379,13 @@ This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader s
    - Commit initial structure to `dev` branch, push
    - Set working directory to `~/git/{product-name}-dev/`
 
+   **Org conventions — confirm the GitHub org before creating.** The org is not always `final-il`. Ask/confirm which org owns the repo (e.g. `final-israel`, `final-csi`, `final-develop`). Verify it exists with `gh api user/orgs --jq '.[].login'` before `gh repo create` — a wrong org fails with a 404.
+
+   **Protected `main` (Cycode + required PR approvals).** In `final-israel` (and any org with branch protection), `main` rejects direct pushes — it requires the `Cycode: Secrets` status check and PR approvals. Consequences for the pipeline:
+   - The initial commit and ALL work go to `dev`; `main` is created/updated ONLY via an approved PR. Never `git push origin main` directly — it fails with `GH013: Repository rule violations`.
+   - When `autoInit` leaves the repo empty at branch time, seed the first commit locally on `dev` and push `dev` (not `main`).
+   - Phase 8 promotion (dev → main) is a PR that must pass Cycode + get approval — it is NOT a fast-forward merge/push. Surface the PR link to the user rather than attempting to merge.
+
 7. **Detect dev/prod branching model:**
    - Check if the current directory name ends with `-dev` (e.g., `jiralyzer-dev/`)
    - Check if a `dev` branch exists: `git branch -a | grep dev`
