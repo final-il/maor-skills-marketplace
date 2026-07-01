@@ -45,12 +45,13 @@ run_hook() {
 }
 
 # Run the hook WITHOUT a classifier stub (to exercise the real-call fail-safe
-# branch). ANTHROPIC_API_KEY is forced empty so it never hits the network.
+# branch). Both ANTHROPIC_API_KEY (direct) and ANTHROPIC_AUTH_TOKEN (proxy) are
+# forced empty so the no-auth fail-safe fires and it never hits the network.
 run_hook_no_stub() {
   local prompt="$1" tp="$2"
   jq -cn --arg p "$prompt" --arg tp "$tp" \
     '{session_id:"s1", transcript_path:$tp, cwd:".", hook_event_name:"UserPromptSubmit", prompt:$p}' \
-    | env -u SDLC_CLASSIFIER_STUB ANTHROPIC_API_KEY="" bash "$HOOK"
+    | env -u SDLC_CLASSIFIER_STUB ANTHROPIC_API_KEY="" ANTHROPIC_AUTH_TOKEN="" bash "$HOOK"
 }
 
 journal_lines() {

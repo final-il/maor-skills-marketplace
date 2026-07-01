@@ -33,9 +33,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/journal-append.sh
 . "$SCRIPT_DIR/lib/journal-append.sh" || exit 0
 
-# Zscaler corporate CA bundle — required for any HTTPS to api.anthropic.com.
+# Zscaler corporate CA bundle — required for any HTTPS to the Anthropic API
+# (direct or via a LiteLLM/proxy endpoint).
 SSL_CERT_FILE_PATH="/Users/maorb/.config/uv/ca-bundle.pem"
-HAIKU_MODEL="claude-haiku-4-5"
+
+# Auth + endpoint resolution. This machine (and any proxied setup) routes
+# Claude traffic through a LiteLLM/headroom proxy that authenticates with a
+# Bearer token, NOT the direct-API `x-api-key`. Resolve, in priority order:
+#   - key:  ANTHROPIC_API_KEY (direct) → ANTHROPIC_AUTH_TOKEN (proxy/LiteLLM)
+#   - base: ANTHROPIC_BASE_URL if set  → else the direct api.anthropic.com
+#   - model: ANTHROPIC_DEFAULT_HAIKU_MODEL (proxy alias) → direct default
+ANTHROPIC_KEY="${ANTHROPIC_API_KEY:-${ANTHROPIC_AUTH_TOKEN:-}}"
+ANTHROPIC_BASE="${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"
+ANTHROPIC_BASE="${ANTHROPIC_BASE%/}"   # strip any trailing slash
+HAIKU_MODEL="${ANTHROPIC_DEFAULT_HAIKU_MODEL:-claude-haiku-4-5}"
 
 # ---- read stdin payload ----------------------------------------------------
 STDIN_JSON="$(cat 2>/dev/null || true)"
@@ -103,9 +114,9 @@ classify_intent() {
     return 0
   fi
 
-  # Fail-safe to `no` if no API key — never block, never error out.
-  if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-    warn "capture-user-correction: ANTHROPIC_API_KEY unset; fail-safe classify=no"
+  # Fail-safe to `no` if no auth token — never block, never error out.
+  if [ -z "${ANTHROPIC_KEY:-}" ]; then
+    warn "capture-user-correction: no ANTHROPIC_API_KEY/ANTHROPIC_AUTH_TOKEN; fail-safe classify=no"
     printf 'no'
     return 0
   fi
@@ -136,8 +147,9 @@ classify_intent() {
   resp="$(
     SSL_CERT_FILE="$SSL_CERT_FILE_PATH" \
     curl -sS --max-time 15 \
-      -X POST 'https://api.anthropic.com/v1/messages' \
-      -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+      -X POST "${ANTHROPIC_BASE}/v1/messages" \
+      -H "x-api-key: ${ANTHROPIC_KEY}" \
+      -H "Authorization: Bearer ${ANTHROPIC_KEY}" \
       -H 'anthropic-version: 2023-06-01' \
       -H 'content-type: application/json' \
       --data "$body" 2>/dev/null || true
