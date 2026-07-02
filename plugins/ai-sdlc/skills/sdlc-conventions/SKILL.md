@@ -244,6 +244,26 @@ The AI-SDLC pipeline requires the standalone `mcp-atlassian` MCP server (configu
 10. **PR target** — Always use `--base {pr_target_branch}` when creating PRs
 11. **Operate in your worktree** — All git/edit/test commands run with `cd {worktree_path}` (or `git -C {worktree_path}`). Never `cd {repo_path}` for write operations. Never run `git worktree add/remove` from an agent — that is the orchestrator's job.
 
+## Dynamic Agent Spawning — When and How
+
+A *dynamic agent* is a general-purpose `Agent()` the orchestrator spawns with an **orchestrator-authored, task-specific instruction prompt**, for work that **no existing `sdlc-<role>` owns** (e.g. operating a live cloud environment, running a benchmark, a one-off migration). This is powerful but is in direct tension with the core rule "every phase must run through the proper agent." Uncontrolled, it becomes a loophole to skip pipeline gates (a hand-rolled fixer that dodges bug-fixer → tester → QA). The following governs it.
+
+**Validity test — ALL 5 must hold before proposing a dynamic spawn:**
+
+1. **No existing role fits.** Never a shortcut around a defined phase agent. If developer/tester/architect/qa/etc. owns the work, that role MUST be used.
+2. **Bounded and single-purpose.** Clear inputs, exactly one concrete deliverable, and it terminates (a verdict, a measurement, a migration) — not open-ended "help with X."
+3. **Specialized reason to isolate.** The work needs domain-specific knowledge such that inlining it would bloat the orchestrator or a generic role's prompt, AND it is not merely "read some files and summarize" (that is general-purpose/Explore — no custom role needed). Also qualifies if it must keep something out of orchestrator context (credentials, very large outputs).
+4. **Guardrails travel verbatim (with teeth).** A dynamic agent inherits NO role file. Before spawning, the orchestrator MUST emit an explicit checklist naming which standing guardrails/memories it is injecting verbatim into the prompt (e.g. AWS-safety posture, no-unapproved-CI/CD, creds-never-printed protocol). If a relevant guardrail exists and is not listed, do NOT spawn.
+5. **Still tracked.** The dynamic agent reports to a Jira ticket and/or returns structured evidence — auditable, not off-book.
+
+**Graduation rule:** If the same dynamic role is spawned 2+ times, OR the role touches production/external systems even once, promote it to a permanent, version-controlled `sdlc-<role>.md` agent file (reviewed) rather than re-authoring it ad hoc.
+
+**Autonomy ladder (phased rollout — the orchestrator does NOT self-advance; the user promotes the phase after reviewing the decision log):**
+
+- **Phase 1 (CURRENT / default):** The orchestrator MUST pause and ASK the user before spawning ANY dynamic agent — read or write. It presents the 5-point justification including the guardrail checklist, and waits for approve/deny. Every decision is journaled to the self-learning log so the criteria can be tightened.
+- **Phase 2** (advance only when the log shows the criteria are reliable): read-only/analysis dynamic spawns become free; any dynamic agent that WRITES to external systems or the repo still requires user approval.
+- **Phase 3** (eventually): fully automatic when all 5 criteria hold.
+
 ## Performance Rules — How Agents Use Jira
 
 Every agent should treat Jira round-trips as the bottleneck of the pipeline. Follow these rules in every agent run:
