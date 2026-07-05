@@ -975,13 +975,19 @@ Self-Learning: ON
 - For `agent-self-report`: parse the `Suggested target:` field out of the `### Lesson` evidence block and use it as `Target candidate` (extractor may override).
 - For `user-correction`: apply the "Target candidate selection" priority list (in the Source 1 sub-section below).
 
-**6. Lifecycle (unchanged).** After the extractor returns:
+**6. Lifecycle.** After the extractor returns:
 - On `nothing-learnable` → append `status: nothing-learnable` (terminal). No surface.
-- On `Proposal` / `Proposal (replace)` / `Recommendation` → append `status: proposed` with the full `extractor_run` object.
+- On `Proposal` / `Proposal (tiered)` / `Proposal (replace)` / `Recommendation` → append `status: proposed` with the full `extractor_run` object.
 - In mode 1, surface the proposal immediately (see "Surface format"). In mode 2, queue and continue.
-- On user approval (Proposal/Proposal-replace): apply the Edit, append `status: approved` with `applied_commit: <sha or null>` (orchestrator does NOT auto-commit lesson edits in v1).
+- On user approval (`Proposal`/`Proposal (replace)`): apply the Edit, append `status: approved` with `applied_commit: <sha or null>` (orchestrator does NOT auto-commit lesson edits in v1).
+- On user approval (`Proposal (tiered)`): the user picks route `a` / `b` / `c` — apply it per "Applying a tiered route" below, then append the resulting `status`.
 - On Recommendation approval: nothing to apply automatically — append `status: approved` with `applied_commit: null`; the user implements it manually.
 - On user rejection: append `status: rejected`.
+
+**6a. Applying a tiered route.** The `## Proposal (tiered)` verdict carries the three signals and the three route targets but **no `## Diff` block** — the extractor deliberately does not author the edit for a tiered lesson. When the user picks a route, the orchestrator composes the minimal edit itself from the verdict's `Trigger` (and the evidence), phrased imperatively ("Always … / Never …"):
+- **`a` (Principle)** → apply an Edit to the always-loaded canonical file named in route `[a]` (a role file / `feedback_*.md` / `CLAUDE.md`), adding one concise imperative line located near related existing rules. Append `status: approved` with `applied_commit: <sha or null>` (do NOT auto-commit). This is the existing text-edit behavior; the orchestrator supplies the line because the tiered verdict omitted the diff.
+- **`b` (Recipe)** → append the lesson as a recipe to `plugins/ai-sdlc/skills/sdlc-conventions/references/recipes-{domain}.md` (the `{domain}` from route `[b]`; create the file with its format header — see an existing `recipes-*.md` — if absent). Use the per-recipe three-field shape: `### <short title>` then **Trigger** / **Recipe** / **When-it-rots**. THEN ensure the relevant agent role file(s) carry the one-line on-demand pointer to that recipe file (`See \`../skills/sdlc-conventions/references/recipes-{domain}.md\` for {domain} tooling gotchas — load on demand.`); add it if missing (convention in `sdlc-conventions/SKILL.md` → "On-Demand Recipes"). Append `status: approved` with `applied_commit: <sha or null>`.
+- **`c` (One-off)** → append `status: logged-recipe` (terminal, no file edit). Reuse this existing status; do not redefine it. A later recurrence is promoted to a real proposal by the extractor's repetition counter.
 
 **Multiple raw events.** Process each as a separate event (they may target different files). Self-learning runs alongside phase routing and never blocks it: in mode 1 an inline approval pauses the current turn until the user responds; in mode 2 routing continues and proposals flush at the next boundary.
 
@@ -1024,6 +1030,31 @@ On user response:
 
 Then continue with whatever phase work was in progress.
 
+**Tiered proposals (`## Proposal (tiered)`).** When the extractor's verdict is `## Proposal (tiered)`, surface the cost-at-decision-time signals and the three routes verbatim so the human weighs the always-loaded cost before choosing — this visible cost is the core of the fix. The verdict has no diff; do NOT ask a bare Approve/Reject. Surface:
+
+```
+📚 Lesson proposal (tiered) — <Source> on <agent>/<story or epic>
+Trigger: <trigger_summary>
+
+Generality: <RECIPE | PRINCIPLE | MIXED> (names: <detected tokens>) · <scope note>
+Recurrence: <N> prior events (<one-off | earned>)
+Cost if always-loaded: <what a permanent slot costs>
+
+Route options:
+  [a] Principle → <always-loaded target: role file / feedback_*.md / CLAUDE.md>
+  [b] Recipe   → references/recipes-<domain>.md   (on-demand)
+  [c] One-off  → log only (status: logged-recipe)
+Recommended: <a | b | c>
+
+Pick a route (a / b / c) or Reject?
+```
+
+On user response:
+- `a` / `b` / `c` → apply that route per "Applying a tiered route" (step 6a above), then append the resulting `status` (`approved` for a/b, `logged-recipe` for c), with a one-line confirmation naming the file(s) touched.
+- "reject" / "no" / "skip" → append `status: rejected`, one-line confirmation.
+
+Then continue with whatever phase work was in progress.
+
 ### Mode 2: batching at phase boundary
 
 **Queue.** When mode is 2, every `proposed` event is added to an in-orchestrator-state queue (a list of event IDs). Do NOT surface to the user yet.
@@ -1038,16 +1069,19 @@ Then continue with whatever phase work was in progress.
 
    [1] <Source> • <target_file path basename> • <trigger_summary>
        <abbreviated verdict — first line of diff or recommendation type>
-   [2] ...
+   [2] (tiered) <Source> • <trigger_summary>
+       Generality: <RECIPE|PRINCIPLE|MIXED> · Recurrence: <N> (<one-off|earned>) · Cost: <always-loaded cost>
+       Routes: [a] <always-loaded target>  [b] recipes-<domain>.md  [c] log-only · Recommended: <a|b|c>
    ...
 
    Approve all / Reject all / Defer all to next phase / Per-item (1: a/r/d, 2: a/r/d, ...)
    ```
+   For a `## Proposal (tiered)` item, render the Generality / Recurrence / Cost signals and the three [a]/[b]/[c] routes with the Recommended hint (as shown for item [2]) so the always-loaded cost is visible before the human decides — a bare one-line summary is not enough for a tiered item. Plain (non-tiered) items keep the single abbreviated-verdict line.
 2. On user response:
-   - "approve all" → for each, apply (or log-only), append `status: approved`.
+   - "approve all" → for each: plain/replace verdicts apply their Edit; `Recommendation` is log-only; a **tiered** item applies its **Recommended** route (step 6a). Append the resulting `status` per item (`approved`, or `logged-recipe` when a tiered item's recommended/chosen route is `c`).
    - "reject all" → append `status: rejected` for each.
    - "defer all" → append `status: deferred` for each; re-queue at the start of the next phase.
-   - Per-item like `1: a, 2: r, 3: d` → apply each verb to its event.
+   - Per-item like `1: a, 2: r, 3: d` → apply each verb to its event. For a tiered item, a per-item route letter (`a`/`b`/`c`) selects that route explicitly (overriding Recommended); `r` rejects, `d` defers.
 3. Empty the queue after applying.
 
 **Mid-flush mode switch.** If the user says "mode 1" while a flush is in progress, finish the current flush first, then switch.
