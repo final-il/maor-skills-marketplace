@@ -55,6 +55,26 @@ Agents run in isolation. They share context through three channels:
 
 See `references/context-protocol.md` for the full specification.
 
+## On-Demand Recipes — Agent-Pointer Convention
+
+Not every lesson deserves an always-loaded slot in every future context window. The self-learning loop splits lessons on a generality axis (see `docs/specs/2026-06-10-ai-sdlc-self-learning-design.md` → "Design Addendum — Tiered Lesson Routing"):
+
+- **Principle** — generalizes across stacks/projects → stays always-loaded in a role file, feedback file, or `CLAUDE.md`.
+- **Recipe** — true for one tool and rots as the tool changes → lives on-demand in `references/recipes-{domain}.md` (e.g. `recipes-iac.md`, `recipes-python.md`), NOT always-loaded.
+- **One-off** — fired once, no recurrence signal → logged only (journal status `logged-recipe`), never codified.
+
+**The convention:** an agent role file that works with a given domain's tooling carries a single one-line pointer to that domain's recipe file, instead of inlining the recipes themselves:
+
+```
+See `../skills/sdlc-conventions/references/recipes-{domain}.md` for {domain} tooling gotchas — load on demand.
+```
+
+The agent reads the pointed-to file **only when the story it is implementing touches that domain** (e.g. an IaC story → read `recipes-iac.md`; a Python packaging story → read `recipes-python.md`). This buys an entire on-demand recipe file for the cost of one always-loaded line, so the always-loaded tier does not ratchet upward as recipes accumulate.
+
+**Recipe file format.** Each recipe file opens with its format spec, then a `## Recipes` section of `### <short title>` entries, each with three fields: **Trigger** (when this applies), **Recipe** (the command/gotcha), **When-it-rots** (the condition that makes it stale). See the two seed files for the canonical shape.
+
+`sdlc-developer.md` carries the live IaC pointer today. When a new domain's recipes accumulate, add a `recipes-{domain}.md` file and a matching one-line pointer to whichever role files touch that domain.
+
 ## Artifact Discipline
 
 Every Jira read/write costs context tokens. Agents that pull the entire ticket "to be safe" balloon the context window and slow the pipeline. The rules below keep agents honest about what they read and write.

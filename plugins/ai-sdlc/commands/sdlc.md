@@ -926,11 +926,13 @@ Schema (full schema in the design spec):
                      "existing_rule": null | {...}, "diff": null | {...},
                      "suggested_artifact": null | {...} },
   "status": "raw" | "proposed" | "approved" | "rejected" | "deferred"
-          | "nothing-learnable" | "extraction-failed" | "stale"
+          | "nothing-learnable" | "logged-recipe" | "extraction-failed" | "stale"
           | "suppressed-duplicate-rejection",
   "applied_commit": "<sha or null>"
 }
 ```
+
+`logged-recipe` is terminal — a one-off lesson recorded, not codified (no edit applied); a later recurrence is promoted to a real proposal via the existing repetition counter (see "Draining the raw queue" / the extractor's repetition detection).
 
 Logical updates: append a new line with the same `id` and a new `status`. Readers always take the latest line per `id`. Reverting an update = delete the latest line for that id.
 
