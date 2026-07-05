@@ -52,6 +52,14 @@ You do NOT touch Jira. You do NOT need MCP tools. Your only inputs are local fil
    - `script` — shell wrapper (e.g., `uv-zs` that always sets `SSL_CERT_FILE`)
    - `slash-command` — new `/sdlc-X` style command
    - `manual` — none of the above; user must decide
+4.5. **Compute tiering signals (surface, don't judge).** This step runs ONLY when the step-4 fix type is a text edit that COULD land in an always-loaded file — `instruction-edit`, `memory-feedback`, or `project-claudemd`. For non-text fix types (`hook` / `script` / `skill` / `slash-command` / `manual`), skip this step and use the plain `## Recommendation` path. Compute three orthogonal signals from the evidence + journal — you SURFACE them; the HUMAN decides the route at the approval gate. You only set `Recommended:` as a hint; you never pick the tier yourself.
+
+   - **Generality** — inspect the evidence for tool/version-name density: proper nouns like `terraform`, `tofu`, `pytest`, `ruff`, `uv`, and tool-specific flags like `-backend=false`, `--cov`. High density of such tokens → `RECIPE` (true for one tool, rots as it changes). Stack-agnostic wording (nothing tool-specific — e.g. "always commit after a major phase") → `PRINCIPLE`. Both a durable principle AND tool-specific detail → `MIXED`. Emit the classification plus the exact detected tokens (`names: <tokens>`).
+   - **Recurrence** — REUSE the existing step-6 repetition-counting algorithm (documented below under "Repetition counting algorithm"). Do NOT invent a second counter. `0` prior events → `one-off`; `≥2` prior events → `earned` (the graduation threshold that justifies first codification). Report the count and the label.
+   - **Cost** — derived purely from which tier the candidate target loads into: a role file (`sdlc-*.md`) or `feedback_*.md` or repo `CLAUDE.md` = **always-loaded on every relevant spawn, forever**; `references/recipes-*.md` = **on-demand** (loaded only when the agent pulls it in); the journal (`logged-recipe`) = **never loaded**. State the concrete cost of a permanent slot (e.g. "+1 line on every sdlc-developer spawn, forever").
+
+   When this step ran, emit the `## Proposal (tiered)` verdict (below) instead of a plain `## Proposal`. The three routes let the human weigh cost against generality and recurrence.
+
 5. **Read ONE candidate canonical file** (the one your fix targets, if it's `instruction-edit` / `memory-feedback` / `project-claudemd`). Skip this step for non-text fix types.
 6. **Detect existing rule.** Scan the candidate file for related wording. If found, classify failure mode:
    - **wording** — existing rule is vague, hedged, buried, or contradicted by another rule. Fix: rewrite.
@@ -62,6 +70,14 @@ You do NOT touch Jira. You do NOT need MCP tools. Your only inputs are local fil
 ## Verdicts
 
 Pick exactly one and output it as your final return text. Be terse — no preamble, no narration.
+
+**Which verdict applies:**
+- Fix type is a text edit that COULD land always-loaded (`instruction-edit` / `memory-feedback` / `project-claudemd`) AND no existing rule matches → `## Proposal (tiered)` (step 4.5 ran; surface the three tiering signals + routes).
+- Same text fix types but an existing rule has a wording/scope problem → `## Proposal (replace)`.
+- Non-text fix types (`hook` / `script` / `skill` / `slash-command` / `manual`), or an existing rule with a repetition failure → `## Recommendation`.
+- Already covered with no failure pattern, or not generalizable → `## Verdict: nothing-learnable` (unchanged).
+
+The plain `## Proposal` (no tier) remains valid only if step 4.5 was intentionally skipped; new text-edit lessons should prefer `## Proposal (tiered)`.
 
 ### `## Proposal` — new rule, no existing match
 
@@ -76,6 +92,40 @@ old_string: |
   <verbatim text from target file>
 new_string: |
   <verbatim text replacing old_string>
+```
+
+### `## Proposal (tiered)` — text edit that could land always-loaded (from step 4.5)
+
+Use this INSTEAD of plain `## Proposal` whenever step 4.5 ran (fix type is `instruction-edit` / `memory-feedback` / `project-claudemd` and there's no existing-rule wording/scope problem). It surfaces the three tiering signals and the three routes; the human picks the tier at the gate. `Recommended:` is your hint only — you never decide.
+
+```
+## Proposal (tiered)
+Trigger: <source + one-line summary>
+Generality: RECIPE | PRINCIPLE | MIXED (names: <detected tool/version tokens>) · <scope note>
+Recurrence: <N> prior events (<one-off | earned>)
+Cost if always-loaded: <what a permanent slot costs, e.g. "+1 line on every sdlc-developer spawn, forever">
+
+Route options:
+  [a] Principle → <always-loaded target: role file / feedback_*.md / CLAUDE.md>
+  [b] Recipe   → references/recipes-<domain>.md   (on-demand)
+  [c] One-off  → log only (status: logged-recipe)
+Recommended: <a | b | c>
+```
+
+**Worked example.** A developer self-reported that `tofu` (OpenTofu) rejects `terraform init -backend=false` and the flag must come before the subcommand — a fix that applies only to Terraform/OpenTofu tooling. Step 4.5 detects high tool-name density (`terraform`, `tofu`, `-backend=false`), the journal shows 0 prior events, and the candidate target is a role file (always-loaded). The extractor returns:
+
+```
+## Proposal (tiered)
+Trigger: agent-self-report — OpenTofu rejects `terraform init -backend=false` flag ordering
+Generality: RECIPE (names: terraform, tofu, -backend=false) · fires only on IaC stories
+Recurrence: 0 prior events (one-off)
+Cost if always-loaded: +2 lines on every sdlc-developer spawn, forever
+
+Route options:
+  [a] Principle → plugins/ai-sdlc/agents/sdlc-developer.md   (always-loaded)
+  [b] Recipe   → references/recipes-iac.md   (on-demand)
+  [c] One-off  → log only (status: logged-recipe)
+Recommended: b
 ```
 
 ### `## Proposal (replace)` — existing rule with wording or scope problem
