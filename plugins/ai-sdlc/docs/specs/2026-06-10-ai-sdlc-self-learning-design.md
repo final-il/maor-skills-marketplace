@@ -978,6 +978,58 @@ Implementer in plan Task C5: append this block to the existing `## Error Handlin
 | Agent suggests wrong target | Extractor's classification overrides. Suggestion is a hint, not authoritative. |
 ````
 
+## Design Addendum — Tiered Lesson Routing (cost/generality gate)
+
+**Date:** 2026-07-05. **Status:** design converged in brainstorm; NOT yet implemented. Revises the extractor contract and one v1 non-goal below.
+
+### Problem this addendum fixes
+
+The v1 loop gates only on *"is this true and not already covered?"* — never on *"is this worth a permanent slot in every future context window?"* Every lesson that passes the truth test lands in an always-loaded canonical file (role file / feedback / CLAUDE.md). The loop only adds, never removes → context ratchet, buried high-value rules, recipes crowding out principles. Observed 3:1 recipe-to-principle ratio in a single day's lessons.
+
+### The missing axis
+
+The extractor's step-4 classifies by *what artifact fixes this* (instruction-edit/hook/script/…). It never asks *how often the lesson will be relevant*. Add that orthogonal axis:
+
+- **Principle** — generalizes across stacks/projects → earns an always-loaded slot (current behavior).
+- **Recipe** — true for one tool, rots as the tool changes → on-demand tier, NOT always-loaded.
+- **One-off** — fired once, no recurrence signal → log only, don't codify.
+
+### Change 1 — generality test + `## Proposal (tiered)` verdict
+
+Between extractor step 4 (classify fix type) and step 5 (read candidate file), the extractor computes and surfaces three signals — it does **not** judge. **The human decides at the approval gate** (may move to the extractor later). This also neutralizes reporter salience-bias: the signals are computed independent of the reporter's pain framing.
+
+- **Generality** — tool/version-name density in the evidence (names `terraform`/`pytest`/`-backend=false` → recipe-tell).
+- **Recurrence** — the EXISTING step-6 repetition counter (0 prior events = one-off; ≥2 = earned codification). This is the graduation threshold, and it already exists — it currently escalates to a hook; here it also gates *first* codification.
+- **Cost** — which tier the target loads into (role file = every spawn forever; `references/` = on-demand; journal = never).
+
+New verdict presents all three routes with signals attached:
+
+```
+## Proposal (tiered)
+Trigger: <source + summary>
+Generality: RECIPE (names: terraform, tofu) · fires only on IaC stories
+Recurrence: 0 prior events (first sighting)
+Cost if always-loaded: +1 line on every sdlc-developer spawn, forever
+
+Route options:
+  [a] Principle → <role file / feedback>        (always-loaded)
+  [b] Recipe   → references/recipes-<domain>.md  (on-demand)     ← recommended
+  [c] One-off  → log only (status: logged-recipe)
+```
+
+### Change 2 — recipe tier location
+
+Recipes land in the EXISTING on-demand tier: `plugins/ai-sdlc/skills/sdlc-conventions/references/recipes-{domain}.md` (e.g. `recipes-iac.md`, `recipes-python.md`). Each relevant agent gets a one-line pointer, e.g. sdlc-developer.md: *"See `references/recipes-iac.md` for IaC tooling gotchas."* One always-loaded line buys an on-demand file. No parallel `agents/references/` tier is built.
+
+One-offs get a new terminal journal status `logged-recipe` (no edit applied). If the same lesson recurs, the step-6 repetition counter promotes it to a real proposal — the journal *is* the log-only tier; no new store.
+
+### Change 3 — pruning pass, scoped (revises a non-goal)
+
+The v1 non-goal *"Auto-cleanup of aged lessons… deleted only when manually superseded"* assumed every lesson is a principle. It splits once recipes exist:
+
+- **Principles** — non-goal HOLDS. Never auto-prune always-loaded operating instructions (an auto-deleted instruction is one an agent silently stops following).
+- **Recipes** — a periodic consolidation/pruning pass runs over `references/recipes-*.md` ONLY. These are closer to training data than operating instructions, they rot, and they're on-demand — so pruning one never changes always-loaded behavior. Compatible with the non-goal because it never touches the tier the non-goal was written to protect.
+
 ## Future work (v2)
 
 Outline only. Note: hook-based *capture* is v1, not v2 (see Architecture). The v2 items below are new *sources*, not a re-implementation of v1 capture.
