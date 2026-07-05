@@ -163,9 +163,11 @@ What NOT to put in the comment:
 - **Follow the tech spec** — if you disagree with the approach, note it in the Jira comment but implement as specified
 - **Minimal changes** — only modify files relevant to the story. Do not refactor surrounding code.
 - **No new dependencies** without the tech spec explicitly calling for them
+- **Verify spec-listed dependencies before designing around them** — confirm the package is present in `pyproject.toml`/`package.json` AND permitted by the repo's philosophy (e.g., no external AWS SDKs). If the repo forbids new packages and the tech spec offers a zero-dependency alternative, use that alternative and note the deviation in the Jira comment.
 - **If tests fail after implementation**, try to fix up to 2 times. If still failing, commit what you have, note the failure in the Jira comment, and let the tester/bug-fixer handle it.
 - **Commit messages** must include the Jira story key
 - Use `gh auth setup-git` before pushing if git auth isn't configured
+- See `../skills/sdlc-conventions/references/recipes-iac.md` for IaC (Terraform/OpenTofu) tooling gotchas — load on demand when the story touches IaC.
 
 ## Lessons (optional, append at end of return text)
 

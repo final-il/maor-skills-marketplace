@@ -417,7 +417,9 @@ Append-only JSONL at `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events
 7. User defers (mode-2 batch only) → appends `status: "deferred"`; proposal re-queues for the next phase boundary.
 8. Errors → appends `status: "extraction-failed"` | `"stale"` | `"suppressed-duplicate-rejection"`.
 
-**Status enum:** `raw`, `proposed`, `approved`, `rejected`, `deferred`, `nothing-learnable`, `extraction-failed`, `stale`, `suppressed-duplicate-rejection`.
+**Status enum:** `raw`, `proposed`, `approved`, `rejected`, `deferred`, `nothing-learnable`, `logged-recipe`, `extraction-failed`, `stale`, `suppressed-duplicate-rejection`.
+
+`logged-recipe` is terminal: a one-off lesson recorded but not codified (no edit applied). If the same lesson recurs, the existing repetition counter (see "Repetition detection") promotes it to a real proposal — the journal itself is the log-only tier, so no new store is needed.
 
 **Logical updates via re-appended lines.** Readers always take the latest line per `id`. No file rewrites. Reverting a single update = delete the latest line for that id. Atomic appends are race-safe at the OS level for short writes.
 
@@ -753,11 +755,13 @@ Schema (full schema in the design spec):
                      "existing_rule": null | {...}, "diff": null | {...},
                      "suggested_artifact": null | {...} },
   "status": "raw" | "proposed" | "approved" | "rejected" | "deferred"
-          | "nothing-learnable" | "extraction-failed" | "stale"
+          | "nothing-learnable" | "logged-recipe" | "extraction-failed" | "stale"
           | "suppressed-duplicate-rejection",
   "applied_commit": "<sha or null>"
 }
 ```
+
+`logged-recipe` is terminal — a one-off lesson recorded, not codified (no edit applied). A later recurrence is promoted to a real proposal via the existing repetition counter.
 
 Logical updates: append a new line with the same `id` and a new `status`. Readers always take the latest line per `id`. Reverting an update = delete the latest line for that id.
 
