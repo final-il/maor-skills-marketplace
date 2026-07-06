@@ -33,6 +33,14 @@ A collection of custom skills, agents, and plugins for Claude Code.
 | sdlc-qa-reviewer | Reviews code quality and requirement compliance | opus |
 | sdlc-bug-fixer | Fixes bugs found by tester/QA | sonnet |
 
+### AI-SDLC Skills
+
+| Skill | Purpose |
+|-------|---------|
+| sdlc-conventions | Shared Jira conventions, workflow states, artifact discipline, and context protocol used by all agents |
+| sdlc-handoff | Capture session state for rich pause/resume of a pipeline run |
+| sdlc-explainer | Technical writer for the AI-SDLC system — explains the idea, pipeline flow, agent coordination, and decision-making with mind maps, flowcharts, sequence and state diagrams. Derives the current system shape from source, so it stays accurate as the pipeline evolves |
+
 **Usage:** `/sdlc "project description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KEY` (resume)
 
 **Branching:** Auto-detects dev/prod model (dev + main branches) or single-branch. PRs target the correct branch automatically. Promotion (dev → main) offered at completion with user approval.

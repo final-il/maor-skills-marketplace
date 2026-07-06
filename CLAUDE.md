@@ -48,9 +48,15 @@ maor-skills-marketplace/
         │   ├── sdlc-tester.md         ← Phase 5: Writes + runs tests
         │   ├── sdlc-qa-reviewer.md    ← Phase 6: Code review + validation
         │   └── sdlc-bug-fixer.md      ← Phase 7: Fixes bugs, re-tests
-        └── skills/sdlc-conventions/
-            ├── SKILL.md
-            └── references/
+        └── skills/
+            ├── sdlc-conventions/       ← Shared Jira conventions + context protocol
+            │   ├── SKILL.md
+            │   └── references/
+            ├── sdlc-handoff/           ← Pause/resume session state capture
+            │   └── SKILL.md
+            └── sdlc-explainer/         ← Tech-writer: explains the SDLC system with diagrams
+                ├── SKILL.md
+                └── references/
 ```
 
 ## Skills

@@ -1,0 +1,46 @@
+{
+  "skill_name": "sdlc-explainer",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "I just joined the team and keep hearing about this AI-SDLC thing and the /sdlc command. Can you explain how the whole system works? I learn better with diagrams.",
+      "expected_output": "A layered explanation (idea → flow → decisions) that reads the ai-sdlc source files, leads with a mind map and a phase flowchart, names the real phases/statuses/gates as they exist in source (not from memory), and highlights the human approval gates. Should NOT hardcode a phase count or agent list without deriving from source.",
+      "files": [],
+      "assertions": [
+        "Contains at least one Mermaid diagram (```mermaid fenced block)",
+        "Leads with a visual (mind map or phase flowchart) before deep prose",
+        "Names actual pipeline phases consistent with commands/sdlc.md (no invented/wrong phase set)",
+        "Explicitly surfaces the human approval gates (plan/design/promotion pauses)",
+        "States the principle that the orchestrator coordinates but never does the work itself",
+        "Does not assert a hardcoded phase/agent count that contradicts the source"
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Give me a Mermaid diagram of the /sdlc pipeline flow, including the loops where work gets sent back.",
+      "expected_output": "A Mermaid flowchart with one node per phase in the order found in commands/sdlc.md, including back-edges (bug loop, plan-challenge loopback, failed-merge route) and annotated human gates. Phases derived from source, not invented.",
+      "files": [],
+      "assertions": [
+        "Output contains a valid Mermaid flowchart block",
+        "Has one node per pipeline phase in the order found in commands/sdlc.md",
+        "Includes back-edges/loops (bug/defect loop and/or plan-challenge loopback), not just the happy path",
+        "Annotates at least one human approval gate on the flow",
+        "Phase names match the source rather than being invented"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I want to add a new agent to the ai-sdlc pipeline. Before I touch anything, walk me through how the system is structured so I don't break the way the agents coordinate.",
+      "expected_output": "A contributor-level explanation: the Jira message-bus coordination contract, the one-artifact-per-phase discipline, the spawn protocol, agent anatomy, worktree isolation, and where the source of truth lives — with file:line citations. Derived from the conventions skill and orchestrator, not from memory.",
+      "files": [],
+      "assertions": [
+        "Explains the Jira-as-message-bus + one-artifact-per-phase coordination contract",
+        "Explains the agent spawn protocol (general-purpose Agent, pointer-not-body, model tier)",
+        "Covers git worktree workspace isolation",
+        "Includes file:line or file-path citations to the actual source",
+        "Points to where source of truth lives (orchestrator + agent files + conventions skill)",
+        "Does not fabricate coordination rules absent from the source"
+      ]
+    }
+  ]
+}
