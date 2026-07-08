@@ -49,9 +49,9 @@ See `references/ticket-templates.md` for description templates.
 
 Agents run in isolation. They share context through three channels:
 
-1. **Agent prompt** — Structural metadata (cloudId, projectKey, repo path, issue keys, transition map)
-2. **Jira tickets** — Primary channel. Requirements, tech specs, test results, bug reports (descriptions + comments)
-3. **Project repo** — Code, CLAUDE.md, config files
+1. **Agent prompt** — Structural metadata (cloudId, projectKey, repo path, `Repo Web Base`, issue keys, transition map). `Repo Web Base` is the normalized web URL of the repo (see §2.5), used to build clickable detail pointers.
+2. **Jira tickets** — Summaries + pointers. Artifact **detail** now lives in git (§2.5); Jira carries the `## Summary` and a pointer to the detail file. Requirements and bug reports (descriptions) still live in Jira.
+3. **Project repo** — Code, CLAUDE.md, config files, **and artifact detail** under `docs/sdlc/{KEY}/*.md` (§2.5)
 
 See `references/context-protocol.md` for the full specification.
 
@@ -96,7 +96,7 @@ Write Artifact:
 
 Agents read only the listed artifacts. If an agent finds it needs something else, it stops and asks the orchestrator rather than fetching the full ticket.
 
-**Architect-specific note:** The architect's `## Technical Specification` comment must include a top-level `## Names Reserved` section listing every new file path, exported symbol, route prefix, CLI command, and env var the story claims. The Phase 3.6 integrator agent parses this section verbatim across all sibling stories to detect collisions before development starts. See `references/ticket-templates.md` for the format.
+**Architect-specific note:** The architect must produce a **Names Reserved** list — every new file path, exported symbol, route prefix, CLI command, and env var the story claims. Under the hybrid store (§2.5) this is its **own file** `docs/sdlc/{STORY-KEY}/names-reserved.md`, so the Phase 3.6 integrator reads only that small file per sibling story (never the full tech spec) to detect collisions before development starts. See `references/ticket-templates.md` for the format.
 
 ### 2. Summary header convention
 
@@ -116,12 +116,49 @@ Every artifact (every comment an agent posts) opens with a `## Summary` of 3-5 b
 
 Downstream agents read the **summary first** and drill into detail only when their task requires it. Use the `Read` tool's `offset`/`limit` to window large artifacts. The writer of the artifact owns the summary; this is not lossy compression — the detail is always one read away.
 
+### 2.5 Hybrid artifact store — detail lives in git, not Jira
+
+**The rule:** the `## Summary` stays in the Jira comment; the `## Detail` is written to a **git file**, and the Jira comment carries a **pointer** to it. Jira holds *state + a cheap snapshot + a live pointer*; git holds the *canonical content*. This cuts Jira-write latency, lets specs be diffed and reviewed in the same PR as the code, and removes the duplication that comes from re-deriving specs across stores.
+
+Design + rationale: `docs/specs/2026-07-08-ai-sdlc-hybrid-artifact-store-design.md`.
+
+**Where detail files live:**
+
+| Artifact | Author phase | Detail file |
+|---|---|---|
+| Technical Specification | Architect (3) | `docs/sdlc/{STORY-KEY}/tech-spec.md` |
+| Names Reserved | Architect (3) | `docs/sdlc/{STORY-KEY}/names-reserved.md` *(own file — the integrator reads only this, never the full tech spec)* |
+| Critical User Journeys | Architect (3, epic) | `docs/sdlc/{EPIC-KEY}/cujs.md` |
+| Design Specification | Designer (3.5) | `docs/sdlc/{STORY-KEY}/design-spec.md` |
+| Integration Notes | Integrator (3.6) | `docs/sdlc/{STORY-KEY}/integration-notes.md` |
+
+**The Jira comment** an agent posts is now just the `## Summary` bullets followed by a pointer footer:
+
+```markdown
+## Summary
+- Approach: streaming XML SAX parser (handles 100MB+ files)
+- New module: `src/parsers/xml.py` exposing `parse_stream(io.IOBase)`
+- Depends on stdlib `xml.sax` only — no new packages
+- Test strategy: 5 fixture files covering malformed/valid/large
+- Risk: SAX is callback-based; refactor needed if we want async later
+
+📄 Detail: https://github.com/{org}/{repo}/blob/{sha}/docs/sdlc/CSI-105/tech-spec.md
+```
+
+**Pointer format:** a clickable GitHub blob URL pinned to the commit the detail was written at — `{Repo Web Base}/blob/{sha}/{path}`. The orchestrator derives `Repo Web Base` once (from `git remote get-url origin`, normalizing `git@github.com:org/repo.git` or `https://github.com/org/repo.git` → `https://github.com/org/repo`) and passes it in the context block. Agents that need to **read** the detail use the repo-relative path locally (they have `Repo Path` + the worktree) — no network. The URL is for the human-facing Jira pointer only.
+
+**Summary is a snapshot; the pointer is truth.** The summary is written once, when the artifact is created. If a later phase edits the detail file, the agent does **NOT** re-post the summary — the pointer always leads to the current file. Consequence: **the Jira summary may lag the detail; follow the pointer for current truth.** (This is deliberate — re-syncing on every edit is the Jira-write cost this model exists to eliminate.)
+
+**Reading detail:** agents `Read` the local file at the repo-relative path (windowed with `offset`/`limit` for large files). This replaces the old `jira_get_issue` fetch of a comment body — faster and free of network round-trips.
+
+**Migration / mixed-mode:** if no `docs/sdlc/{KEY}/` file exists (an epic that ran under the old all-in-Jira model), fall back to reading the detail from the Jira comment body as before. New artifacts always write the hybrid way; old ones stay readable. No back-fill.
+
 ### 3. What NOT to store in artifacts
 
 - ❌ **Full test output** — Store `15/16 passed; failing: test_parse_malformed_xml (expected ValueError, got None at line 42)`. Re-run tests in the worktree if detail is needed.
 - ❌ **Code snippets** — Reference commit SHA + file path. The worktree is the source of truth: `See src/parsers/xml.py:42-78 in commit abc1234`.
 - ❌ **Restated requirements** — Don't quote the story description in the tech spec; don't quote the failing test source in the bug report. The reader has the same access you do.
-- ❌ **Accumulating threads** — When an artifact is revised (e.g., bug-fixer updates dev-result), post a new comment that says "Supersedes prior dev-result; see commit XYZ" with a fresh summary. The Jira history preserves the prior version.
+- ❌ **Accumulating threads** — When a detail artifact is revised (e.g., bug-fixer updates the tech spec), **edit the detail file in git** (its history preserves the prior version) — do not post a new Jira comment. Per §2.5 the summary is a snapshot and is not re-synced; the pointer already leads to the current file. (Non-detail results that have no git file — e.g. a one-off dev-result summary comment — still follow the old rule: post a fresh comment with "Supersedes prior; see commit XYZ".)
 - ❌ **Full file contents** — Tech specs reference files by path; don't paste the file in.
 
 ### 4. Net effect
@@ -129,7 +166,7 @@ Downstream agents read the **summary first** and drill into detail only when the
 | Phase | Old default ("read the ticket") | With artifact discipline |
 |---|---|---|
 | Architect | full story desc + planner notes | story summary + acceptance criteria |
-| Integrator (3.6) | full thread on every story | `## Names Reserved` + `#### Files to Create/Modify` per sibling story |
+| Integrator (3.6) | full thread on every story | local `names-reserved.md` per sibling story (own file — no tech-spec read) |
 | Tester | story + tech spec + design + dev result | tech spec summary + dev-result summary + worktree |
 | QA | everything above + test results | all summaries + test-result file |
 | Bug-fixer | full thread | bug report + tech spec summary |

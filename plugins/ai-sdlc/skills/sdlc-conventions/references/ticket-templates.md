@@ -106,9 +106,11 @@ A Bug is created with `issue_type: "Bug"` and `additional_fields.parent: {STORY-
 
 ## Comment Formats
 
-**Every artifact comment** opens with `## Summary` (3-5 bullets), then `## Detail`. See `SKILL.md` "Artifact Discipline" for the rationale.
+**Hybrid artifact store (see `SKILL.md` §2.5).** The **`## Summary` bullets go in the Jira comment**, followed by a **pointer** to the detail file in git. The **`### Detail` body is written to `docs/sdlc/{KEY}/*.md`** in the repo, not pasted into Jira. The templates below show the full artifact structure; the split is: summary+pointer → Jira, everything under `### Detail` → the git file.
 
 ### Architect Comment (Tech Spec)
+
+**Jira comment** (summary + pointer only):
 ```markdown
 ## Technical Specification
 
@@ -118,23 +120,32 @@ A Bug is created with `issue_type: "Bug"` and `additional_fields.parent: {STORY-
 - Key dependencies: {libs, modules}
 - Risk / open question: {one bullet, or "none"}
 
-### Detail
+📄 Detail: {Repo Web Base}/blob/{sha}/docs/sdlc/{STORY-KEY}/tech-spec.md
+📄 Names Reserved: {Repo Web Base}/blob/{sha}/docs/sdlc/{STORY-KEY}/names-reserved.md
+```
 
-#### Files to Create/Modify
+**Detail file** `docs/sdlc/{STORY-KEY}/tech-spec.md`:
+```markdown
+# Technical Specification — {STORY-KEY}
+
+## Files to Create/Modify
 - `src/module/file.py` — {what to do}
 - `tests/test_file.py` — {what to test}
 
-#### Approach
+## Approach
 {Implementation approach. Reference existing patterns by file path; do not paste code.}
 
-#### Data Structures
+## Data Structures
 {Key signatures only — `def parse(stream: IO[bytes]) -> list[Record]`. No bodies.}
 
-#### Edge Cases
+## Edge Cases
 - {Edge case 1}
 - {Edge case 2}
+```
 
-## Names Reserved
+**Names Reserved file** `docs/sdlc/{STORY-KEY}/names-reserved.md`:
+```markdown
+# Names Reserved — {STORY-KEY}
 - **New files:** `path/foo.py`, `path/bar.tsx`
 - **Exported symbols:** `class FooThing` in `path/foo.py`, `function ChartResult` in `path/bar.tsx`
 - **Route prefixes:** `/api/foo`, `/api/foo/{id}`
@@ -142,12 +153,14 @@ A Bug is created with `issue_type: "Bug"` and `additional_fields.parent: {STORY-
 - **Env vars / config keys:** `FOO_TIMEOUT`, `foo.timeout`
 ```
 
-**Names Reserved is mandatory.** It is a top-level section (not nested under `### Detail`) so the Phase 3.6 integrator agent can locate it via header match across stories. Every architect tech spec must include it. For categories that do not apply to a given story, write `none` — do not omit the bullet. The format is fixed:
+**Names Reserved is mandatory and lives in its own file** (`names-reserved.md`), so the Phase 3.6 integrator reads only that small file per sibling story — never the full tech spec — to detect collisions. Every architect story must produce it. For categories that do not apply, write `none` — do not omit the bullet. The format is fixed:
 - Bullets keyed by category (`New files`, `Exported symbols`, etc.)
 - File paths as backticked relative paths
 - Symbols qualified by `<kind> <name> in <path>` (e.g., `class FooThing in src/foo.py`)
 - One reservation per item; comma-separated within a single bullet
 ### Integrator Comment (Phase 3.6)
+
+**Jira comment** (summary + pointer):
 ```markdown
 ## Integration Notes
 
@@ -155,19 +168,26 @@ A Bug is created with `issue_type: "Bug"` and `additional_fields.parent: {STORY-
 - Stories audited: {N}
 - Shared files: {count}
 - Name collisions: {count} (resolved | requires-rename)
-- Action required: {yes/no — see below}
+- Action required: {yes/no — see detail}
 
-### Shared files
+📄 Detail: {Repo Web Base}/blob/{sha}/docs/sdlc/{STORY-KEY}/integration-notes.md
+```
+
+**Detail file** `docs/sdlc/{STORY-KEY}/integration-notes.md`:
+```markdown
+# Integration Notes — {STORY-KEY}
+
+## Shared files
 - `web/backend/.../app.py` — also touched by CSI-X, CSI-Y. Strategy: union-merge router registrations.
 
-### Name collisions
+## Name collisions
 - `ChartResult.tsx` — also reserved by CSI-X for an incompatible API. Recommended rename: `ChartByType.tsx` (per internal type name).
 
-### Action required
+## Action required
 - Update tech spec to reflect the new component name OR confirm coordination with CSI-X.
 ```
 
-The integrator posts ONE `## Integration Notes` comment per affected story. When a rename is required, the orchestrator re-routes affected stories to the architect for revision before development starts.
+The integrator posts ONE `## Integration Notes` comment per affected story (summary + pointer); the detail goes to the story's `integration-notes.md`. When a rename is required, the orchestrator re-routes affected stories to the architect for revision before development starts.
 
 ### Developer Comment (Implementation Done)
 ```markdown
