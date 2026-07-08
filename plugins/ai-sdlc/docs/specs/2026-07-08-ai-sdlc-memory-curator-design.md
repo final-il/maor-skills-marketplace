@@ -1,7 +1,7 @@
 # AI-SDLC Memory Curator — Design Spec
 
 **Date:** 2026-07-08
-**Status:** Design + scaffold. NOT yet wired live (curate verb is a stub; no smoke tests run).
+**Status:** Design + scaffold, **validated by one live run** against the real SDLC corpus (2026-07-08). The `sdlc-curator` agent works end-to-end: isolated scan → leverage-ranked, evidence-verified, safety-tiered proposal (3 candidates found and applied under approval). The `/sdlc lessons curate` command flow is documented but not yet exercised as a single automated path — the first run was driven manually. Formal smoke suite (below) still to run.
 **Scope:** The subtractive half of the self-learning loop. Where `sdlc-lesson-extractor` **adds** rules to the accumulated knowledge under a cost gate, the curator **removes** what is no longer relevant under a safety gate.
 
 > Read alongside `2026-06-10-ai-sdlc-self-learning-design.md`. This spec deliberately reuses that loop's machinery (journal, extractor-shaped isolation, approval-owns-apply split, toggle/flag-file, `references/recipes-*.md` tier) rather than inventing a parallel system. It is the **generalization and implementation of that spec's "Change 3 — pruning pass, scoped"** (2026-07-05 addendum), which sketched a periodic consolidation pass over recipes but left it as future work.
@@ -85,6 +85,8 @@ leverage = lines_removed × load_weight
                 on-demand      = 1
                 never-loaded   = 0   (journal archival ranked last; it's hygiene, not token savings)
 ```
+
+**Token-win vs maintainability-win.** A `lines × always-loaded-weight` score is a real per-spawn token saving ONLY when each duplicate copy sits in a **separate** always-loaded artifact that loads on its own (two standalone `feedback_*.md` files stating the same rule — removing one removes it from context forever). When the duplicate block instead lives *inside* files that each load once regardless (a verbatim `## Lessons` block repeated across 13 role files — each role file is injected once per spawn no matter its body), deduping is a **maintainability** win, not a token win — it scores `load_weight = 1` or drops below the cut. The curator must not claim a token saving the load model doesn't deliver. (This distinction was surfaced by the first live run against the real corpus, which correctly demoted the cross-role `## Lessons` duplication to `Dropped`.)
 
 It returns only the **top-N** candidates (default N=15) and — per the "no silent caps" discipline — reports how many it dropped and their aggregate leverage (*"+9 lower-leverage candidates not shown (~30 always-loaded lines); re-run with `--all` to see them"*). Each candidate quantifies its win: *"consolidating these 6 duplicated lines removes ~40 always-loaded lines ≈ N tokens per relevant spawn, forever."* The batch opens with a one-line total: biggest always-loaded win first.
 

@@ -61,6 +61,7 @@ Full design: `docs/specs/2026-07-08-ai-sdlc-memory-curator-design.md`. Read it i
                    on-demand      = 1
                    never-loaded   = 0
    ```
+   **Token-win vs maintainability-win — do not conflate them.** A `lines_removed × 100` score is a real *per-spawn token* win ONLY when each copy is in a **separate** always-loaded artifact that is fully loaded on its own (e.g. the same rule living in two standalone `feedback_*.md` files — removing one removes it from context forever). When the duplicated block instead lives *inside* files that each load exactly once regardless (e.g. a verbatim `## Lessons` block repeated across 13 role files — each role file is injected once per spawn no matter what its body contains), deduping it does NOT reduce per-spawn tokens; it is a **maintainability** win only. Score those with `load_weight = 1` (or demote to `Dropped`), and say so in the human note. Never claim a token saving that the load model doesn't actually deliver.
    Report how many candidates you dropped below the cut and their aggregate lines — never a silent cap.
 8. **Anti-thrash check.** Before proposing to `delete` a recipe, scan the journal: if the same content was ADDED by an approved lesson within the last 50 events, do not propose silent removal — mark it `recently-added — confirm intent` in the candidate's Evidence.
 9. **Return the proposal.**

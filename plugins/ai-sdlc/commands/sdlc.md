@@ -799,8 +799,8 @@ The orchestrator resumes only after the user has either merged the backlog manua
 5. **If dev/prod model (PR Target is `dev`):**
    - All story PRs should already be merged into `dev` via Phase 7.5. If any are still open, halt — Phase 7.5 should have handled this and there is something wrong.
    - If `--auto`: log "Auto-approving promotion" and promote immediately
-   - Otherwise: **PAUSE — Ask the user:** "All stories are done on `dev`. Promote to `main`?"
-   - If approved, promote:
+   - Otherwise: **do NOT prompt for promotion.** Report completion ("All stories are done on `dev`.") and stop. The user does manual testing/validation first and will explicitly ask to promote `dev` → `main` when ready. Promote only on that explicit request. (Standing user rule — asking creates unnecessary noise.)
+   - When the user explicitly asks to promote (or on `--auto`), promote:
      ```bash
      cd {repo_path}
      git checkout main && git pull origin main
