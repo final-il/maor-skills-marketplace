@@ -92,6 +92,7 @@ When this document says "Spawn the `sdlc-X` agent", do this:
 | sdlc-conflict-resolver | sonnet |
 | sdlc-jira-reader | sonnet |
 | sdlc-lesson-extractor | sonnet |
+| sdlc-curator | sonnet |
 
 This ensures agents get ToolSearch, MCP tools, and the Skill tool (for invoking skills like tavily-search, systematic-debugging, etc.), and keeps the orchestrator's context lean.
 
@@ -151,7 +152,8 @@ The user provides `$ARGUMENTS` which can be:
 1. **A file path** (ends in `.md`, `.txt`, or starts with `/`) — read the file as the project plan
 2. **A Jira epic key** (matches pattern like `PROJ-123`) — resume an existing pipeline
 3. **`pause {EPIC-KEY}`** — save current state for fast resume (see "Pause & Handoff")
-4. **A text description** — treat as a new project description
+4. **`lessons on|off|curate`** (or bare `lessons`) — self-learning controls: toggle capture on/off, or run the subtractive curator (`curate`). See `## Self-Learning Loop` → Toggle and Curate.
+5. **A text description** — treat as a new project description
 
 ### Flags
 
@@ -305,6 +307,7 @@ This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader s
      conflict-resolver: "/.../plugins/ai-sdlc/agents/sdlc-conflict-resolver.md",
      reader:            "/.../plugins/ai-sdlc/agents/sdlc-jira-reader.md",
      lesson-extractor:  "/.../plugins/ai-sdlc/agents/sdlc-lesson-extractor.md",
+     curator:           "/.../plugins/ai-sdlc/agents/sdlc-curator.md",
    }
    ```
    If multiple matches per role exist (e.g., dev marketplace + cached prod marketplace), pick the path under the active marketplace (`maor-skills-marketplace-dev` if `~/git-dev/.claude/settings.json` enables it, else `maor-skills-marketplace`). Do NOT Read these files — agents Read their own role definition.
@@ -893,6 +896,43 @@ See `docs/specs/2026-06-10-ai-sdlc-self-learning-design.md` for the full design.
 - **Slash command:** `/sdlc lessons on|off` flips state, writes/removes the flag file, persists, confirms in one line. `/sdlc lessons` (no arg) reports current state.
 - **LLM intent:** classify free-form user text as `disable` ("turn off self-learning", "too noisy, stop capturing"), `enable` ("turn lessons back on"), or `irrelevant`. On `disable`/`enable`: confirm in one line, write/remove the flag file, update state, persist on next auto-save.
 - On every flip, the next agent spawn's context line reflects the new value.
+
+### Curate (subtractive loop) — `/sdlc lessons curate`
+
+> **STATUS: SCAFFOLD — not yet smoke-tested.** Wiring is present; the flow below is the contract, not a validated path. See `docs/specs/2026-07-08-ai-sdlc-memory-curator-design.md` for the full design.
+
+The curator is the **subtractive inverse** of the extractor: where the extractor ADDS one rule under a cost gate, the curator finds duplicated / contradictory / superseded / stale content to REMOVE under a safety gate. It runs **on-demand only** (v1 — no auto-offer, no schedule). All corpus-reading happens inside the `sdlc-curator` sub-agent's throwaway context, so the main session never ingests the corpus — running it has zero standing context cost.
+
+**Flow:**
+
+1. **Toggle hard-gate.** If Self-Learning is OFF, refuse: *"Self-learning is off; curation is part of the same loop. Turn it on with `/sdlc lessons on` first."* Do not spawn.
+2. **Resolve the corpus** (the command layer globs so the agent stays bounded), grouped by tier:
+   - **always-loaded:** `plugins/ai-sdlc/agents/sdlc-*.md`, `plugins/ai-sdlc/commands/sdlc.md`, `~/.claude/projects/-Users-maorb-git-dev/memory/feedback_*.md` + `MEMORY.md`, repo-local `CLAUDE.md`, user global `CLAUDE.md`/`RTK.md`.
+   - **on-demand:** `plugins/ai-sdlc/skills/*/SKILL.md`, `plugins/ai-sdlc/skills/*/references/*.md` (incl. `recipes-*.md`), other `~/.claude/projects/.../memory/*.md`.
+   - **never-loaded:** the journal `sdlc-events.jsonl`.
+   Resolve repo root, plugin root, journal path.
+3. **Spawn `sdlc-curator`** via the standard general-purpose `Agent()` pattern (per "How to Spawn Agents"). Pointer to `Agent Paths.curator`. Prompt body:
+   ```
+   Corpus:
+     always-loaded: <file list>
+     on-demand: <file list>
+     never-loaded: <journal path>
+   Journal Path: ~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-events.jsonl
+   Repo Root: <repo root>
+   Plugin Root: <plugin root>
+   Top-N: 15
+   Self-Learning: ON
+   ```
+4. **Surface the ranked proposal** as a batch (reuse the mode-2 batch surface shape): the `Total potential savings` line, then each candidate block, then: `Approve all / Reject all / Per-item (1: a/r, 2: a/r, ...)`.
+5. **Per-item apply on approval** (the curator NEVER edits — the orchestrator does, exactly as with lesson proposals):
+   - `delete` / `archive` (Tier A) → Edit removes the recipe block; journal archival moves resolved lines to `sdlc-events.archive-YYYY-MM.jsonl` (reuse the manual-rotation convention).
+   - `consolidate` (Tier B) → Edit removes the duplicate copy from the **non-canonical** file only; the canonical file is untouched (add a one-line pointer only if the resolution says so).
+   - `resolve-contradiction` (Tier B) → Edit the losing side to defer to the winner the user picked at the gate.
+   Do NOT auto-commit (v1 — the user commits when ready). Rejected candidates apply no edit.
+6. **Journal each action** with the curator schema variant: `source: "curator"`, `agent: "sdlc-curator"`, `curator_run: { category, tier, action, targets, leverage, resolution }`, `status: proposed → approved | rejected` (or `archived`). Same append-only, latest-line-per-`id` mechanics as the additive loop.
+7. **Anti-thrash guard.** If the curator flagged a candidate `recently-added — confirm intent` (the same content was added by an approved lesson within the last 50 events), surface that note prominently so the user doesn't undo a fresh lesson by reflex.
+
+**Safety invariant (enforced by the curator, re-checked here):** a Tier-B (always-loaded) candidate is NEVER a silent `delete` — only `consolidate` (the rule survives in the canonical file) or `resolve-contradiction` (both sides shown, user picks). If a proposal ever shows `Tier: B` with `Action: delete`, reject it and note the contract violation.
 
 ### Mode
 

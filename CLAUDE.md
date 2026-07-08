@@ -47,7 +47,9 @@ maor-skills-marketplace/
         │   ├── sdlc-developer.md      ← Phase 4: Writes code, opens PRs
         │   ├── sdlc-tester.md         ← Phase 5: Writes + runs tests
         │   ├── sdlc-qa-reviewer.md    ← Phase 6: Code review + validation
-        │   └── sdlc-bug-fixer.md      ← Phase 7: Fixes bugs, re-tests
+        │   ├── sdlc-bug-fixer.md      ← Phase 7: Fixes bugs, re-tests
+        │   ├── sdlc-lesson-extractor.md ← Self-learning: proposes rule ADDITIONS
+        │   └── sdlc-curator.md        ← Self-learning: proposes rule REMOVALS (inverse of extractor)
         └── skills/
             ├── sdlc-conventions/       ← Shared Jira conventions + context protocol
             │   ├── SKILL.md
