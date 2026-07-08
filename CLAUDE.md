@@ -49,7 +49,8 @@ maor-skills-marketplace/
         │   ├── sdlc-qa-reviewer.md    ← Phase 6: Code review + validation
         │   ├── sdlc-bug-fixer.md      ← Phase 7: Fixes bugs, re-tests
         │   ├── sdlc-lesson-extractor.md ← Self-learning: proposes rule ADDITIONS
-        │   └── sdlc-curator.md        ← Self-learning: proposes rule REMOVALS (inverse of extractor)
+        │   ├── sdlc-curator.md        ← Self-learning: proposes rule REMOVALS (inverse of extractor)
+        │   └── sdlc-documenter.md     ← Phase 7.7 (opt-in --docs): product docs → README/docs/Confluence
         └── skills/
             ├── sdlc-conventions/       ← Shared Jira conventions + context protocol
             │   ├── SKILL.md
@@ -81,7 +82,7 @@ maor-skills-marketplace/
 
 Entry point: `/sdlc "description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KEY` (resume)
 
-8 agents coordinate through Jira as a message bus. Each agent transitions tickets through: Backlog → Selected for Development → In Progress → In Review → Testing → Done (with Bug issue type for defect loop). Phase 3.5 (Designer) is optional — runs only for stories with user-facing components, with user approval before development begins.
+8 agents coordinate through Jira as a message bus. Each agent transitions tickets through: Backlog → Selected for Development → In Progress → In Review → Testing → Done (with Bug issue type for defect loop). Phase 3.5 (Designer) is optional — runs only for stories with user-facing components, with user approval before development begins. Phase 7.7 (Documenter) is optional too — enabled with `--docs`, it synthesizes durable product docs (README/docs/Confluence) from the epic's specs + merged code after all stories merge.
 
 **Branching model:** Phase 0 auto-detects dev/prod (two-branch) vs single-branch setups. Context block includes `Base Branch` and `PR Target` so agents always branch and open PRs against the correct branch. Phase 8 handles promotion (dev → main) with user approval.
 

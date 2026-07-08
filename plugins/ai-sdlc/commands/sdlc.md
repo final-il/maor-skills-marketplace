@@ -93,6 +93,7 @@ When this document says "Spawn the `sdlc-X` agent", do this:
 | sdlc-jira-reader | sonnet |
 | sdlc-lesson-extractor | sonnet |
 | sdlc-curator | sonnet |
+| sdlc-documenter | sonnet |
 
 This ensures agents get ToolSearch, MCP tools, and the Skill tool (for invoking skills like tavily-search, systematic-debugging, etc.), and keeps the orchestrator's context lean.
 
@@ -160,6 +161,7 @@ The user provides `$ARGUMENTS` which can be:
 Parse these flags from `$ARGUMENTS` before processing:
 
 - **`--auto`** — Auto-approve all gates. Skip all approval pauses (plan approval, design approval, promotion). The pipeline runs end-to-end without stopping. Use for testing or trusted pipelines.
+- **`--docs`** — Enable Phase 7.7 (Documentation). After all stories are Done + merged, synthesize durable product docs (README edits, a `docs/<feature>.md` page, an optional changelog entry, and a Confluence page) from the epic's Jira artifacts + the merged code. Off by default; when absent, Phase 7.7 is skipped. Persisted to the resume file's `## Docs` block so it survives `/sdlc continue`. See Phase 7.7.
 
 Strip flags from `$ARGUMENTS` before using the remaining text as the project description.
 
@@ -308,6 +310,7 @@ This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader s
      reader:            "/.../plugins/ai-sdlc/agents/sdlc-jira-reader.md",
      lesson-extractor:  "/.../plugins/ai-sdlc/agents/sdlc-lesson-extractor.md",
      curator:           "/.../plugins/ai-sdlc/agents/sdlc-curator.md",
+     documenter:        "/.../plugins/ai-sdlc/agents/sdlc-documenter.md",
    }
    ```
    If multiple matches per role exist (e.g., dev marketplace + cached prod marketplace), pick the path under the active marketplace (`maor-skills-marketplace-dev` if `~/git-dev/.claude/settings.json` enables it, else `maor-skills-marketplace`). Do NOT Read these files — agents Read their own role definition.
@@ -758,6 +761,48 @@ After every Phase 7.5 run, count remaining open PRs targeting `{base_branch}` fr
 
 The orchestrator resumes only after the user has either merged the backlog manually or cleared the escalated Bugs (whichever applies).
 
+## Phase 7.7: Documentation (Optional — `--docs` only)
+
+**Gate first.** If the `--docs` flag is NOT set, skip this entire phase — log one line ("Docs phase skipped (no --docs).") and proceed to Phase 8. Everything below runs only when `--docs` is set.
+
+By this point every story is `Done` and merged, so the source material is complete: the epic's Jira artifacts **plus** the actual merged code on `{base_branch}`. This phase turns that into durable **product** documentation (distinct from the `sdlc-explainer` skill, which documents the SDLC system itself). Full design: `docs/specs/2026-07-08-ai-sdlc-documentation-phase-design.md`.
+
+1. **Resolve doc targets.** Default in-scope set: `readme`, `docs-page`, `changelog`, `confluence`. (A future `--docs=readme,confluence` form may narrow this; absent that, use all four.)
+
+2. **Resolve the Confluence target.**
+   - If the resume file's `## Docs` block (or the context block) has `confluence_space` + `confluence_parent`, use them.
+   - Else ask the user **once**: "Which Confluence space + parent page for `{Project Name}` docs?" Persist the answer to `## Docs` so it is never re-asked for this project.
+   - If the user declines or has no Confluence: drop the `confluence` target (log it), keep the repo targets. Persist `confluence_space: none` so it is not re-asked.
+
+3. **Spawn `sdlc-documenter`** (`Agent Paths.documenter`, model `sonnet`). Pass the standard SDLC Context block plus:
+   ```
+   Epic Key: {EPIC-KEY}
+   Read Artifacts: epic ## Critical User Journeys + description; each story's ## Technical Specification, ## Integration Notes, ## Design Specification
+   Doc Targets: {resolved set}
+   Confluence Space: {key or "unset"}
+   Confluence Parent: {id or "unset"}
+   ```
+   The agent reads the epic corpus + merged diff in ITS context and returns a `## Documentation Proposal` (or `## Verdict: nothing-to-document`). It writes nothing.
+
+4. **If `nothing-to-document`:** log the reason, skip to Phase 8. (Legitimate for internal refactors with no user-facing surface.)
+
+5. **Surface the proposal for approval** (unless `--auto`, which auto-approves — consistent with every other gate). Show the user: the README edit (diff-style), the new `docs/<feature>.md`, the changelog entry (or its SKIP), and the Confluence page title + space. Let them approve all / edit / skip individual targets.
+
+6. **On approval, apply the repo targets:**
+   - Apply each README Edit using the agent's verbatim `old_string` anchors.
+   - Write `docs/<feature>.md`.
+   - Append the changelog entry (only if the agent found a real changelog convention).
+   - Commit on `{base_branch}` (same as the Phase 8 CUJ artifacts), or open a small "epic docs" PR if branch protection requires it:
+     ```bash
+     git -C {repo_path} add README.md docs/ CHANGELOG*
+     git -C {repo_path} commit -m "docs({EPIC-KEY}): document shipped feature"
+     git -C {repo_path} push origin {base_branch}
+     ```
+
+7. **On approval, apply the Confluence target** (if in scope): create the page with `mcp__mcp-atlassian__confluence_create_page` (pass `contentFormat: "markdown"`), or `confluence_update_page` if an epic page already exists (check by title/label first — idempotent re-run). Then link it from the epic ticket with a `## Documentation` comment (page URL + repo docs path).
+
+8. **Journal the run.** If Self-Learning is ON, write one event with `source:"documenter"` and a `documenter_run` object `{ epic, files_written: [...], confluence_page_id, status:"applied" }` — structurally parallel to `extractor_run`/`curator_run`. If OFF, skip (no journal write).
+
 **Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
 ## Phase 8: Completion
@@ -1166,6 +1211,19 @@ queue: [<event_id>, ...]    # empty in mode 1; non-empty only in mode 2
 ```
 
 On `Phase 0 → Fast Resume`, when reading the resume file, restore mode state from this block. If the block is absent, default to `current: 1, ...all flags false, proposals_this_phase: 0, queue: []`.
+
+### Docs state in the auto-resume file
+
+Phase 7.7 (`--docs`) persists its state so it survives `/sdlc continue` and the Confluence target is asked only once per project. Add:
+
+```
+## Docs
+enabled: true | false          # mirrors the --docs flag; default false if absent
+confluence_space: <key> | none | unset   # "unset" = not yet asked; "none" = user declined
+confluence_parent: <id> | unset
+```
+
+On `Phase 0 → Fast Resume`, restore `enabled` into the in-memory `--docs` state (so a resumed run keeps documenting). If the block is absent, default to `enabled: false, confluence_space: unset, confluence_parent: unset`. On the first auto-save after `--docs` is seen on the command line, write `enabled: true` explicitly.
 
 ## Error Handling
 
