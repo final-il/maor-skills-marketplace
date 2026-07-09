@@ -49,7 +49,7 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, transition map, **Read Artifacts**, **Write Artifact**)
+- SDLC context block (cloudId, projectKey, repo path, **Repo Web Base**, transition map, **Read Artifacts** — `docs/sdlc/{STORY-KEY}/tech-spec.md` read locally from the checkout, **Write Artifact**)
 - A single Jira story key (in "Testing" status)
 - Optional: `Mode: fast` flag from the orchestrator (see Fast Mode section below)
 
@@ -64,7 +64,7 @@ What NOT to put in the comment:
 
 ## Process
 
-1. **Read only listed artifacts** — Your prompt's `Read Artifacts` is typically: story description + AC, tech spec summary, dev-result summary, test-result summary. Read each artifact's `## Summary` first; drill into `## Detail` only when verifying a specific concern.
+1. **Read only listed artifacts (hybrid store — §2.5).** The tech-spec detail — including the `## Smoke Path` and `## Wire Contracts` sections you validate against — lives in `docs/sdlc/{STORY-KEY}/tech-spec.md` in the checkout, not Jira. Read that file directly with the `Read` tool — no network. Use `mcp__mcp-atlassian__jira_get_issue` once for the story description + AC and the dev/test `## Summary` comments. **Mixed-mode fallback:** if `docs/sdlc/{STORY-KEY}/tech-spec.md` is absent (old all-in-Jira epic), read the `## Detail` of the architect's `## Technical Specification` Jira comment instead.
 
 2. **Read the code:**
    - Identify the PR branch from the developer's Jira comment

@@ -50,7 +50,7 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, **worktree path**, transition map, **Read Artifacts**, **Write Artifact**)
+- SDLC context block (cloudId, projectKey, repo path, **worktree path**, **Repo Web Base**, transition map, **Read Artifacts** — `docs/sdlc/{STORY-KEY}/tech-spec.md` read locally from the worktree, **Write Artifact**)
 - A single Jira story key (in "In Review" status)
 - The PR branch name
 
@@ -68,7 +68,7 @@ What NOT to put in the comment:
 
 ## Process
 
-1. **Read only listed artifacts** — Your prompt's `Read Artifacts` is typically: story description + AC, tech spec summary, developer's `## Implementation Complete` summary. Read summaries first; drill into detail only on failure investigation.
+1. **Read only listed artifacts (hybrid store — §2.5).** The `## Smoke Path` and `## Wire Contracts` sections you test against live in `docs/sdlc/{STORY-KEY}/tech-spec.md` in git, not Jira. Read that file directly from the worktree with the `Read` tool — no network. Use `mcp__mcp-atlassian__jira_get_issue` once for the story description + AC and the developer's `## Implementation Complete` `## Summary` comment. **Mixed-mode fallback:** if `docs/sdlc/{STORY-KEY}/tech-spec.md` is absent (old all-in-Jira epic), read the `## Detail` of the architect's `## Technical Specification` Jira comment instead.
 
 2. **Enter the worktree and sync:**
    ```bash

@@ -50,7 +50,7 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, **worktree path**, transition map, **Read Artifacts**, **Write Artifact**)
+- SDLC context block (cloudId, projectKey, repo path, **worktree path**, **Repo Web Base**, transition map, **Read Artifacts** — parent story's `docs/sdlc/{STORY-KEY}/tech-spec.md` read locally from the worktree, **Write Artifact**)
 - A Bug sub-task key (the specific bug to fix)
 - The parent story key
 
@@ -68,7 +68,7 @@ What NOT to put in the comment:
 
 ## Process
 
-1. **Read only listed artifacts** — Your prompt's `Read Artifacts` is typically: bug description, parent story's tech spec summary, developer's `## Implementation Complete` summary, tester's failure summary. Read summaries first.
+1. **Read only listed artifacts (hybrid store — §2.5).** The parent story's tech-spec detail lives in `docs/sdlc/{STORY-KEY}/tech-spec.md` in the worktree, not Jira. Read that file directly with the `Read` tool — no network. Use `mcp__mcp-atlassian__jira_get_issue` once for the bug description and the tester's failure `## Summary` comment. **Mixed-mode fallback:** if `docs/sdlc/{STORY-KEY}/tech-spec.md` is absent (old all-in-Jira epic), read the `## Detail` of the architect's `## Technical Specification` Jira comment instead.
 
 2. **Read the parent story** — Use the listed parent-story summary; do NOT re-read every comment in the thread.
 

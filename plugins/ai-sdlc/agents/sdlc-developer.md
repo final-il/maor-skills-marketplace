@@ -50,7 +50,7 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, **worktree path**, base branch, transition map, **Read Artifacts**, **Write Artifact**)
+- SDLC context block (cloudId, projectKey, repo path, **worktree path**, base branch, **Repo Web Base**, transition map, **Read Artifacts** — `docs/sdlc/{STORY-KEY}/tech-spec.md` (+ `design-spec.md` if Phase 3.5 ran), read locally from the worktree, **Write Artifact**)
 - A single Jira story key to implement
 
 **Worktree Path is your working directory.** The orchestrator has already created a dedicated git worktree for this story at `{worktree_path}` (typically `{repo_path}.worktrees/{STORY-KEY}`). All code edits, builds, tests, commits, and pushes happen there. Do NOT `cd {repo_path}` — another agent may be working there. Only read-only access to `{repo_path}` is allowed (e.g., reading `CLAUDE.md` if it isn't in the worktree). Never run `git worktree add` or `git worktree remove` — that is the orchestrator's job.
@@ -67,7 +67,7 @@ What NOT to put in the comment:
 
 ## Process
 
-1. **Read only listed artifacts** — Your prompt's `Read Artifacts` typically includes the story description + the architect's tech spec (and the designer's spec if Phase 3.5 ran). Use `mcp__mcp-atlassian__jira_get_issue` once and read those sections' `## Summary` first; drill into `## Detail` only when implementation requires it.
+1. **Read only listed artifacts (hybrid store — §2.5).** The spec **detail** lives in git, not Jira. Your prompt's `Read Artifacts` lists the story key plus the local detail files: `docs/sdlc/{STORY-KEY}/tech-spec.md` (and `design-spec.md` if Phase 3.5 ran). These files were committed at Phase 3/3.5 end and are present in your worktree. Read them with the `Read` tool — no network. Use `mcp__mcp-atlassian__jira_get_issue` **once** for the story description + AC (and to read the architect's `## Summary` comment for orientation). **Mixed-mode fallback:** if `docs/sdlc/{STORY-KEY}/tech-spec.md` is absent (an epic that ran under the old all-in-Jira model), fall back to reading the `## Detail` of the architect's `## Technical Specification` Jira comment instead.
 
 2. **Load development skills** — Invoke relevant skills:
    ```
