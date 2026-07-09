@@ -120,8 +120,8 @@ A Bug is created with `issue_type: "Bug"` and `additional_fields.parent: {STORY-
 - Key dependencies: {libs, modules}
 - Risk / open question: {one bullet, or "none"}
 
-📄 Detail: {Repo Web Base}/blob/{sha}/docs/sdlc/{STORY-KEY}/tech-spec.md
-📄 Names Reserved: {Repo Web Base}/blob/{sha}/docs/sdlc/{STORY-KEY}/names-reserved.md
+📄 Detail: {Repo Web Base}/blob/{base_branch}/docs/sdlc/{STORY-KEY}/tech-spec.md
+📄 Names Reserved: {Repo Web Base}/blob/{base_branch}/docs/sdlc/{STORY-KEY}/names-reserved.md
 ```
 
 **Detail file** `docs/sdlc/{STORY-KEY}/tech-spec.md`:
@@ -170,7 +170,7 @@ A Bug is created with `issue_type: "Bug"` and `additional_fields.parent: {STORY-
 - Name collisions: {count} (resolved | requires-rename)
 - Action required: {yes/no — see detail}
 
-📄 Detail: {Repo Web Base}/blob/{sha}/docs/sdlc/{STORY-KEY}/integration-notes.md
+📄 Detail: {Repo Web Base}/blob/{base_branch}/docs/sdlc/{STORY-KEY}/integration-notes.md
 ```
 
 **Detail file** `docs/sdlc/{STORY-KEY}/integration-notes.md`:

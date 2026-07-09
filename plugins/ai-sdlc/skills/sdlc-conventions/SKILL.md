@@ -142,10 +142,10 @@ Design + rationale: `docs/specs/2026-07-08-ai-sdlc-hybrid-artifact-store-design.
 - Test strategy: 5 fixture files covering malformed/valid/large
 - Risk: SAX is callback-based; refactor needed if we want async later
 
-📄 Detail: https://github.com/{org}/{repo}/blob/{sha}/docs/sdlc/CSI-105/tech-spec.md
+📄 Detail: https://github.com/{org}/{repo}/blob/{base_branch}/docs/sdlc/CSI-105/tech-spec.md
 ```
 
-**Pointer format:** a clickable GitHub blob URL pinned to the commit the detail was written at — `{Repo Web Base}/blob/{sha}/{path}`. The orchestrator derives `Repo Web Base` once (from `git remote get-url origin`, normalizing `git@github.com:org/repo.git` or `https://github.com/org/repo.git` → `https://github.com/org/repo`) and passes it in the context block. Agents that need to **read** the detail use the repo-relative path locally (they have `Repo Path` + the worktree) — no network. The URL is for the human-facing Jira pointer only.
+**Pointer format:** a clickable GitHub blob URL **tracking the base branch** — `{Repo Web Base}/blob/{base_branch}/{path}` (both `Repo Web Base` and `Base Branch` come from the context block). It is branch-relative, not sha-pinned, so it always resolves to the *current* detail (consistent with "the pointer is truth" below) and the agent can write it in one pass without knowing the phase-end commit sha. The orchestrator derives `Repo Web Base` once (from `git remote get-url origin`, normalizing `git@github.com:org/repo.git` or `https://github.com/org/repo.git` → `https://github.com/org/repo`) and passes it in the context block. Agents that need to **read** the detail use the repo-relative path locally (they have `Repo Path` + the worktree) — no network. The URL is for the human-facing Jira pointer only.
 
 **Summary is a snapshot; the pointer is truth.** The summary is written once, when the artifact is created. If a later phase edits the detail file, the agent does **NOT** re-post the summary — the pointer always leads to the current file. Consequence: **the Jira summary may lag the detail; follow the pointer for current truth.** (This is deliberate — re-syncing on every edit is the Jira-write cost this model exists to eliminate.)
 

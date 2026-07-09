@@ -90,11 +90,13 @@ Net: the `sdlc-documenter` agent shrinks (less synthesis, more assembly), and th
 
 ## Build decisions (resolved 2026-07-09)
 
-1. **Pointer format → clickable repo URL (pinned to sha).** The Jira comment footer is a full GitHub blob URL at the commit the detail was written at:
+1. **Pointer format → clickable repo URL, branch-relative.** The Jira comment footer is a full GitHub blob URL tracking the base branch:
    ```
-   📄 Detail: https://github.com/{org}/{repo}/blob/{sha}/docs/sdlc/CSI-105/tech-spec.md
+   📄 Detail: https://github.com/{org}/{repo}/blob/{base_branch}/docs/sdlc/CSI-105/tech-spec.md
    ```
-   One click from Jira to the rendered file. The orchestrator derives the web base once (from `git remote get-url origin`, transforming `git@github.com:org/repo.git` / `https://github.com/org/repo.git` → `https://github.com/org/repo`) and stores it in the context block as `Repo Web Base`. Agents build the URL from `{Repo Web Base}/blob/{sha}/{path}`. Agents that need to *read* the detail still use the repo-relative path locally (they already have `Repo Path`) — the URL is for the human-facing pointer only.
+   One click from Jira to the *current* rendered file. The orchestrator derives the web base once (from `git remote get-url origin`, transforming `git@github.com:org/repo.git` / `https://github.com/org/repo.git` → `https://github.com/org/repo`) and stores it in the context block as `Repo Web Base`. Agents build the URL from `{Repo Web Base}/blob/{base_branch}/{path}`. Agents that need to *read* the detail still use the repo-relative path locally (they already have `Repo Path`) — the URL is for the human-facing pointer only.
+
+   **Branch-relative, not sha-pinned (resolved 2026-07-09):** a sha-pinned URL would freeze at the write-time version, contradicting decision 4 ("follow the pointer for current truth") — and the phase-end commit sha does not exist when the agent writes its summary, so pinning would force an orchestrator rewrite pass (an extra Jira write per artifact, the exact cost this model eliminates). Branch-relative is always-current and writable in one pass. Trade-off accepted: the link breaks if a detail file is later moved/deleted (rare; git history still has it).
 
 2. **`Names Reserved` → its own file** `docs/sdlc/{STORY}/names-reserved.md`. The integrator reads only this small per-story file to detect collisions, never the full tech spec — cheapest possible integrator read. The architect writes it alongside `tech-spec.md`.
 

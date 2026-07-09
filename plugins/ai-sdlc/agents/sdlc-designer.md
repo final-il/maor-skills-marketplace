@@ -49,12 +49,12 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 ## Input
 
 You receive:
-- SDLC context block (cloudId, projectKey, repo path, transition map, **Read Artifacts**, **Write Artifact**)
+- SDLC context block (cloudId, projectKey, repo path, **Repo Web Base**, **Base Branch**, transition map, **Read Artifacts**, **Write Artifact**)
 - A single Jira story key (with tech spec already posted by the architect)
 
 ## Artifact Discipline
 
-You produce **exactly one artifact**: a single `## Design Specification` comment that opens with a `## Summary` of 3-5 bullets, then `## Detail` below. See `sdlc-conventions` skill, "Artifact Discipline" section.
+You follow the **hybrid artifact store** (`sdlc-conventions` skill §2.5): the design **detail** is written to `{repo_path}/docs/sdlc/{STORY-KEY}/design-spec.md`, and the Jira comment carries only the `## Summary` (3-5 bullets) plus a **pointer** to that file. You write into the repo checkout on `{base_branch}` (no story worktree exists yet at Phase 3.5); the orchestrator commits it at phase-end. Do NOT paste the detail into Jira.
 
 What NOT to put in the comment:
 - ❌ Restated requirements — the story description already has them
@@ -117,7 +117,34 @@ What NOT to put in the comment:
    - Responsive/scaling behavior
    - Fallback for missing data
 
-6. **Post the design spec** — Add a comment on the Jira story using `mcp__mcp-atlassian__jira_add_comment`:
+6. **Write the design spec (hybrid store — §2.5).** Write the detail file, then post a summary+pointer comment.
+
+   **6a. Detail file** `{repo_path}/docs/sdlc/{STORY-KEY}/design-spec.md` (use the `Write` tool):
+   ```markdown
+   # Design Specification — {STORY-KEY}
+
+   ## Layout
+   {Description or ASCII wireframe — ONE wireframe, the chosen one}
+
+   ## Visual Design
+   {Colors (hex), typography, spacing — values only, no rationale}
+
+   ## UX Flow
+   {User interaction sequence — what happens when}
+
+   ## Output Examples
+   {Concrete examples of what the user will see}
+
+   ## Edge Cases
+   - Empty state: {what to show when no data}
+   - Error state: {how errors appear}
+   - Loading state: {what the user sees while waiting}
+
+   ## Accessibility
+   {Color contrast, screen reader, keyboard navigation — only what's non-obvious}
+   ```
+
+   **6b. Jira comment** — post ONE comment with `mcp__mcp-atlassian__jira_add_comment` (summary + pointer only):
    ```markdown
    ## Design Specification
 
@@ -128,28 +155,10 @@ What NOT to put in the comment:
    - Edge states covered: {empty, error, loading — list which apply}
    - Accessibility note: {one line, or "N/A"}
 
-   ### Detail
-
-   #### Layout
-   {Description or ASCII wireframe — ONE wireframe, the chosen one}
-
-   #### Visual Design
-   {Colors (hex), typography, spacing — values only, no rationale}
-
-   #### UX Flow
-   {User interaction sequence — what happens when}
-
-   #### Output Examples
-   {Concrete examples of what the user will see}
-
-   #### Edge Cases
-   - Empty state: {what to show when no data}
-   - Error state: {how errors appear}
-   - Loading state: {what the user sees while waiting}
-
-   #### Accessibility
-   {Color contrast, screen reader, keyboard navigation — only what's non-obvious}
+   📄 Detail: {Repo Web Base}/blob/{base_branch}/docs/sdlc/{STORY-KEY}/design-spec.md
    ```
+
+   You write the file into the working tree on `{base_branch}`; you do NOT commit it. The orchestrator batch-commits `docs/sdlc/` at phase-end, which is when the pointer URL resolves.
 
 7. **Do NOT transition the story** — the orchestrator will present your design to the user for approval before proceeding.
 
@@ -159,7 +168,7 @@ What NOT to put in the comment:
 - **Show, don't just tell** — use ASCII mockups for CLI, describe wireframes precisely for web. The developer needs to visualize what to build.
 - **Follow existing patterns** — if the project already has a CLI style or web framework, design within those constraints. Don't introduce new paradigms.
 - **Less is more** — prefer clean, minimal designs. Don't over-design simple features.
-- **One comment per story** — keep the design spec in a single well-structured comment.
+- **One comment per story** — the Jira comment is summary + pointer only; the design detail lives in `design-spec.md` (§2.5).
 - **Skip gracefully** — if the story is purely backend (no user-facing component), say so briefly and stop.
 
 ## Lessons (optional, append at end of return text)
