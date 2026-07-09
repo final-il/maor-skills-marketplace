@@ -793,7 +793,7 @@ The orchestrator resumes only after the user has either merged the backlog manua
 
 **Gate first.** If the `--docs` flag is NOT set, skip this entire phase — log one line ("Docs phase skipped (no --docs).") and proceed to Phase 8. Everything below runs only when `--docs` is set.
 
-By this point every story is `Done` and merged, so the source material is complete: the epic's Jira artifacts **plus** the actual merged code on `{base_branch}`. This phase turns that into durable **product** documentation (distinct from the `sdlc-explainer` skill, which documents the SDLC system itself). Full design: `docs/specs/2026-07-08-ai-sdlc-documentation-phase-design.md`.
+By this point every story is `Done` and merged, so the source material is complete: the epic's local spec files under `docs/sdlc/` (committed in Phases 3/3.5/3.6 under the hybrid store — §2.5) **plus** the actual merged code on `{base_branch}`. This phase turns that into durable **product** documentation (distinct from the `sdlc-explainer` skill, which documents the SDLC system itself). Because the specs are now local files, the documenter mostly **assembles** rather than re-synthesizes from Jira. Full design: `docs/specs/2026-07-08-ai-sdlc-documentation-phase-design.md`.
 
 1. **Resolve doc targets.** Default in-scope set: `readme`, `docs-page`, `changelog`, `confluence`. (A future `--docs=readme,confluence` form may narrow this; absent that, use all four.)
 
@@ -805,12 +805,12 @@ By this point every story is `Done` and merged, so the source material is comple
 3. **Spawn `sdlc-documenter`** (`Agent Paths.documenter`, model `sonnet`). Pass the standard SDLC Context block plus:
    ```
    Epic Key: {EPIC-KEY}
-   Read Artifacts: epic ## Critical User Journeys + description; each story's ## Technical Specification, ## Integration Notes, ## Design Specification
+   Read Artifacts: docs/sdlc/{EPIC-KEY}/cujs.md + epic description; each story's docs/sdlc/{STORY-KEY}/tech-spec.md, integration-notes.md, design-spec.md (read locally from {repo_path}; mixed-mode Jira fallback for old epics)
    Doc Targets: {resolved set}
    Confluence Space: {key or "unset"}
    Confluence Parent: {id or "unset"}
    ```
-   The agent reads the epic corpus + merged diff in ITS context and returns a `## Documentation Proposal` (or `## Verdict: nothing-to-document`). It writes nothing.
+   The agent reads the local spec files + merged diff in ITS context and returns a `## Documentation Proposal` (or `## Verdict: nothing-to-document`). It writes nothing.
 
 4. **If `nothing-to-document`:** log the reason, skip to Phase 8. (Legitimate for internal refactors with no user-facing surface.)
 

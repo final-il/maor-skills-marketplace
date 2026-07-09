@@ -80,7 +80,7 @@ Net: the `sdlc-documenter` agent shrinks (less synthesis, more assembly), and th
 
 - **In-flight epics** have details in Jira comments. Run mixed-mode: the file-read path falls back to a Jira comment fetch when no `docs/sdlc/{KEY}/` file exists. New artifacts write the hybrid way; old ones stay readable.
 - **No back-fill required** — old epics finish under the old model; new epics start hybrid.
-- **Rollout order:** (1) update `sdlc-conventions` Artifact Discipline to define the split + pointer format; (2) update each writer agent (architect, designer, integrator) to write detail-to-file + summary+pointer-to-Jira; (3) update `Read Artifacts` semantics + the reader agent; (4) add the phase-end spec commit; (5) fold the documenter. Each step is independently shippable.
+- **Rollout order (all shipped 2026-07-09):** (1) ✅ update `sdlc-conventions` Artifact Discipline to define the split + pointer format; (2) ✅ update each writer agent (architect, designer, integrator) to write detail-to-file + summary+pointer-to-Jira; (3) ✅ update `Read Artifacts` semantics + the reader/consumer agents; (4) ✅ orchestrator derives `Repo Web Base` in Phase 0 + batch-commits `docs/sdlc/` at the end of Phases 3/3.5/3.6; (5) ✅ fold the documenter to assemble-from-local-files. Each step was independently shippable. **Not yet done:** end-to-end validation against a live epic.
 
 ## Tradeoffs (chosen: hybrid)
 
