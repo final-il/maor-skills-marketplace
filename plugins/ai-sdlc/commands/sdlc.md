@@ -270,6 +270,7 @@ Before doing anything else, check if a cached resume file exists for this epic:
    - **If all statuses match the cached table** → skip the rest of Phase 0 entirely. Proceed to routing.
    - **If any status drifted** → update the routing table in-place (re-route only the changed stories). No need to re-discover transitions or agent paths — those are stable.
    - **If the file is missing or malformed** → fall through to full Phase 0 below.
+   - **`Repo Web Base` backfill (hybrid store — §2.5).** If the cached context block predates the hybrid store and has no `Repo Web Base` line, derive it now (Phase 0 step 7b — one `git remote get-url origin` + normalize) and add it to the in-memory context block so downstream spawns carry it. Cheap; no full Phase 0 needed.
 
    **Self-Learning toggle restore.** While parsing the resume file, look for a top-level `## Self-Learning` block with an `enabled: true|false` line. Restore that boolean into in-memory orchestrator state and use it to build the `Self-Learning: ON|OFF` line of the SDLC Context block. **If the resume file has no `## Self-Learning` field (or the file is missing entirely), treat the toggle as ON by default.** On the next auto-save, write `enabled: true` explicitly so subsequent reads are no longer implicit. This is the only place the toggle is read; agents never read the resume file.
 
@@ -404,12 +405,24 @@ This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader s
    - If NOT dev/prod model (single-branch):
      - Set `Base Branch: main` and `PR Target: main`
 
+7b. **Derive `Repo Web Base`** (for the hybrid artifact-store pointers — `sdlc-conventions` §2.5). Run once and cache in the context block:
+   ```bash
+   git -C {repo_path} remote get-url origin
+   ```
+   Normalize the result to a browsable HTTPS base with no `.git` suffix:
+   - `git@github.com:org/repo.git` → `https://github.com/org/repo`
+   - `https://github.com/org/repo.git` → `https://github.com/org/repo`
+   - already-clean `https://github.com/org/repo` → unchanged
+
+   Store it as `Repo Web Base`. Agents build detail pointers as `{Repo Web Base}/blob/{base_branch}/docs/sdlc/{KEY}/{file}.md`. If the remote is not GitHub (e.g., GitLab/Bitbucket) apply the equivalent `/blob/` (GitLab uses `/-/blob/`) or, if unknown, set `Repo Web Base: (none — pointers omitted)` and agents post the repo-relative path instead of a URL.
+
 8. Store the context block:
    ```
    Project Name: {product_name}
    Project Key: {projectKey}
    Cloud ID: {cloudId}
    Repo Path: {repo_path}
+   Repo Web Base: {repo_web_base}
    Base Branch: {base_branch}
    PR Target: {pr_target_branch}
    QBV Key: {qbv_key or "to be created"}
@@ -524,7 +537,7 @@ The Jira project uses a 3-tier hierarchy:
    - Pointer to `Agent Paths.architect`
    - SDLC context block, including:
      - `Read Artifacts: Epic description + AC ({EPIC-KEY}); Story description + AC ({STORY-KEY})`
-     - `Write Artifact: ## Critical User Journeys (comment on {EPIC-KEY}, ONCE per Phase 3 run); ## Technical Specification (comment on each {STORY-KEY})`
+     - `Write Artifact: docs/sdlc/{EPIC-KEY}/cujs.md + ## Critical User Journeys summary+pointer comment on {EPIC-KEY} (ONCE per Phase 3 run); per story: docs/sdlc/{STORY-KEY}/tech-spec.md + names-reserved.md + ## Technical Specification summary+pointer comment. Files written into {repo_path} on {base_branch}; orchestrator commits at phase-end.`
    - Task: **the epic key** + all story keys in "To Do" status + the repo path
    - `model: "opus"`
 
@@ -533,9 +546,21 @@ The Jira project uses a 3-tier hierarchy:
    - Then writes a tech spec on each story — including a `## Smoke Path` section that references one or more CUJs
    - Transitions each story to "Ready for Dev"
 
-3. Report to user the CUJ comment on the epic + which stories are now ready for development
+3. **Commit the spec detail files (hybrid artifact store — §2.5).** The architect wrote `docs/sdlc/{EPIC-KEY}/cujs.md` and, per story, `docs/sdlc/{STORY-KEY}/tech-spec.md` + `names-reserved.md` into the base-branch checkout at `{repo_path}` — it did NOT commit them (no story worktree exists yet at Phase 3). You batch-commit them now, mirroring the Phase 8 CUJ-artifact commit. **This is what makes the `📄 Detail:` pointer URLs in the Jira comments resolve** — see "Spec-commit procedure" below. Run it before reporting to the user.
 
-**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+4. Report to user the CUJ comment on the epic + which stories are now ready for development
+
+**Spec-commit procedure** (shared by Phases 3, 3.5, 3.6):
+```bash
+git -C {repo_path} add docs/sdlc/
+# only commit if there is something staged (agent may have written nothing new)
+git -C {repo_path} diff --cached --quiet || git -C {repo_path} commit -m "docs(sdlc): {PHASE} spec artifacts for {EPIC-KEY}"
+git -C {repo_path} push origin {base_branch}
+```
+- `{PHASE}` = `architecture` (Phase 3) / `design` (Phase 3.5) / `integration` (Phase 3.6).
+- Run in the **base-branch checkout** (`{repo_path}` on `{base_branch}`) — NOT a story worktree (none exists yet). Confirm `git -C {repo_path} rev-parse --abbrev-ref HEAD` == `{base_branch}` before committing; if the working checkout is on a different branch, stash-free `git -C {repo_path} checkout {base_branch}` first.
+- **Protected base branch:** if `{base_branch}` rejects direct pushes (e.g., `main` under Cycode — see Phase 0 step 6), open a small PR instead: branch `sdlc/specs-{EPIC-KEY}-{PHASE}`, push, `gh pr create`, and surface the link. Under the dev/prod model `{base_branch}` is `dev` (unprotected), so the direct push is the normal path.
+- Idempotent: re-running a phase re-commits only changed spec files; the `diff --cached --quiet` guard skips an empty commit.
 
 ## Phase 3.5: Design (Optional)
 
@@ -553,8 +578,8 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
 2. **Spawn `sdlc-designer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
    - Pointer to `Agent Paths.designer`
    - SDLC context block, including:
-     - `Read Artifacts: Story description + AC; ## Technical Specification (Summary section first) on {STORY-KEY}`
-     - `Write Artifact: ## Design Specification (comment on {STORY-KEY})`
+     - `Read Artifacts: Story description + AC; docs/sdlc/{STORY-KEY}/tech-spec.md (read locally; ## Technical Specification Summary comment for orientation)`
+     - `Write Artifact: docs/sdlc/{STORY-KEY}/design-spec.md + ## Design Specification summary+pointer comment on {STORY-KEY}. File written into {repo_path} on {base_branch}; orchestrator commits after design approval.`
    - Task: the story key (has tech spec in comments)
    - `model: "opus"`
 
@@ -568,6 +593,8 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
 
 5. Stories that don't need design proceed directly to Phase 3.6.
 
+6. **Commit the design-spec detail files (hybrid store — §2.5).** The designer wrote `docs/sdlc/{STORY-KEY}/design-spec.md` into the base-branch checkout without committing. After the user approves the designs, run the **Spec-commit procedure** (see Phase 3) with `{PHASE}` = `design`. This resolves the `📄 Detail:` pointers in the design comments. Commit only after approval — a rejected/re-spawned design should not leave a stale committed file (the re-spawn overwrites `design-spec.md` before the commit).
+
 **IMPORTANT: The designer MUST run in the foreground, NOT in the background.** The user must review and approve designs before any development begins on those stories. Running the designer in the background skips the approval gate — this is not allowed. If you want to parallelize, you may develop non-design stories (pure backend/infrastructure) while waiting for design approval on UI stories, but the designer itself must be foreground so you can present its output to the user immediately.
 
 ## Phase 3.6: Cross-Story Integration Audit
@@ -579,16 +606,17 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
 2. **Spawn `sdlc-integrator` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
    - Pointer to `Agent Paths.integrator`
    - SDLC context block, including:
-     - `Read Artifacts: ## Technical Specification on every story key in the audit set (focus on ## Names Reserved + #### Files to Create/Modify sections)`
-     - `Write Artifact: ## Integration Notes (comment on each affected story)`
+     - `Read Artifacts: docs/sdlc/{STORY-KEY}/names-reserved.md + the ## Wire Contracts / ## Files to Create/Modify sections of docs/sdlc/{STORY-KEY}/tech-spec.md, read locally from {repo_path} on {base_branch}, for every story key in the audit set (mixed-mode Jira fallback for old epics)`
+     - `Write Artifact: docs/sdlc/{STORY-KEY}/integration-notes.md (detail) + ## Integration Notes (summary+pointer comment) on each affected story`
    - Task: the epic key + comma-separated list of story keys in the audit set
    - `model: "sonnet"`
-3. The integrator reads tech specs, builds a reservation index, and posts `## Integration Notes` on every affected story. Stories with no findings get NO comment (silence = clear).
-4. **Routing on integrator output:**
+3. The integrator reads the local reservation/contract files, builds a reservation index, writes `integration-notes.md` for each affected story, and posts a summary+pointer `## Integration Notes` comment on it. Stories with no findings get NO comment (silence = clear).
+4. **Commit the integration-notes detail files (hybrid store — §2.5).** The integrator wrote `docs/sdlc/{STORY-KEY}/integration-notes.md` into the base-branch checkout without committing. Run the **Spec-commit procedure** (see Phase 3) with `{PHASE}` = `integration` to resolve the `📄 Detail:` pointers. Do this regardless of routing outcome (below) so any posted pointer resolves.
+5. **Routing on integrator output:**
    - If the integrator returns `Action required: 0` → proceed to Phase 4 immediately. Stories carrying COORDINATION notes go forward with their notes; the developer agent will read those as part of `Read Artifacts: ## Integration Notes`.
    - If `Action required > 0` → stories listed under "Action required" have already been transitioned back to `Backlog` by the integrator. Re-run **Phase 3** (architect) on ONLY those stories with the integrator's recommended renames in the spawn prompt. Then re-run Phase 3.6 on the same epic. Cap at 2 audit iterations per epic; if a third iteration is needed, halt and ask the user to triage.
-   - If the integrator reports any INCOMPLETE stories (missing `## Names Reserved`) → re-run Phase 3 (architect) on them, then re-run Phase 3.6.
-5. The integrator does NOT need a worktree (read-only on Jira, no code).
+   - If the integrator reports any INCOMPLETE stories (missing `names-reserved.md`) → re-run Phase 3 (architect) on them, then re-run Phase 3.6.
+6. The integrator does NOT need a worktree — it reads the small `docs/sdlc/` artifact files from the base-branch checkout, read-only on implementation code.
 
 **Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
@@ -634,7 +662,7 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 - **Spawn `sdlc-developer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
   - Pointer to `Agent Paths.developer`
   - SDLC context block — including `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` and:
-    - `Read Artifacts: Story description + AC; ## Technical Specification on {STORY-KEY}; ## Design Specification on {STORY-KEY} (if Phase 3.5 ran)`
+    - `Read Artifacts: Story description + AC; docs/sdlc/{STORY-KEY}/tech-spec.md (+ design-spec.md if Phase 3.5 ran), read locally from the worktree; ## Technical Specification / ## Design Specification Summary comments for orientation; ## Integration Notes (Summary) if present`
     - `Write Artifact: ## Implementation Complete (comment on {STORY-KEY})`
   - Task: single story key + base branch name
   - `model: "opus"`
@@ -644,7 +672,7 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 - **Spawn `sdlc-tester` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
   - Pointer to `Agent Paths.tester`
   - SDLC context block — including the same `Worktree Path` used by the developer and:
-    - `Read Artifacts: Story description + AC; ## Technical Specification (Summary) on {STORY-KEY}; ## Implementation Complete (Summary) on {STORY-KEY}`
+    - `Read Artifacts: Story description + AC; docs/sdlc/{STORY-KEY}/tech-spec.md (read locally — ## Smoke Path + ## Wire Contracts); ## Technical Specification Summary + ## Implementation Complete (Summary) comments on {STORY-KEY}`
     - `Write Artifact: ## Test Results (comment on {STORY-KEY})`
   - Task: the story key (now "In Review") + the PR branch name
   - `model: "sonnet"`
@@ -660,7 +688,7 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 - **Spawn `sdlc-qa-reviewer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
   - Pointer to `Agent Paths.qa-reviewer`
   - SDLC context block, including:
-    - `Read Artifacts: Story description + AC; ## Technical Specification (Summary) on {STORY-KEY}; ## Implementation Complete (Summary) on {STORY-KEY}; ## Test Results (Summary + AC Coverage Map) on {STORY-KEY}`
+    - `Read Artifacts: Story description + AC; docs/sdlc/{STORY-KEY}/tech-spec.md (read locally — ## Smoke Path + ## Wire Contracts); ## Technical Specification Summary + ## Implementation Complete (Summary) + ## Test Results (Summary + AC Coverage Map) comments on {STORY-KEY}`
     - `Write Artifact: ## QA Review (comment on {STORY-KEY})`
   - Task: the story key (now "Testing")
   - `model: "opus"`
@@ -681,7 +709,7 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
   - **Spawn `sdlc-bug-fixer` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
     - Pointer to `Agent Paths.bug-fixer`
     - SDLC context block — including the parent story's `Worktree Path` (the bug fix happens on the same branch) and:
-      - `Read Artifacts: Bug description ({BUG-KEY}); ## Technical Specification (Summary) on parent {STORY-KEY}; ## Implementation Complete (Summary) on parent {STORY-KEY}; ## Test Results (Summary + named failure) on parent {STORY-KEY}`
+      - `Read Artifacts: Bug description ({BUG-KEY}); docs/sdlc/{STORY-KEY}/tech-spec.md for parent story (read locally); ## Implementation Complete (Summary) + ## Test Results (Summary + named failure) comments on parent {STORY-KEY}`
       - `Write Artifact: ## Bug Fix Complete (comment on {BUG-KEY})`
     - Task: the Bug issue key + the parent story key
     - `model: "sonnet"`
