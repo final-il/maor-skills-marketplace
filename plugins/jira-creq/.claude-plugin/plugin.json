@@ -1,0 +1,6 @@
+{
+  "name": "jira-creq",
+  "version": "0.1.0",
+  "description": "Create tickets in the CREQ (CSI Request) Jira project without hitting its required-field and issue-type quirks. Captures issue types, the mandatory Zone and Does-Impact-Production fields, assignee resolution, and the batch-create pitfall.",
+  "author": { "name": "Maor B", "email": "maorb@final.co.il" }
+}

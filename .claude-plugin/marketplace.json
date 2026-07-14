@@ -62,6 +62,12 @@
       "description": "Air-gapped Jira sync — external (online) side. Pull from Jira Cloud, query the local store, ingest internal-side packages, push deltas back to Jira Cloud, export packages for the internal side.",
       "source": "./plugins/jira-sync-external",
       "strict": false
+    },
+    {
+      "name": "jira-creq",
+      "description": "Create tickets in the CREQ (CSI Request) Jira project without hitting its required-field and issue-type quirks. Captures issue types, the mandatory Zone and Does-Impact-Production fields, assignee resolution, and the batch-create pitfall.",
+      "source": "./plugins/jira-creq",
+      "strict": false
     }
   ]
 }

@@ -13,6 +13,7 @@ A collection of custom skills, agents, and plugins for Claude Code.
 | [csi-discovery](plugins/csi-discovery/) | CSI Department discovery agent — maps teams' systems, processes, tooling, and pain points through structured forms, source scanning, and Confluence integration |
 | [jira-sync-internal](plugins/jira-sync-internal/) | Air-gapped Jira sync — internal (offline) side. Query the local SQLite mirror, make offline edits/comments/transitions/creates, ingest packages from external, export deltas |
 | [jira-sync-external](plugins/jira-sync-external/) | Air-gapped Jira sync — external (online) side. Pull from Jira Cloud, query local store, ingest internal packages, push deltas to Jira Cloud, export packages |
+| [jira-creq](plugins/jira-creq/) | Create tickets in the CREQ (CSI Request) Jira project without hitting its required-field and issue-type quirks — Zone, Does-Impact-Production, issue types, assignee resolution, batch-create pitfall |
 
 ## Plugins
 
