@@ -194,7 +194,9 @@ What NOT to put in the comment:
    - Include specific details: file, line, what's wrong, how to fix.
    - Transition the parent Story to **"In Progress"**. Do this in a single parallel batch with the comment + Bug-creation calls.
 
-## Fast Mode
+## Fast Mode (Mode: fast — lightweight review depth)
+
+> **Naming note:** this `Mode: fast` axis controls **review depth** (how heavy the QA gate is). It is **distinct** from the wave-level `Jira: off` axis (see "Jira-Skip Mode" below), which controls whether Jira is used at all. The two are orthogonal and combine freely — a `Jira: off` wave can still ask for a `Mode: fast` review, or a full review. Do not conflate them.
 
 The orchestrator may pass `Mode: fast` for stories that meet ALL of:
 - ≤3 acceptance criteria
@@ -231,6 +233,24 @@ Fast Mode comment template (still follows artifact discipline — `## Summary` f
 ```
 
 If you find any blocking issue in Fast Mode, switch to a full review for that story before posting — the speedup isn't worth letting a real bug through.
+
+## Jira-Skip Mode (Jira: off)
+
+If your SDLC Context block contains the line `Jira: off`, the wave is running in **fast mode** — Jira is skipped during the build and replaced by an orchestrator-held ledger (see `sdlc-conventions` §2.6). This is orthogonal to `Mode: fast` above: `Jira: off` changes *where you read/write*, not *how deep you review*. Apply your review depth (`Mode: fast` or full) exactly as instructed; only the Jira I/O changes. When `Jira: off`:
+
+1. **Skip the mandatory startup ToolSearch and load NO `mcp__mcp-atlassian__*` tools.** There is no Jira in this wave.
+2. **Read from git, not Jira.** Your work unit's synthetic key is `{PROJECT}-F{n}`. Read its description + AC from the `## {KEY}` section of `docs/sdlc/_wave-{WAVE-ID}/plan.md`; read the tech spec from `docs/sdlc/{KEY}/tech-spec.md`, the developer summary from `impl-complete.md`, and the test results (with the smoke-artifact + live-gates evidence you cross-check) from `docs/sdlc/{KEY}/test-results.md`. Read the diff and code from the worktree as usual.
+3. **Run every verification gate identically** — requirements coverage, wire-contract verification (c.1), smoke-path artifact verification (c.1.5, **never skipped**), live-gates verification (c.2), test-summary grep (c.3), wire-contract grep (c.4). The whole point of fast mode is "keep all gates."
+4. **Skip the Jira comment + transition.** Write your review to git instead: create `docs/sdlc/{KEY}/qa-review.md` with the same body (`## Summary` + `## Detail`, per-AC verdicts).
+5. **On issues, do NOT create a Jira Bug.** Return a `Bug:` block per issue in your return text; the orchestrator records them in the ledger's `bugs[]` and re-routes the unit to the bug-fixer.
+6. **Return your verdict in your return text** — the message-bus signal:
+   ```
+   Status: done               # on APPROVED
+   Verdict: APPROVED | ISSUES
+   Bug: <one-line issue + file:line>   # one per issue, only on ISSUES
+   ```
+
+Inert unless `Jira: off` is present.
 
 ## Rules
 

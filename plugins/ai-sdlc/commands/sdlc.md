@@ -9,7 +9,7 @@ You are the orchestrator of an automated software development lifecycle. You coo
 
 ## Core Principles
 
-- **Jira is the message bus** — agents coordinate through ticket statuses and comments
+- **Jira is the message bus** — agents coordinate through ticket statuses and comments. **In fast mode (`Jira: off`) the message bus is the Fast Work Ledger** (an orchestrator-held git/resume file); agents return their verdict in return text instead of writing Jira. See "Mode selection & offer" and `sdlc-conventions` §2.6.
 - **Agents are autonomous** — each runs in isolation with full context from Jira
 - **Pause for approval** — always get user approval after planning, before creating tickets
 - **Fail gracefully** — retry once, then flag for human review after 3 bug-fix loops
@@ -154,14 +154,19 @@ The user provides `$ARGUMENTS` which can be:
 2. **A Jira epic key** (matches pattern like `PROJ-123`) — resume an existing pipeline
 3. **`pause {EPIC-KEY}`** — save current state for fast resume (see "Pause & Handoff")
 4. **`lessons on|off|curate`** (or bare `lessons`) — self-learning controls: toggle capture on/off, or run the subtractive curator (`curate`). See `## Self-Learning Loop` → Toggle and Curate.
-5. **A text description** — treat as a new project description
+5. **`continue {WAVE-ID}`** — resume a **fast-mode wave** by its wave id (`{PROJECT}-W{YYYYMMDD-HHMMSS}`). Bare **`continue`** (no id) picks the most recent unreconciled fast wave. **`continue fast`** is a synonym for bare `continue`. Fast waves have no Jira epic key, so they resume off the wave id + the Fast Work Ledger — see "Fast Resume from Memory" and `sdlc-conventions` §2.6.
+6. **A text description** — treat as a new project description
 
 ### Flags
 
 Parse these flags from `$ARGUMENTS` before processing:
 
-- **`--auto`** — Auto-approve all gates. Skip all approval pauses (plan approval, design approval, promotion). The pipeline runs end-to-end without stopping. Use for testing or trusted pipelines.
+- **`--auto`** — Auto-approve all gates. Skip all approval pauses (plan approval, design approval, promotion). The pipeline runs end-to-end without stopping. Use for testing or trusted pipelines. With fast mode, `--auto` also takes the **recommended** mode at the offer gate (see "Mode selection & offer") and answers the Phase 8.5 reconciliation gate with **yes**.
 - **`--docs`** — Enable Phase 7.7 (Documentation). After all stories are Done + merged, synthesize durable product docs (README edits, a `docs/<feature>.md` page, an optional changelog entry, and a Confluence page) from the epic's Jira artifacts + the merged code. Off by default; when absent, Phase 7.7 is skipped. Persisted to the resume file's `## Docs` block so it survives `/sdlc continue`. See Phase 7.7.
+- **`--fast`** — Pre-answer the mode-selection gate with **fast** (skip Jira during the build; coordinate through the Fast Work Ledger — see "Mode selection & offer" and `sdlc-conventions` §2.6). No pause at the offer gate. Keeps every engineering gate (planner, challenger, architect, designer, integrator, developer, tester incl. smoke + live-process E2E gates, QA, bug-fixer, Phase 7.5 merge). Jira can be back-filled after the wave via Phase 8.5.
+- **`--normal`** — Pre-answer the mode-selection gate with **normal** (Jira as the message bus, as today). Overrides the recommendation. No pause at the offer gate.
+
+`--fast` and `--normal` are mutually exclusive; if both are present, `--normal` wins (the safer, fuller-traceability choice) and log the conflict.
 
 Strip flags from `$ARGUMENTS` before using the remaining text as the project description.
 
@@ -245,9 +250,10 @@ Indicators that this is a feedback loop (not a new project):
 
 In this mode, the orchestrator:
 1. Discovers the existing project context (same as Phase 0, but faster — reuse known cloudId, projectKey, transitions)
-2. Creates an epic + stories directly (or adds stories to an existing epic)
-3. Sets up dependency links
-4. Proceeds to architecture (brief) → develop → test → QA
+2. **Run the "Mode selection & offer" gate up front** (a small feedback delta is a strong fast-mode candidate — the heuristic usually recommends fast). If fast: skip step 3's Jira creation, stamp a `WAVE-ID`, write `plan.md` + ledger, and proceed via fast-path routing. If normal: continue below.
+3. Creates an epic + stories directly (or adds stories to an existing epic)
+4. Sets up dependency links
+5. Proceeds to architecture (brief) → develop → test → QA
 
 ## Phase 0: Initialization
 
@@ -275,6 +281,23 @@ Before doing anything else, check if a cached resume file exists for this epic:
    **Self-Learning toggle restore.** While parsing the resume file, look for a top-level `## Self-Learning` block with an `enabled: true|false` line. Restore that boolean into in-memory orchestrator state and use it to build the `Self-Learning: ON|OFF` line of the SDLC Context block. **If the resume file has no `## Self-Learning` field (or the file is missing entirely), treat the toggle as ON by default.** On the next auto-save, write `enabled: true` explicitly so subsequent reads are no longer implicit. This is the only place the toggle is read; agents never read the resume file.
 
 This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader spawn).
+
+### Fast Resume from Memory (fast-mode wave)
+
+A fast-mode wave has **no Jira epic key** — it resumes off its **wave id** and the **Fast Work Ledger** instead of a Jira status scan. Trigger this path when `$ARGUMENTS` is `continue {WAVE-ID}`, bare `continue`, or `continue fast`:
+
+1. **Locate the wave resume file.**
+   - `continue {WAVE-ID}` → read `~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-resume-{WAVE-ID}.md`.
+   - bare `continue` / `continue fast` → glob `sdlc-resume-*-W*.md` in that memory dir, pick the **most recent** whose `## Wave` block has `reconciled: false`. If none, tell the user there is no unreconciled fast wave and stop.
+2. **Parse the fast resume file:**
+   - `## Wave` block: `id`, `project`, `mode: fast`, `plan_file`, `reconciled: false|<QBV-KEY>`.
+   - `## Context Block` (project key, cloudId, repo path, base branch, PR target, agent paths, Repo Web Base, Self-Learning). **No transition map is needed** while the wave stays fast — there is no Jira to transition.
+   - `## Fast Work Ledger` block: one entry per work unit (see the ledger schema in `sdlc-conventions` §2.6).
+3. **Ledger fallback (memory-file loss).** If the resume file is missing or its `## Fast Work Ledger` block is malformed but the wave dir exists, rebuild the ledger from the committed `docs/sdlc/_wave-{WAVE-ID}/ledger.md` (the durable git copy). If both are gone, fall through to full Phase 0 and ask the user for the wave id.
+4. **Route from the ledger, not Jira.** For each unit, its `phase` field (`architected|ready|in-progress|in-review|testing|done|blocked`) is the router key — map it to the next SDLC phase exactly as a Jira status would route (see `references/workflow-states.md` → "Fast Mode — Ledger Phase ↔ Jira Status"). **Run NO verification JQL** — there are no tickets to drift. Units with open `bugs[]` re-enter the Phase 7 bug-fix loop; `blocked` units (3-loop cap hit) surface to the user.
+5. **Set `Jira: off` in the context block** for every spawn this wave (until/unless the user later runs reconciliation). Continue at the routed phase using the fast-path routing described in "Fast-path phase routing" below.
+
+**v1 restriction:** at most **one active (unreconciled) fast wave per repo**. If bare `continue` finds more than one unreconciled wave for the same project, list them and ask the user which `{WAVE-ID}` to resume.
 
 ---
 
@@ -500,6 +523,83 @@ The challenger adversarially reviews the plan before it goes to the user. Critic
    - Show the build-vs-buy alignment line.
    - If `--auto`: log "Auto-approving plan (challenger verdict: {verdict})" and proceed immediately.
    - Otherwise: Ask "Approve this plan? Or modify?" — do NOT proceed until the user approves. The user may accept individual important findings ("apply I1, skip I2") — capture those and pass them to the jira-creator as plan deltas.
+
+## Mode selection & offer (fast vs normal)
+
+**Runs once per wave, immediately after the plan is approved** (end of Phase 1.5). For **feedback-loop / hotfix** entries (small deltas on an existing repo that skip Phase 1/1.5), run this gate **up front in Phase 0**, before any tickets would be created — the plan shape is already known.
+
+The orchestrator always **offers** fast vs normal and **recommends** one with a one-line rationale; the user picks. Fast mode skips only Jira ceremony during the build (see `sdlc-conventions` §2.6) — every engineering gate stays.
+
+**Recommendation heuristic** — recommend **fast** when most of these hold:
+- Small wave (≤ ~5 stories) OR a feedback-loop / hotfix delta.
+- A single active driver in the session (the user is present and driving — not a background `/sdlc continue`).
+- No hard requirement for live PM visibility *during* the build (Jira can be back-filled after via Phase 8.5).
+
+Recommend **normal** when: a large multi-epic project, multiple stakeholders tracking Jira live, or the user asked for full traceability throughout.
+
+**Flag / auto interaction:**
+- `--fast` or `--normal` present → **skip the pause**; take the flagged mode (log which and why the flag overrode the recommendation if they differ).
+- `--auto` (no `--fast`/`--normal`) → take the **recommended** mode automatically; log `"Auto-selecting {mode} mode (recommended: {rationale})"`.
+- `--fast --auto` → fast, no prompt. `--normal --auto` → normal, no prompt.
+- Neither flag, interactive → **PAUSE** and show the prompt:
+  ```
+  Recommended: {FAST|NORMAL} mode — {one-line rationale, e.g. "3-story feedback delta, you're driving live"}.
+  Fast mode skips Jira during the build (same tests/QA/gates) and offers to create the tickets in
+  retrospect when the wave finishes. Normal mode uses Jira as the message bus as we go.
+    [f] Fast (recommended)   [n] Normal (Jira as we go)
+  ```
+  Wait for the choice. `f` → fast, `n` → normal.
+
+**On NORMAL:** proceed to Phase 2 (Jira Ticket Creation) exactly as today. The rest of this document's non-fast phases apply unchanged; no `Jira:` line (or `Jira: on`) is added to spawns.
+
+**On FAST:** **skip Phase 2 entirely** (no jira-creator, no tickets). Instead:
+
+1. **Stamp the wave.** Set `WAVE-ID = {PROJECT}-W{YYYYMMDD-HHMMSS}` using the current timestamp (you stamp it once — agents/scripts can't call `date` deterministically). Create the wave dir `docs/sdlc/_wave-{WAVE-ID}/` in the base-branch checkout.
+2. **Assign synthetic keys.** Number the approved work units `{PROJECT}-F1`, `{PROJECT}-F2`, … (F = fast; collision-free with real `{PROJECT}-{integer}` keys). These keys drive `docs/sdlc/{KEY}/` dirs, `{KEY}/{slug}` branches, and worktrees exactly like real keys.
+3. **Write `plan.md`.** Write `docs/sdlc/_wave-{WAVE-ID}/plan.md` with one `## {KEY}` section per unit: title, description, acceptance criteria, complexity, epic (grouping name), and deps (blocking `{PROJECT}-F{n}` keys). This is the human-readable requirements source every fast-mode agent reads in place of `jira_get_issue`.
+4. **Initialize the Fast Work Ledger.** Build the `## Fast Work Ledger` (schema in `sdlc-conventions` §2.6): one entry per unit with `phase: architected`-to-be (initialize `phase: null`/pre-architecture), `deps`, `complexity`, `spec_files: []`, `bugs: []`, `verdicts: {test: null, qa: null}`, `pr: null`, `jira: null`. Persist it to the resume file's `## Fast Work Ledger` block AND commit a canonical copy to `docs/sdlc/_wave-{WAVE-ID}/ledger.md` on `{base_branch}`.
+5. Proceed to **Phase 3** using **fast-path phase routing** (below): every agent spawn's SDLC Context block carries `Jira: off` and the `WAVE-ID`.
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+
+## Fast-path phase routing (Phases 3–7.5 with `Jira: off`)
+
+When the wave is fast, Phases 3 through 7.5 run **structurally unchanged** — same agents, same worktrees, same code/TDD/smoke/live-process gates, same PR flow — with these substitutions. (Normal mode ignores this section entirely.)
+
+**Every fast spawn's SDLC Context block adds two lines:**
+```
+Jira: off
+WAVE-ID: {PROJECT}-W{YYYYMMDD-HHMMSS}
+```
+and uses the **synthetic key** `{PROJECT}-F{n}` wherever a story key would go. No `Transition Map` is needed (nothing to transition). Each agent's `## Fast Mode (Jira: off)` section governs its behavior: skip the startup ToolSearch, load no `mcp__mcp-atlassian__*` tools, read requirements from `docs/sdlc/_wave-{WAVE-ID}/plan.md`, write its summary artifact to the named git file, and return its verdict in return text.
+
+**Drive the ledger from return text.** Agents no longer write status to Jira; the orchestrator updates the ledger from each agent's ≤10-line return:
+
+| Phase | Agent | Ledger update from return text |
+|---|---|---|
+| 3 | architect | `phase: architected`, `deps[]` (from reported cross-unit deps), `spec_files += tech-spec.md, names-reserved.md` |
+| 3.5 | designer | `phase: ready` (design written / "no design needed"); present `design-spec.md` for approval (kept gate) |
+| 3.6 | integrator | Action-required units → re-run Phase 3 on them (same as normal); clean → keep `phase` |
+| 4 | developer | `phase: in-review`, `branch`, `pr` (from `PR:` line), `spec_files += impl-complete.md` |
+| 5 | tester | `phase: testing`, `verdicts.test = PASS|FAIL`; on FAIL append a `bugs[]` entry from the `Bug:` block |
+| 6 | qa-reviewer | `phase: done` on APPROVED; on ISSUES append a `bugs[]` entry; `verdicts.qa` set |
+| 7 | bug-fixer | mark the `bugs[]` entry `status: fixed` on `Fixed: {id}`; re-route unit to Phase 5 |
+
+After each phase's ledger update, **re-write the `## Fast Work Ledger` block in the resume file and re-commit `docs/sdlc/_wave-{WAVE-ID}/ledger.md`** so a resume can always rebuild state.
+
+**Spec-commit in fast mode.** Phases 3 / 3.5 / 3.6 still batch-commit the `docs/sdlc/` artifact files via the **Spec-commit procedure** (see Phase 3) — the files are identical; only the Jira comment is dropped. Also commit the wave dir (`plan.md`, `ledger.md`, `cujs.md`) in the same push. Pointer URLs are moot in fast mode (files are read locally), so a protected-branch PR fallback is only needed if `{base_branch}` itself rejects the push.
+
+**Design-approval gate is kept.** Phase 3.5 still PAUSES for user approval (unless `--auto`), reading `docs/sdlc/{KEY}/design-spec.md` directly instead of a Jira comment.
+
+**Failure loop without Bug issues (Phase 7, fast).** When the tester or QA returns a `Bug:` block:
+1. Record it in the unit's ledger `bugs[]`: assign a synthetic id `{KEY}-B{n}`, `summary`, `source: tester|qa`, `status: open`, `loop: n` (increment per re-entry).
+2. Spawn `sdlc-bug-fixer` with `Jira: off`, the failure detail inline (root-cause hypothesis, failing test, re-run command), the synthetic bug id, the parent unit key, and the **shared worktree**.
+3. On `Fixed: {bug-id}`, mark the bug `status: fixed` and re-route the unit to **Phase 5** (re-test).
+4. **Max-3-loops cap unchanged** — counted from the ledger `bugs[].loop`, not from closed child Bugs. On the 3rd failed loop, mark the unit `phase: blocked` and surface it to the user.
+
+**E2E / smoke gate in fast mode.** The Phase 5 E2E gate (frontend/HTTP/CLI stories must ship a Playwright spec) is **still mandatory**. In fast mode the tester's verdict is in its **return text** and its detail is in `docs/sdlc/{KEY}/test-results.md` — NOT a Jira `## Test Results` comment. So the orchestrator checks for the `E2E:`/`Playwright:` marker in the tester's **return text** (or, if terse, greps `docs/sdlc/{KEY}/test-results.md`); if absent on a user-facing unit, re-spawn the tester with explicit instructions to add browser coverage — same enforcement, different source.
+
+**Phase 7.5 (PR merge) is unchanged.** PRs, `gh pr merge`, the conflict-resolver, and the drift cap all operate on git/GitHub, not Jira — they work identically in fast mode. The only difference: a merged unit's ledger `phase` stays `done` (there is no Jira status to keep in sync).
 
 ## Phase 2: Jira Ticket Creation
 
@@ -837,6 +937,8 @@ By this point every story is `Done` and merged, so the source material is comple
 
 **Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
+**Fast-mode note (`Jira: off`).** In a fast wave there are no tickets to query. Substitute every "query Jira for stories / read the epic's `## Critical User Journeys` comment" step below with the **ledger** and the local wave files: iterate units from the `## Fast Work Ledger` (those with `phase: done`), and read the CUJs from `docs/sdlc/_wave-{WAVE-ID}/cujs.md` instead of the epic comment. The PR-merge assertions, CUJ replay, and worktree cleanup are git/file-based and run identically. After Phase 8 completes for a fast wave, proceed to **Phase 8.5 (Retro Reconciliation)** before the final report.
+
 1. Query Jira for all stories in the epic
 2. **Assert all Done stories have merged PRs.** For each story in `Done`, verify its PR is merged (`gh pr view {N} --json state` returns `MERGED`). Phase 7.5 should have handled this continuously; this is the final safety check.
    - If any Done story still has an open PR: re-run Phase 7.5 on those PRs (single batch). If the conflict-resolver still cannot merge them, halt and ask the user to investigate. Do NOT report epic completion while Done PRs are unmerged.
@@ -892,6 +994,32 @@ By this point every story is `Done` and merged, so the source material is comple
 6. **If single-branch model (PR Target is `main`):**
    - Suggest next steps (manual testing, etc.). PRs were auto-merged via Phase 7.5.
 
+## Phase 8.5: Retro Reconciliation (fast waves only, opt-in)
+
+**Runs only for fast waves** (`Jira: off`), after Phase 8's CUJ replay succeeds and all PRs are merged, **before** the final report. Normal waves skip this phase (Jira already exists). This is the "create the tickets in retrospect" the user asked for — it back-fills the full QBV → Epic → Story(→ Bug) hierarchy so a completed fast wave gains a faithful audit trail.
+
+1. **Gate — ask once** (unless `--auto`, which answers **yes**):
+   ```
+   Wave complete ({N} units done, all PRs merged). Create the Jira tickets in retrospect
+   (full QBV → Epic → Story hierarchy, each moved to its recorded final status)?
+     [y] yes, back-fill Jira   [n] no, leave it in git only
+   ```
+   - `n` → skip reconciliation. Leave `## Wave.reconciled: false`; the wave lives in git only. Proceed to the final report. The user can reconcile later by resuming the wave and re-running this phase.
+   - `y` (or `--auto`) → reconcile.
+
+2. **Spawn `sdlc-jira-creator` in reconcile mode** as a general-purpose `Agent()` (per "How to Spawn Agents" — pointer not body) with:
+   - Pointer to `Agent Paths.jira-creator`
+   - SDLC context block **including `Mode: reconcile`** and the **full Transition Map** (rediscover it now via `jira_get_transitions` if the fast wave never fetched one — fast waves skip it during the build). Also include `Repo Web Base` + `Base Branch`.
+   - Task inputs: the **ledger** (inline or path to `docs/sdlc/_wave-{WAVE-ID}/ledger.md`), the path to `docs/sdlc/_wave-{WAVE-ID}/plan.md`, the committed `docs/sdlc/{KEY}/` artifact dirs, and the PR urls (from ledger `pr` fields).
+   - `model: "sonnet"`
+   The agent (see `sdlc-jira-creator.md` → `## Reconcile Mode`): dedupes by label first (idempotent re-run), creates QBV → Epics → Stories grouped by ledger `epic:`, each Story carrying the real spec pointer + PR link; assembles `## Summary` comments from the local artifact files; creates child Bugs from ledger `bugs[]`; walks each Story to its recorded final status (falling back to furthest-reachable on restrictive workflows without failing the wave); and returns the `synthetic → real` key mapping.
+
+3. **On agent return, record the mapping.** Write each `{PROJECT}-F{n} → {REAL-KEY}` pair into the ledger's `jira:` field and set the resume file's `## Wave.reconciled: {QBV-KEY}`. Re-commit `docs/sdlc/_wave-{WAVE-ID}/ledger.md`. **Do NOT rename the `docs/sdlc/{PROJECT}-F{n}/` dirs** — PRs and branches already reference the synthetic keys; the mapping + the epic `## Reconciliation` comment are the trace.
+
+4. **Surface the result** to the user: the QBV/epic/story keys created, any tickets left at a furthest-reachable status (restrictive workflow), and the wave→Jira mapping. After reconciliation the wave has a real epic key and resumes normally thereafter (the `## Wave.reconciled` epic key routes like any other epic).
+
+**Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
+
 ## Environment — Read Before Running Any Commands
 
 Before running package managers or network-dependent tools, check the project's CLAUDE.md and the user's environment notes for proxy/TLS configuration. Common issues:
@@ -924,6 +1052,21 @@ Write ~/.claude/projects/-Users-maorb-git-dev/memory/sdlc-resume-{EPIC-KEY}.md w
   enabled: true
 ```
 
+**Fast-mode resume file.** A fast wave has no Jira epic key, so its resume file is named by **wave id** — `sdlc-resume-{WAVE-ID}.md` (`{WAVE-ID}` = `{PROJECT}-W{YYYYMMDD-HHMMSS}`), same memory dir. It replaces the `## Story Routing Table` (there are no Jira statuses to route on) with two fast-mode blocks:
+```
+- ## Wave
+  id: {PROJECT}-W{YYYYMMDD-HHMMSS}
+  project: {PROJECT}
+  mode: fast
+  plan_file: docs/sdlc/_wave-{WAVE-ID}/plan.md
+  reconciled: false            # or the {QBV-KEY} once Phase 8.5 back-fills Jira
+- ## Fast Work Ledger
+  {one YAML entry per work unit — full schema in `sdlc-conventions` §2.6:
+   key, title, epic, ac[], complexity, deps[], phase, branch, pr, spec_files[], bugs[], verdicts, jira}
+- ## Context Block, ## Last Action, ## Active Worktrees, ## Mode (mode: fast), ## Self-Learning — as above
+```
+The `## Fast Work Ledger` block is the machine state; its canonical git copy is `docs/sdlc/_wave-{WAVE-ID}/ledger.md` (committed each phase, so a resume rebuilds from git if the memory file is lost — see Phase 0 "Fast Resume from Memory (fast-mode wave)"). Re-write both on every ledger update.
+
 **`## Self-Learning` block.** This is the single source of truth for the self-learning toggle. Default `true` if the field or file is missing (Phase 0 fast-resume treats absence as ON). Persisted on every auto-save. Read on Phase 0 fast-resume to restore the in-memory toggle state, which is then propagated into every agent spawn via the `Self-Learning: ON|OFF` line of the SDLC Context block. On the **first auto-save** after a session that started without the field, write `enabled: true` explicitly so subsequent reads are unambiguous. There is no other state mechanism — no env var, no feature flag, no ambient state.
 
 Update MEMORY.md pointer if missing. Report one line to user: "State saved. Resume: `/sdlc continue {EPIC-KEY}`"
@@ -942,7 +1085,7 @@ Invoke the full skill: `Skill("ai-sdlc:sdlc-handoff")`. This does everything aut
 
 **Why two tiers:** Auto-save costs ~0 extra tokens (inline write). The full skill loads ~120 lines + does user interaction — worth it when explicitly pausing, wasteful at every batch boundary.
 
-**Cleanup:** When an epic reaches Phase 8 (all stories Done), delete the resume file.
+**Cleanup:** When an epic reaches Phase 8 (all stories Done), delete the resume file. **Fast-wave exception:** keep `sdlc-resume-{WAVE-ID}.md` until the wave is reconciled (`## Wave.reconciled` holds a QBV key) OR the user explicitly declined reconciliation at the Phase 8.5 gate — otherwise a later `/sdlc continue` could not find the wave to back-fill Jira. Once reconciled or declined, delete it.
 
 ## Self-Learning Loop
 

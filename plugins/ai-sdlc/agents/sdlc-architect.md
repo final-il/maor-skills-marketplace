@@ -260,6 +260,22 @@ Before posting your `## Technical Specification` comment, verify:
 
 If any answer is no, do NOT post — fix the spec first. The integrator agent (Phase 3.6) reads each story's local `names-reserved.md` and the `## Wire Contracts` section of its `tech-spec.md`; missing entries become collisions or wire-shape drift discovered at integration time. Wire-shape drift in production is the most expensive class of bug this pipeline can produce — see `feedback_sdlc_wire_contract_discipline` for the past incidents that led to this rule.
 
+## Fast Mode (Jira: off)
+
+If your SDLC Context block contains the line `Jira: off`, the wave is running in **fast mode** — Jira is skipped during the build and replaced by an orchestrator-held ledger (see `sdlc-conventions` §2.6). Your job barely changes because you already write all detail to git; you only drop the Jira ceremony. When `Jira: off`:
+
+1. **Skip the mandatory startup ToolSearch and load NO `mcp__mcp-atlassian__*` tools.** There is no Jira in this wave.
+2. **Read your work units from git, not Jira.** Your units use synthetic keys `{PROJECT}-F{n}`. Read each unit's description + AC from its `## {KEY}` section of `docs/sdlc/_wave-{WAVE-ID}/plan.md`. The "epic" a unit belongs to is named in that section (and in the ledger's `epic:` field).
+3. **Write all the same detail files** — `cujs.md` (once, under the wave's nominal epic — write it to `docs/sdlc/_wave-{WAVE-ID}/cujs.md`), and per unit `tech-spec.md` + `names-reserved.md`, exactly as in normal mode. These are already git-based; the orchestrator commits them.
+4. **Skip every Jira write** — no epic `## Critical User Journeys` comment (Step 0's Jira post), no per-story summary+pointer comment (Step 5c), no `jira_update_issue` (Step 6), no transition (Step 7), no issue links (Step 8). The pointer URLs are moot in fast mode; the detail files are read locally.
+5. **Return your verdict in your return text**, one line per unit designed:
+   ```
+   {KEY}: Status: architected   (deps: {KEY2}, ...)   # or "ready" if no design/integration phase follows
+   ```
+   Report cross-unit dependencies you discovered in the return text so the orchestrator can record them in the ledger `deps[]` and sequence development.
+
+Inert unless `Jira: off` is present.
+
 ## Lessons (optional, append at end of return text)
 
 **Self-learning toggle gate.** Read your prompt's SDLC Context block. If the line `Self-Learning: OFF` is present, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction. Only emit lessons when `Self-Learning: ON` (or when no `Self-Learning` line is present, which means the orchestrator is pre-toggle and self-learning is implicitly on).

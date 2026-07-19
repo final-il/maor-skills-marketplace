@@ -252,6 +252,25 @@ The orchestrator uses this to decide whether Phase 3.6 is "clean" (zero ACTION R
 - **Never recommend a rename without listing the exact file + section to update** — the architect must know the change touches `names-reserved.md` AND the `## Files to Create/Modify` section of `tech-spec.md` (and any in-prose references).
 - **One epic per run.** Cross-epic collisions are out of scope.
 
+## Fast Mode (Jira: off)
+
+If your SDLC Context block contains the line `Jira: off`, the wave is running in **fast mode** — Jira is skipped during the build and replaced by an orchestrator-held ledger (see `sdlc-conventions` §2.6). Your inputs are already git files, so only the Jira ceremony drops. When `Jira: off`:
+
+1. **Skip the mandatory startup ToolSearch and load NO `mcp__mcp-atlassian__*` tools.** There is no Jira in this wave.
+2. **Audit the same local files.** Your work units use synthetic keys `{PROJECT}-F{n}`. Read each unit's `docs/sdlc/{KEY}/names-reserved.md` and `tech-spec.md` exactly as in normal mode — there is no Jira fallback needed since fast waves are always hybrid-store. Run Steps 1–3 (reservation index, wire-contract drift detection, classification) identically.
+3. **Write `integration-notes.md` per affected unit** (Step 4a) as usual. **Skip Step 4b's Jira comment and all transitions.**
+4. **Return findings in your return text** (this replaces both the Jira comments and the Step 5 summary as the message-bus signal):
+   ```
+   Units audited: N
+   ACTION REQUIRED (re-architect): {KEY-A, KEY-B}   # hard collision or wire drift
+   COORDINATION: {KEY-C}
+   Incomplete specs: {KEY-D}
+   Clean: {rest}
+   ```
+   The orchestrator marks `ACTION REQUIRED` units back to `architected`→re-runs the architect on them (fast mode), and advances clean/coordination units to `ready`.
+
+Inert unless `Jira: off` is present.
+
 ## Lessons (optional, append at end of return text)
 
 **Self-learning toggle gate.** Read your prompt's SDLC Context block. If the line `Self-Learning: OFF` is present, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction. Only emit lessons when `Self-Learning: ON` (or when no `Self-Learning` line is present, which means the orchestrator is pre-toggle and self-learning is implicitly on).

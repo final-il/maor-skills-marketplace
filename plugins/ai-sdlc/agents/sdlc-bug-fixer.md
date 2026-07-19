@@ -157,6 +157,23 @@ What NOT to put in the comment:
 - **If you can't reproduce the bug**, add a Jira comment explaining what you tried and leave the ticket for human review.
 - **If fixing requires changes beyond the story's scope**, add a Jira comment and do NOT make the change.
 
+## Fast Mode (Jira: off)
+
+If your SDLC Context block contains the line `Jira: off`, the wave is running in **fast mode** — Jira is skipped during the build and replaced by an orchestrator-held ledger (see `sdlc-conventions` §2.6). When `Jira: off`:
+
+1. **Skip the mandatory startup ToolSearch and load NO `mcp__mcp-atlassian__*` tools.** There is no Jira in this wave.
+2. **Read the bug from your prompt, not Jira.** The orchestrator passes you the failure detail (root-cause hypothesis, failing test name, re-run command) and a synthetic bug id `{KEY}-B{n}` inline — there is no Jira Bug issue to fetch. Read the parent unit's tech spec from the local `docs/sdlc/{KEY}/tech-spec.md`.
+3. **Fix identically.** Reproduce, systematic-debug + TDD regression test, minimal fix, full-suite verification — all unchanged. Commit + push in the shared worktree.
+4. **Skip step 10's Jira comments + transitions.** Write your fix summary to git instead: create `docs/sdlc/{KEY}/bug-fix-{bug-id}.md` (e.g. `bug-fix-CSI-F1-B1.md`) with the same `## Summary` + `## Detail` body.
+5. **Return your verdict in your return text** — the message-bus signal:
+   ```
+   Fixed: {bug-id}
+   Verification: <test name that now passes>
+   ```
+   If you could not fix it (can't reproduce, or fix requires out-of-scope changes), return `Fixed: none` with a one-line reason; the orchestrator surfaces it.
+
+Inert unless `Jira: off` is present.
+
 ## Lessons (optional, append at end of return text)
 
 **Self-learning toggle gate.** Read your prompt's SDLC Context block. If the line `Self-Learning: OFF` is present, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction. Only emit lessons when `Self-Learning: ON` (or when no `Self-Learning` line is present, which means the orchestrator is pre-toggle and self-learning is implicitly on).

@@ -80,9 +80,11 @@ maor-skills-marketplace/
 
 ### AI-SDLC Plugin Details
 
-Entry point: `/sdlc "description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KEY` (resume)
+Entry point: `/sdlc "description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KEY` (resume) or `/sdlc continue {WAVE-ID}` (resume a fast wave)
 
 8 agents coordinate through Jira as a message bus. Each agent transitions tickets through: Backlog → Selected for Development → In Progress → In Review → Testing → Done (with Bug issue type for defect loop). Phase 3.5 (Designer) is optional — runs only for stories with user-facing components, with user approval before development begins. Phase 7.7 (Documenter) is optional too — enabled with `--docs`, it synthesizes durable product docs (README/docs/Confluence) from the epic's specs + merged code after all stories merge.
+
+**Fast mode (`Jira: off`):** Every run the orchestrator offers **fast vs normal** with a one-line recommendation (flags `--fast` / `--normal` pre-answer; `--auto` takes the recommendation). Fast mode **skips only Jira ceremony** during the build — no ticket creation, transitions, comments, or Bug issues — while keeping **every engineering gate** (planner, challenger, architect, designer, integrator, developer, tester incl. smoke + live-process E2E, QA, bug-fixer, Phase 7.5 merge). Coordination moves to the **Fast Work Ledger** (an orchestrator-held git + resume file at `docs/sdlc/_wave-{WAVE-ID}/ledger.md`): work units get synthetic keys `{PROJECT}-F{n}`, agents read requirements from `docs/sdlc/_wave-{WAVE-ID}/plan.md` and return their verdict in return text. This is cheap because the hybrid artifact store already keeps all spec detail in git. **Phase 8.5 (Retro Reconciliation)** is opt-in at wave end: `sdlc-jira-creator` in `Mode: reconcile` back-fills the full QBV → Epic → Story(→ Bug) hierarchy with spec pointers + PR links, each walked to its recorded final status. Full design: `plugins/ai-sdlc/docs/specs/2026-07-19-ai-sdlc-fast-mode-design.md`; conventions in `sdlc-conventions` §2.6.
 
 **Branching model:** Phase 0 auto-detects dev/prod (two-branch) vs single-branch setups. Context block includes `Base Branch` and `PR Target` so agents always branch and open PRs against the correct branch. Phase 8 handles promotion (dev → main) with user approval.
 

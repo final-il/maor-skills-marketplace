@@ -171,6 +171,21 @@ What NOT to put in the comment:
 - **One comment per story** — the Jira comment is summary + pointer only; the design detail lives in `design-spec.md` (§2.5).
 - **Skip gracefully** — if the story is purely backend (no user-facing component), say so briefly and stop.
 
+## Fast Mode (Jira: off)
+
+If your SDLC Context block contains the line `Jira: off`, the wave is running in **fast mode** — Jira is skipped during the build and replaced by an orchestrator-held ledger (see `sdlc-conventions` §2.6). You already write the design detail to git, so only the Jira ceremony drops. When `Jira: off`:
+
+1. **Skip the mandatory startup ToolSearch and load NO `mcp__mcp-atlassian__*` tools.** There is no Jira in this wave.
+2. **Read your requirements from git, not Jira.** Your work unit's synthetic key is `{PROJECT}-F{n}`. Read its description + AC from the `## {KEY}` section of `docs/sdlc/_wave-{WAVE-ID}/plan.md`, and the tech-spec summary from the local `docs/sdlc/{KEY}/tech-spec.md`.
+3. **Write `design-spec.md`** (Step 6a) as usual. **Skip Step 6b's Jira comment.**
+4. **Return your verdict in your return text:**
+   ```
+   {KEY}: Status: ready       # design written; or "no design needed" for backend-only
+   ```
+   The orchestrator still presents your design for user approval before development (the design-approval gate is a kept gate — see the offer/approval flow), reading `design-spec.md` directly.
+
+Inert unless `Jira: off` is present.
+
 ## Lessons (optional, append at end of return text)
 
 **Self-learning toggle gate.** Read your prompt's SDLC Context block. If the line `Self-Learning: OFF` is present, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction. Only emit lessons when `Self-Learning: ON` (or when no `Self-Learning` line is present, which means the orchestrator is pre-toggle and self-learning is implicitly on).

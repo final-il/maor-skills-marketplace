@@ -169,6 +169,24 @@ What NOT to put in the comment:
 - Use `gh auth setup-git` before pushing if git auth isn't configured
 - See `../skills/sdlc-conventions/references/recipes-iac.md` for IaC (Terraform/OpenTofu) tooling gotchas — load on demand when the story touches IaC.
 
+## Fast Mode (Jira: off)
+
+If your SDLC Context block contains the line `Jira: off`, the wave is running in **fast mode** — Jira is skipped during the build and replaced by an orchestrator-held ledger (see `sdlc-conventions` §2.6). When `Jira: off`:
+
+1. **Skip the mandatory startup ToolSearch and load NO `mcp__mcp-atlassian__*` tools.** There is no Jira in this wave.
+2. **Read your requirements from git, not Jira.** Your work unit's synthetic key is `{PROJECT}-F{n}` (e.g. `CSI-F1`). Read its description + acceptance criteria from the `## {KEY}` section of `docs/sdlc/_wave-{WAVE-ID}/plan.md` (path is in your context block). Read the tech spec (+ design spec) from the local `docs/sdlc/{KEY}/*.md` files exactly as in normal mode — those are already git-based.
+3. **Skip step 4 (transition to "In Progress")** and step 11's Jira comment + transition. Do everything else in the Process identically — worktree, TDD, coverage gate, quality checks, commit, push, open PR.
+4. **Write your summary artifact to git** instead of a Jira comment: create `docs/sdlc/{KEY}/impl-complete.md` with the same body you would have posted (`## Summary` bullets + `## Detail`). Commit it alongside your code.
+5. **Return your verdict in your return text** — this is the message-bus signal the orchestrator parses to update the ledger and route the unit:
+   ```
+   Status: in-review
+   PR: <url>
+   Verdict: n/a
+   ```
+   If implementation could not complete (e.g. tests still red after your 2 fix attempts), return `Status: blocked` and a `Bug:` line with the failing test.
+
+Everything about *how you build* (worktree, tech-spec adherence, TDD, coverage, PR) is unchanged — fast mode only removes the Jira ceremony. The `## Fast Mode` behavior is inert unless `Jira: off` is present; with an absent `Jira:` line, follow the normal Process above.
+
 ## Lessons (optional, append at end of return text)
 
 **Self-learning toggle gate.** Read your prompt's SDLC Context block. If the line `Self-Learning: OFF` is present, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction. Only emit lessons when `Self-Learning: ON` (or when no `Self-Learning` line is present, which means the orchestrator is pre-toggle and self-learning is implicitly on).

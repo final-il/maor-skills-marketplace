@@ -259,6 +259,25 @@ Commit the artifact alongside your tests: `git add tests/artifacts/{STORY-KEY}/`
 - **Always exercise the second turn for chat-agent stories** — replay a persisted conversation, do not stop at "first message returned 200".
 - **Always produce a smoke-path artifact when the tech spec has a `## Smoke Path` section** — real curl bytes, real screenshot, real CLI stdout. Commit it under `tests/artifacts/{STORY-KEY}/`. The QA reviewer rejects stories whose `## Test Results` references an artifact that does not exist on disk. A passing unit test is NOT a substitute — the smoke artifact is what proves the story actually participates in its CUJ.
 
+## Fast Mode (Jira: off)
+
+If your SDLC Context block contains the line `Jira: off`, the wave is running in **fast mode** — Jira is skipped during the build and replaced by an orchestrator-held ledger (see `sdlc-conventions` §2.6). When `Jira: off`:
+
+1. **Skip the mandatory startup ToolSearch and load NO `mcp__mcp-atlassian__*` tools.** There is no Jira in this wave.
+2. **Read your requirements from git, not Jira.** Your work unit's synthetic key is `{PROJECT}-F{n}` (e.g. `CSI-F1`). Read its description + acceptance criteria from the `## {KEY}` section of `docs/sdlc/_wave-{WAVE-ID}/plan.md`; read the tech spec (with `## Smoke Path` / `## Wire Contracts`) from the local `docs/sdlc/{KEY}/tech-spec.md`, and the developer's summary from `docs/sdlc/{KEY}/impl-complete.md`.
+3. **Run every test gate identically.** Coverage gate, wire-contract tests, the smoke-path artifact (step 7a-pre), and the live-process gates (step 7a) are **NOT skipped in fast mode** — they are the whole point of "keep all gates." Commit tests + artifacts, push the branch.
+4. **Skip the Jira comment + transition.** Write your summary artifact to git instead: create `docs/sdlc/{KEY}/test-results.md` with the same body you would have posted (`## Summary` + `## Detail`, including the `#### Smoke-Path Artifact` and `#### Live Gates Run` sections). Commit it alongside your tests.
+5. **On defect, do NOT create a Jira Bug.** Return a `Bug:` block in your return text; the orchestrator records it in the ledger's `bugs[]` and spawns the bug-fixer.
+6. **Return your verdict in your return text** — the message-bus signal:
+   ```
+   Status: testing            # on PASS
+   PR: <url or n/a>
+   Verdict: PASS | FAIL
+   Bug: <one-line root cause + failing test name + re-run command>   # only on FAIL
+   ```
+
+Everything about *how you test* is unchanged — fast mode only removes the Jira ceremony, never a gate. Inert unless `Jira: off` is present.
+
 ## Lessons (optional, append at end of return text)
 
 **Self-learning toggle gate.** Read your prompt's SDLC Context block. If the line `Self-Learning: OFF` is present, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction. Only emit lessons when `Self-Learning: ON` (or when no `Self-Learning` line is present, which means the orchestrator is pre-toggle and self-learning is implicitly on).

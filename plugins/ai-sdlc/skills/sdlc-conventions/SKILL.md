@@ -153,6 +153,89 @@ Design + rationale: `docs/specs/2026-07-08-ai-sdlc-hybrid-artifact-store-design.
 
 **Migration / mixed-mode:** if no `docs/sdlc/{KEY}/` file exists (an epic that ran under the old all-in-Jira model), fall back to reading the detail from the Jira comment body as before. New artifacts always write the hybrid way; old ones stay readable. No back-fill.
 
+### 2.6 Fast Mode — the `Jira:` axis and the Fast Work Ledger
+
+Fast mode skips **only the Jira ceremony** during a build (no ticket creation, no status transitions, no summary comments, no Bug issues) while keeping **every** engineering gate — planner, plan-challenger, architect, designer, integrator, developer, tester (incl. smoke-path + live-process E2E gates), QA reviewer, bug-fixer, Phase 7.5 PR merge. It is enabled *because* §2.5 already moved all spec detail into git: the content the pipeline needs is local, so Jira status can be replaced by an orchestrator-held ledger. When the wave finishes, the orchestrator can optionally reconstruct the full Jira hierarchy in retrospect (see `sdlc-jira-creator` Reconcile Mode).
+
+Design + rationale: `docs/specs/2026-07-19-ai-sdlc-fast-mode-design.md`.
+
+**The `Jira: on|off` context axis.** Fast mode adds one line to the SDLC Context block, parallel to `Self-Learning: ON|OFF`:
+
+```
+Jira: off
+```
+
+- **Default:** an absent `Jira:` line means `Jira: on` — normal mode. Every agent behaves exactly as before until the orchestrator sends `Jira: off`. (This is why the per-agent `## Fast Mode` sections are inert until the orchestrator wires the offer.)
+- **Distinct from QA's `Mode: fast`.** The QA reviewer's existing `Mode: fast` means "lightweight review — skip skill loading + test re-run." That is orthogonal: it controls *how heavy the gate is*, not *whether Jira is used*. The two combine freely — a `Jira: off` wave can still ask QA for a `Mode: fast` review. Never overload `Mode: fast` to mean Jira-skip.
+
+**Per-agent behavior when `Jira: off`.** Each per-story agent (architect, developer, tester, qa-reviewer, bug-fixer, integrator, designer):
+
+1. **Skips the startup `jira_get_issue`** and reads its work unit's description + acceptance criteria from `docs/sdlc/_wave-{WAVE-ID}/plan.md` (the `## {KEY}` section for its synthetic key). Sibling spec detail is read from the local `docs/sdlc/{KEY}/*.md` files — already the §2.5 default.
+2. **Skips all Jira writes** (`jira_transition_issue`, `jira_add_comment`, `jira_create_issue`) and **loads no `mcp__mcp-atlassian__*` tools** — the mandatory startup ToolSearch is skipped entirely, saving latency + tokens.
+3. **Writes its summary artifact to a git file** instead of a Jira comment:
+
+   | Agent | Fast-mode artifact file |
+   |---|---|
+   | architect | `docs/sdlc/{KEY}/tech-spec.md`, `names-reserved.md`, `cujs.md` *(already git — just drop the Jira comment)* |
+   | designer | `docs/sdlc/{KEY}/design-spec.md` *(already git)* |
+   | integrator | `docs/sdlc/{KEY}/integration-notes.md` *(already git)* |
+   | developer | `docs/sdlc/{KEY}/impl-complete.md` |
+   | tester | `docs/sdlc/{KEY}/test-results.md` |
+   | qa-reviewer | `docs/sdlc/{KEY}/qa-review.md` |
+   | bug-fixer | `docs/sdlc/{KEY}/bug-fix-{bug-id}.md` |
+
+4. **Returns its verdict in its return text** — the orchestrator parses this to update the ledger and route the unit:
+
+   ```
+   Status: <phase>            # architected | ready | in-review | testing | done | blocked
+   PR: <url or n/a>
+   Verdict: PASS | FAIL | APPROVED | ISSUES | n/a
+   Bug: <one-line failure + failing test>   # only on FAIL / ISSUES
+   ```
+
+Everything else (worktree, code, TDD, tests, smoke artifacts, live-process gates, PR) is **identical** — those are already git/file-based.
+
+**Synthetic work-unit keys.** With no jira-creator to mint keys, work units are named **`{PROJECT}-F{n}`** (`F` = fast; e.g. `CSI-F1`). Real Jira keys are always `{PROJECT}-{integer}`, so `{PROJECT}-F{integer}` can never collide. The synthetic key drops into every existing convention unchanged: dir `docs/sdlc/CSI-F1/`, branch `CSI-F1/{slug}`, worktree `{repo}.worktrees/CSI-F1`. At reconciliation the ledger records the `CSI-F1 → CSI-1234` back-mapping. The wave itself gets a **`WAVE-ID` = `{PROJECT}-W{YYYYMMDD-HHMMSS}`**, stamped once by the orchestrator at wave start (agents can't call `date` deterministically); it names the wave dir and the resume file.
+
+**Wave directory layout.**
+
+```
+docs/sdlc/
+  _wave-{WAVE-ID}/
+    plan.md          # requirements source: one `## {KEY}` section per work unit
+    ledger.md        # machine state (committed copy, see below)
+  CSI-F1/            # per-unit artifacts, synthetic key — identical to normal layout
+    tech-spec.md  names-reserved.md  design-spec.md  integration-notes.md
+    impl-complete.md  test-results.md  qa-review.md  bug-fix-CSI-F1-B1.md
+```
+
+**The Fast Work Ledger** is the machine-readable state of the wave — it replaces Jira status as the message bus. The orchestrator holds it in two places: as a `## Fast Work Ledger` block in the resume file, and committed to git at `docs/sdlc/_wave-{WAVE-ID}/ledger.md` on the base branch (durable copy — survives loss of the memory file; readable by `--docs` and reconciliation). One entry per work unit:
+
+```yaml
+- key: CSI-F1                    # synthetic key
+  title: <story title>
+  epic: <epic title>             # groups units under an epic for reconciliation
+  ac: [ <criterion>, ... ]
+  complexity: S|M|L
+  deps: [ CSI-F2, ... ]          # blocking work-unit keys
+  phase: architected|ready|in-progress|in-review|testing|done|blocked
+  branch: CSI-F1/<slug>
+  pr: <url or null>
+  spec_files: [ docs/sdlc/CSI-F1/tech-spec.md, ... ]
+  bugs:                          # defect loop — replaces child Bug issues
+    - id: CSI-F1-B1
+      summary: <one-line failure + failing test>
+      source: tester|qa|user
+      status: open|fixed
+      loop: 1                    # bug-fix loop counter; cap 3
+  verdicts:
+    test: PASS|FAIL|null
+    qa: APPROVED|ISSUES|null
+  jira: null                     # real Jira key, filled at reconciliation
+```
+
+The failure loop runs off the ledger: tester/QA return a `Bug:` block, the orchestrator appends it to `bugs[]` (id `{KEY}-B{n}`, `loop: n`) and spawns the bug-fixer with `Jira: off`; the **max-3-loops cap is unchanged**, counted from `bugs[].loop` instead of closed child Bugs. On the 3rd failure the unit is marked `blocked` and surfaced to the user. See `references/workflow-states.md` for the ledger-phase ↔ Jira-status equivalence table.
+
 ### 3. What NOT to store in artifacts
 
 - ❌ **Full test output** — Store `15/16 passed; failing: test_parse_malformed_xml (expected ValueError, got None at line 42)`. Re-run tests in the worktree if detail is needed.

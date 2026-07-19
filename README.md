@@ -42,7 +42,11 @@ A collection of custom skills, agents, and plugins for Claude Code.
 | sdlc-handoff | Capture session state for rich pause/resume of a pipeline run |
 | sdlc-explainer | Technical writer for the AI-SDLC system — explains the idea, pipeline flow, agent coordination, and decision-making with mind maps, flowcharts, sequence and state diagrams. Derives the current system shape from source, so it stays accurate as the pipeline evolves |
 
-**Usage:** `/sdlc "project description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KEY` (resume)
+**Usage:** `/sdlc "project description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KEY` (resume) or `/sdlc continue {WAVE-ID}` (resume a fast wave)
+
+**Flags:** `--auto` (auto-approve all gates) · `--docs` (synthesize product docs after merge) · `--fast` / `--normal` (pre-answer the fast-vs-normal mode gate)
+
+**Fast mode:** Every run offers **fast vs normal** with a recommendation. Fast mode skips only Jira ceremony during the build (no tickets, transitions, comments, or Bug issues) while keeping every engineering gate — tests, smoke + live-process E2E, QA, and PR merge all run identically. Coordination moves to a git-backed **Fast Work Ledger** (`docs/sdlc/_wave-{WAVE-ID}/`); work units use synthetic `{PROJECT}-F{n}` keys. At wave end, opt-in **retro reconciliation** back-fills the full Jira QBV → Epic → Story(→ Bug) hierarchy with spec pointers, PR links, and final statuses.
 
 **Branching:** Auto-detects dev/prod model (dev + main branches) or single-branch. PRs target the correct branch automatically. Promotion (dev → main) offered at completion with user approval.
 

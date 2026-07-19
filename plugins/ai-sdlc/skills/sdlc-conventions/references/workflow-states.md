@@ -55,3 +55,21 @@ A Story is "in the bug-fix loop" if it has any non-Done child Bug. Don't infer t
 ## Max Retry
 
 A Story can go through the In-Progress (fix) → In Review → Testing loop at most **3 times** with a child Bug each round. After that, the orchestrator flags it for human review and moves on.
+
+## Fast Mode — Ledger Phase ↔ Jira Status
+
+In fast mode (`Jira: off`, see `SKILL.md` §2.6) there are no Jira tickets during the build. The **Fast Work Ledger** replaces the Jira status field: each work unit carries a `phase` value that the orchestrator advances from agent return text, exactly where a Jira transition would fire in normal mode. The mapping is 1:1, so a wave can be faithfully reconstructed at reconciliation (see `sdlc-jira-creator` Reconcile Mode).
+
+| Ledger `phase` | Equivalent Jira status | Set by | Set from agent return |
+|---|---|---|---|
+| `architected` | Backlog (spec written, pre-design) | orchestrator | architect `Status: architected` |
+| `ready` | Selected for Development | orchestrator | architect/designer/integrator — unit cleared for dev |
+| `in-progress` | In Progress | orchestrator | developer spawned (or bug-fixer active on a `bugs[]` entry) |
+| `in-review` | In Review | orchestrator | developer `Status: in-review` + `PR:` |
+| `testing` | Testing | orchestrator | tester `Verdict: PASS` |
+| `done` | Done | orchestrator | qa-reviewer `Verdict: APPROVED` |
+| `blocked` | (no Jira equivalent — surfaced to user) | orchestrator | 3rd failed bug-fix loop on the unit |
+
+**Bug entries.** A ledger `bugs[]` entry (`status: open|fixed`, `loop: n`) is the fast-mode stand-in for a child Bug issue. `open` ⇔ a non-Done child Bug with the parent Story back in `in-progress`; `fixed` ⇔ the child Bug Done and the unit re-routed to `in-review`. The same **3-loop cap** applies, counted from the highest `bugs[].loop` on the unit rather than by querying child issues.
+
+**At reconciliation**, `sdlc-jira-creator` (Reconcile Mode) creates each unit's Story at Backlog and walks it forward to the ledger `phase`'s equivalent status using this table, and creates one child Bug (final status Done) per `bugs[]` entry. A `blocked` unit is left at the furthest status its open bug reached, with a note.
