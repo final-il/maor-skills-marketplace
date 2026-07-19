@@ -41,6 +41,10 @@ airlock-jira <ISSUE-KEY> --fields summary,status,assignee
 airlock-jira get --path /rest/api/3/myself     # arbitrary read-only REST path
 airlock-jira <ISSUE-KEY> --raw | jq .          # raw JSON body only, for piping
 
+# search (JQL) — a read; use the /search/jql endpoint (the old /rest/api/3/search is REMOVED)
+airlock-jira get --path '/rest/api/3/search/jql?jql=project%20%3D%20CSI%20AND%20text%20~%20%22jiralyzer%22&fields=summary,status,issuetype,assignee&maxResults=50'
+# → parse with: airlock-jira get --path '…/search/jql?…' --raw | jq -r '.issues[] | "\(.key)  \(.fields.status.name)  \(.fields.summary)"'
+
 # writes (POST — mutate a live ticket; prompt for confirmation unless --yes)
 airlock-jira comment <ISSUE-KEY> "text"        # add a comment (plain text → ADF)
 airlock-jira transitions <ISSUE-KEY>           # list available transitions (this is a read)
@@ -92,6 +96,11 @@ all mean the same thing here.
 - **Read / look up / check a ticket** ("what's CREQ-2971", "status of CSI-780", "pull the raw JSON")
   → `airlock-jira CREQ-2971` (add `--fields` if they name specific fields; `--raw | jq` to extract one
   value; `get --path /rest/api/3/...` for an arbitrary read-only endpoint).
+- **Find / list / search tickets** ("all jiralyzer tickets in CSI", "open bugs in PROJ") → a JQL search
+  via `get --path '/rest/api/3/search/jql?jql=<url-encoded JQL>&fields=…&maxResults=50'`. Use
+  `/search/jql` — the legacy `/rest/api/3/search` is removed and returns a migration error. Results are
+  paged: the response's `isLast` is `false` when there's more, so page with `nextPageToken` (or a
+  higher `maxResults`) and tell the user when you've capped the list rather than implying it's complete.
 - **Comment on / update a ticket** → confirm the exact text, then
   `airlock-jira comment CSI-780 "…" --yes`.
 - **Move / transition / close a ticket** → confirm intent, then
