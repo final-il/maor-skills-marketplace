@@ -1,0 +1,6 @@
+{
+  "name": "airlock-jira",
+  "version": "0.1.0",
+  "description": "Read and update Jira from the internet-isolated internal (island) network using the airlock-jira CLI — the only path to Jira there. Relays every call internal → Aurora → S3 → external worker → real Jira and back, with no outbound internet or credentials on the island. Covers reads, guarded comment/transition writes, and preflight (SSM tunnel + creds) fixes.",
+  "author": { "name": "Maor B", "email": "maorb@final.co.il" }
+}
