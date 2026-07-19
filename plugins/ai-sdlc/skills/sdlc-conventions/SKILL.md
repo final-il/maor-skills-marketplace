@@ -126,9 +126,10 @@ Design + rationale: `docs/specs/2026-07-08-ai-sdlc-hybrid-artifact-store-design.
 
 | Artifact | Author phase | Detail file |
 |---|---|---|
-| Technical Specification | Architect (3) | `docs/sdlc/{STORY-KEY}/tech-spec.md` |
-| Names Reserved | Architect (3) | `docs/sdlc/{STORY-KEY}/names-reserved.md` *(own file — the integrator reads only this, never the full tech spec)* |
-| Critical User Journeys | Architect (3, epic) | `docs/sdlc/{EPIC-KEY}/cujs.md` |
+| Ownership Registry | Architect (3a, epic) | `docs/sdlc/{EPIC-KEY}/ownership.md` *(the lead-pass namespace allocation the detail pass reserves against — see §2.5a)* |
+| Technical Specification | Architect (3b) | `docs/sdlc/{STORY-KEY}/tech-spec.md` |
+| Names Reserved | Architect (3b) | `docs/sdlc/{STORY-KEY}/names-reserved.md` *(own file — the integrator reads only this, never the full tech spec)* |
+| Critical User Journeys | Architect (3a, epic) | `docs/sdlc/{EPIC-KEY}/cujs.md` |
 | Design Specification | Designer (3.5) | `docs/sdlc/{STORY-KEY}/design-spec.md` |
 | Integration Notes | Integrator (3.6) | `docs/sdlc/{STORY-KEY}/integration-notes.md` |
 
@@ -152,6 +153,46 @@ Design + rationale: `docs/specs/2026-07-08-ai-sdlc-hybrid-artifact-store-design.
 **Reading detail:** agents `Read` the local file at the repo-relative path (windowed with `offset`/`limit` for large files). This replaces the old `jira_get_issue` fetch of a comment body — faster and free of network round-trips.
 
 **Migration / mixed-mode:** if no `docs/sdlc/{KEY}/` file exists (an epic that ran under the old all-in-Jira model), fall back to reading the detail from the Jira comment body as before. New artifacts always write the hybrid way; old ones stay readable. No back-fill.
+
+### 2.5a Ownership registry — architecture is a two-pass, single-authority allocation
+
+**The problem it solves.** Architecture draws the system's *boundaries* — which file owns which module, which story exports which symbol, which story owns a shared wire-contract schema. Boundary-setting is a **global-consistency** problem: if N architects each design one story in isolation, two of them can independently reserve the same file / symbol / route / schema, and the collision is only discovered later by the Phase 3.6 integrator, which then forces an expensive re-architecture loop. Fanning out boundary decisions to independent actors is the root cause of that churn.
+
+**The rule: Phase 3 runs in two passes.**
+
+- **Pass 3a — lead (serial, once per epic).** A single architect reads the whole epic + every story and produces two epic-level artifacts: the CUJs (`docs/sdlc/{EPIC-KEY}/cujs.md`) **and** the **ownership registry** `docs/sdlc/{EPIC-KEY}/ownership.md`. The registry is the single authority on who-owns-what. Because one actor holds the whole picture, it cannot collide with itself.
+- **Pass 3b — detail (parallel, per story).** The existing per-story architects fan out exactly as before, but each **reads the registry as an input and reserves only within its allocated slice**. A story's `names-reserved.md` must be a *subset* of what the registry granted it; it may not claim a namespace the registry assigned to a sibling. Collisions can no longer form because allocation happened once, up front.
+
+**Ownership registry format** — `docs/sdlc/{EPIC-KEY}/ownership.md` (fast mode: `docs/sdlc/_wave-{WAVE-ID}/ownership.md`):
+
+```markdown
+# Ownership Registry — {EPIC-KEY}
+
+## Module / boundary map
+- {one line per major module or layer the epic introduces, and which story owns it}
+
+## Per-story allocation
+### {STORY-KEY}: {title}
+- **Owns files:** `path/foo.py`, `path/bar.tsx`   (files ONLY this story may create)
+- **Owns symbols:** `class FooThing`, `function ChartResult`
+- **Owns routes:** `/api/foo`, `/api/foo/{id}`
+- **Owns CLI:** `jiralyzer foo`
+- **Owns env/config:** `FOO_TIMEOUT`, `foo.timeout`
+- **Consumes (does not own):** {names owned by another story this one depends on, with the owning story key}
+
+## Shared wire-contract schemas
+- `path/to/canonical_schema.py` — **owned by {STORY-KEY}**; consumers: {STORY-KEY2, ...}
+  (exactly one owning story per schema file; consumers reference it, never redefine it)
+
+## Sequencing
+- {ordered/dependency notes: which stories must land before which — feeds the ledger `deps[]` / Jira issue links}
+```
+
+Every namespace category from `names-reserved.md` (new files, exported symbols, route prefixes, CLI subcommands, env/config keys) is allocated here first. If a category is empty for a story, write `none`. Each shared wire-contract schema file is assigned to **exactly one** owning story; the consumer stories reference that same path (this is the §2.5 "single canonical schema location" rule, decided once in the lead pass instead of negotiated across parallel specs).
+
+**Phase 3.6 becomes a confirmation gate.** With the registry in place, the integrator additionally verifies each story's `names-reserved.md` is a subset of its registry allocation (registry-drift check) and that no two stories claim the same name. It should almost always return `Action required: 0`; it remains the safety net for the rare drift, and the sole authority for **mixed-mode** epics that predate the registry (no `ownership.md` → fall back to the pure cross-check it always did).
+
+**Fast mode inherits this for free** — the lead pass writes `ownership.md` to the wave dir, per-unit architects read it, no Jira on either pass. See §2.6.
 
 ### 2.6 Fast Mode — the `Jira:` axis and the Fast Work Ledger
 

@@ -573,11 +573,14 @@ WAVE-ID: {PROJECT}-W{YYYYMMDD-HHMMSS}
 ```
 and uses the **synthetic key** `{PROJECT}-F{n}` wherever a story key would go. No `Transition Map` is needed (nothing to transition). Each agent's `## Fast Mode (Jira: off)` section governs its behavior: skip the startup ToolSearch, load no `mcp__mcp-atlassian__*` tools, read requirements from `docs/sdlc/_wave-{WAVE-ID}/plan.md`, write its summary artifact to the named git file, and return its verdict in return text.
 
+**Phase 3 is still two-pass in fast mode** (see Phase 3a/3b above and `sdlc-conventions` §2.5a): spawn the lead architect with `Pass: lead` + `Jira: off` (writes `docs/sdlc/_wave-{WAVE-ID}/ownership.md` + `cujs.md`), commit the wave dir, then fan out `Pass: detail` + `Jira: off` architects that read the registry. The lead pass's `## Sequencing` seeds the ledger `deps[]`.
+
 **Drive the ledger from return text.** Agents no longer write status to Jira; the orchestrator updates the ledger from each agent's ≤10-line return:
 
 | Phase | Agent | Ledger update from return text |
 |---|---|---|
-| 3 | architect | `phase: architected`, `deps[]` (from reported cross-unit deps), `spec_files += tech-spec.md, names-reserved.md` |
+| 3a | architect (lead) | seed `deps[]` from the returned `## Sequencing`; `spec_files += _wave-{WAVE-ID}/ownership.md` (epic-level) |
+| 3b | architect (detail) | `phase: architected`, `spec_files += tech-spec.md, names-reserved.md` per unit |
 | 3.5 | designer | `phase: ready` (design written / "no design needed"); present `design-spec.md` for approval (kept gate) |
 | 3.6 | integrator | Action-required units → re-run Phase 3 on them (same as normal); clean → keep `phase` |
 | 4 | developer | `phase: in-review`, `branch`, `pr` (from `PR:` line), `spec_files += impl-complete.md` |
@@ -631,24 +634,41 @@ The Jira project uses a 3-tier hierarchy:
 
 **Drain check:** if Self-Learning is ON, drain the raw-event queue now (see ## Self-Learning Loop → Draining the raw queue).
 
-## Phase 3: Architecture
+## Phase 3: Architecture (two-pass — see `sdlc-conventions` §2.5a)
+
+Architecture runs in **two passes** to prevent cross-story name/file/schema collisions at the source. A single **lead** pass (3a) allocates who-owns-what into an ownership registry; **detail** architects (3b) then fan out in parallel and reserve only within their allotted slice — so collisions can't form. Phase 3.6 drops from a rework trigger to a confirmation gate. **Both passes reuse the same `sdlc-architect` agent**, distinguished by a `Pass:` context line.
+
+### Phase 3a — Lead pass (ownership registry + CUJs; serial, once)
 
 1. **Spawn `sdlc-architect` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
    - Pointer to `Agent Paths.architect`
    - SDLC context block, including:
-     - `Read Artifacts: Epic description + AC ({EPIC-KEY}); Story description + AC ({STORY-KEY})`
-     - `Write Artifact: docs/sdlc/{EPIC-KEY}/cujs.md + ## Critical User Journeys summary+pointer comment on {EPIC-KEY} (ONCE per Phase 3 run); per story: docs/sdlc/{STORY-KEY}/tech-spec.md + names-reserved.md + ## Technical Specification summary+pointer comment. Files written into {repo_path} on {base_branch}; orchestrator commits at phase-end.`
+     - `Pass: lead`
+     - `Read Artifacts: Epic description + AC ({EPIC-KEY}); every child Story description + AC`
+     - `Write Artifact: docs/sdlc/{EPIC-KEY}/cujs.md + docs/sdlc/{EPIC-KEY}/ownership.md + ## Critical User Journeys and ## Ownership Registry summary+pointer comments on {EPIC-KEY}. Files written into {repo_path} on {base_branch}; orchestrator commits at phase-end.`
    - Task: **the epic key** + all story keys in "To Do" status + the repo path
    - `model: "opus"`
 
-2. The architect:
-   - First posts a `## Critical User Journeys` comment on the epic (3-5 epic-level CUJs that the tester / QA / Phase 8 will validate end-to-end)
-   - Then writes a tech spec on each story — including a `## Smoke Path` section that references one or more CUJs
-   - Transitions each story to "Ready for Dev"
+2. The lead architect writes the epic CUJs **and** the ownership registry (allocates every file/symbol/route/CLI/env-config name + every shared wire-contract schema to exactly one owning story), posts the two epic comments, and STOPS (no per-story specs).
 
-3. **Commit the spec detail files (hybrid artifact store — §2.5).** The architect wrote `docs/sdlc/{EPIC-KEY}/cujs.md` and, per story, `docs/sdlc/{STORY-KEY}/tech-spec.md` + `names-reserved.md` into the base-branch checkout at `{repo_path}` — it did NOT commit them (no story worktree exists yet at Phase 3). You batch-commit them now, mirroring the Phase 8 CUJ-artifact commit. **This is what makes the `📄 Detail:` pointer URLs in the Jira comments resolve** — see "Spec-commit procedure" below. Run it before reporting to the user.
+3. **Commit the lead artifacts (hybrid store — §2.5).** Run the **Spec-commit procedure** (see below) with `{PHASE}` = `architecture` so the `📄 Detail:` pointers to `cujs.md` + `ownership.md` resolve **before** the detail pass reads the registry.
 
-4. Report to user the CUJ comment on the epic + which stories are now ready for development
+### Phase 3b — Detail pass (per-story tech specs; parallel)
+
+4. **Spawn one `sdlc-architect` per story** (parallelizable — independent stories run concurrently) with:
+   - Pointer to `Agent Paths.architect`
+   - SDLC context block, including:
+     - `Pass: detail`
+     - `Read Artifacts: Story description + AC ({STORY-KEY}); docs/sdlc/{EPIC-KEY}/ownership.md (your allocation); docs/sdlc/{EPIC-KEY}/cujs.md`
+     - `Write Artifact: docs/sdlc/{STORY-KEY}/tech-spec.md + names-reserved.md + ## Technical Specification summary+pointer comment. Files written into {repo_path} on {base_branch}; orchestrator commits at phase-end.`
+   - Task: **the story key** + the epic key + the repo path
+   - `model: "opus"`
+
+5. Each detail architect reads its allocation from `ownership.md`, writes a tech spec (with a `## Smoke Path` referencing one or more CUJs) reserving **only** within its slice, and transitions the story to "Ready for Dev". If any architect returns a `Registry gap:` line (it needs a name the registry didn't grant), re-run Phase 3a for that gap (append the gap to the lead prompt), then re-run 3b for the affected story. Cap at 2 lead-pass iterations per epic.
+
+6. **Commit the detail spec files (hybrid store — §2.5).** Run the **Spec-commit procedure** with `{PHASE}` = `architecture` to resolve the per-story pointers.
+
+7. Report to user the CUJ + ownership comments on the epic + which stories are now ready for development.
 
 **Spec-commit procedure** (shared by Phases 3, 3.5, 3.6):
 ```bash
@@ -699,14 +719,14 @@ For stories that involve UI, CLI output, dashboards, or any user-visible interfa
 
 ## Phase 3.6: Cross-Story Integration Audit
 
-**Always runs**, after Phase 3 (and 3.5 if it applied) and before any Phase 4 work begins. Catches name and file collisions before parallel branches start.
+**Always runs**, after Phase 3 (and 3.5 if it applied) and before any Phase 4 work begins. With the two-pass Phase 3 in place (the lead pass wrote `docs/sdlc/{EPIC-KEY}/ownership.md`), this is a **confirmation gate**: the integrator verifies each story stayed within its registry allocation (registry-drift check) rather than re-deriving allocation from scratch. It should almost always come back clean; it remains the safety net (and the full authority for mixed-mode epics with no registry).
 
 1. **Identify the audit set.** Every story in the epic that is in `Selected for Development` (or the project's "Ready for Dev" equivalent) and has a `## Technical Specification` comment from the architect.
    - If the epic has only one story, skip Phase 3.6 — there is nothing to audit.
 2. **Spawn `sdlc-integrator` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
    - Pointer to `Agent Paths.integrator`
    - SDLC context block, including:
-     - `Read Artifacts: docs/sdlc/{STORY-KEY}/names-reserved.md + the ## Wire Contracts / ## Files to Create/Modify sections of docs/sdlc/{STORY-KEY}/tech-spec.md, read locally from {repo_path} on {base_branch}, for every story key in the audit set (mixed-mode Jira fallback for old epics)`
+     - `Read Artifacts: docs/sdlc/{EPIC-KEY}/ownership.md (the registry — ground truth for allocation); docs/sdlc/{STORY-KEY}/names-reserved.md + the ## Wire Contracts / ## Files to Create/Modify sections of docs/sdlc/{STORY-KEY}/tech-spec.md, read locally from {repo_path} on {base_branch}, for every story key in the audit set (mixed-mode Jira fallback for old epics; if ownership.md is absent, do the full independent cross-check)`
      - `Write Artifact: docs/sdlc/{STORY-KEY}/integration-notes.md (detail) + ## Integration Notes (summary+pointer comment) on each affected story`
    - Task: the epic key + comma-separated list of story keys in the audit set
    - `model: "sonnet"`

@@ -51,8 +51,18 @@ Jira round-trips are the pipeline's bottleneck. Follow these every run:
 
 You receive:
 - SDLC context block (cloudId, projectKey, repo path, **Repo Web Base**, **Base Branch**, transition map, **Read Artifacts**, **Write Artifact**)
+- A **`Pass:`** line — `Pass: lead` (Phase 3a) or `Pass: detail` (Phase 3b). If the line is **absent**, run **both passes in sequence yourself** (legacy single-spawn behavior — lead pass, then detail pass, for backward compatibility).
 - A list of Jira story keys to design (all in "To Do" status)
-- The parent **Epic key** for those stories — you will post a `## Critical User Journeys` comment on the epic before designing stories
+- The parent **Epic key** for those stories
+
+## Two-pass architecture (why this agent has two modes)
+
+Architecture is a **global-consistency** problem: if independent per-story architects each reserve names in isolation, two can claim the same file / symbol / route / schema, and the Phase 3.6 integrator only catches it afterward — forcing an expensive re-architecture loop. To prevent that, Phase 3 runs in two passes (see `sdlc-conventions` §2.5a):
+
+- **`Pass: lead` (Phase 3a, serial, once per epic)** — you hold the whole epic in one context and produce the epic-level artifacts: the **CUJs** and the **ownership registry** `docs/sdlc/{EPIC-KEY}/ownership.md`, which allocates every namespace (files, symbols, routes, CLI, env/config) and every shared wire-contract schema to exactly one owning story. One actor, whole picture → no self-collision. **Do Step 0 + Step 0.5 below, then stop.**
+- **`Pass: detail` (Phase 3b, parallel, per story)** — you design one (or a few) stories, **reading the registry as an input** and reserving **only within the slice it granted you**. Your `names-reserved.md` must be a subset of your registry allocation; never claim a name the registry gave a sibling. **Do Step 1 below.**
+
+If no `Pass:` line is present, do Step 0 → Step 0.5 → Step 1 for all stories in a single run (legacy).
 
 ## Artifact Discipline
 
@@ -66,7 +76,9 @@ What NOT to put in the spec:
 
 ## Process
 
-### Step 0 — Critical User Journeys (post on the Epic, ONCE per Phase 3 run)
+### Step 0 — Critical User Journeys — LEAD PASS (post on the Epic, once per epic)
+
+*Run in `Pass: lead` (or legacy no-pass). Skip in `Pass: detail`.*
 
 Before writing any per-story tech spec, identify **3-5 epic-level Critical User Journeys (CUJs)** — the end-to-end flows a real user must be able to complete after this epic ships. CUJs are the contract between "Done stories" and "user can use the product"; the tester and QA agents validate them in Phase 5/6 and Phase 8 replays them end-to-end.
 
@@ -115,9 +127,46 @@ Read the epic + every child story (description + AC) to derive the CUJs. Then wr
 
 The epic-level CUJs are the **gold standard** for Phase 8 (the orchestrator replays them end-to-end before closing the epic). Per-story smoke paths are a **subset** of the CUJ — see step 4d below.
 
-Once posted, proceed to per-story specs.
+Once posted, proceed to the ownership registry (Step 0.5).
 
-### Step 1 — Per-story specs
+### Step 0.5 — Ownership registry — LEAD PASS (write once per epic)
+
+*Run in `Pass: lead` (or legacy no-pass). Skip in `Pass: detail`.*
+
+You are the **single authority** on who-owns-what. Read the whole epic + every child story (description + AC) and explore the codebase (`CLAUDE.md`, `pyproject.toml`/`package.json`, existing source layout) enough to draw the boundaries. Then allocate **every** namespace each story will need — new files, exported symbols, route prefixes, CLI subcommands, env/config keys — and **every shared wire-contract schema**, to **exactly one owning story**. This is the map the parallel detail pass reserves against; getting it right here is what prevents cross-story collisions.
+
+**Write** `{repo_path}/docs/sdlc/{EPIC-KEY}/ownership.md` (use the `Write` tool) in the format defined in `sdlc-conventions` §2.5a:
+- `## Module / boundary map` — one line per major module/layer and its owning story.
+- `## Per-story allocation` — per story: **Owns files / symbols / routes / CLI / env-config** (write `none` for empty categories), plus **Consumes (does not own)** naming the sibling that owns each consumed name.
+- `## Shared wire-contract schemas` — each canonical schema file assigned to exactly one owning story; consumers listed (they reference, never redefine).
+- `## Sequencing` — dependency/order notes (which stories must land first).
+
+Allocation rules:
+- **Exactly one owner per name.** If two stories both need to touch a file, either split the file (give each a distinct file) or assign the file to one story and make the other a documented consumer/caller — never let two stories "own" the same path.
+- **Canonical schema, decided here.** For any producer↔consumer pair, pick the owning story now (HTTP/SSE producers own their schema; for symmetric IPC pick the producer alphabetically by story key) and record the single schema file path. The detail pass just references it.
+- **Disambiguate proactively.** If two stories would naturally reach for the same generic name (`ChartResult.tsx`, `class EventStore`, `/api/data`, `FOO_TIMEOUT`), assign intent-based distinct names now (`ChartByType.tsx`/`PinnedChartCard.tsx`, `GitHubEventStore`/`JiraEventStore`, nested routes, namespaced env vars) — the same disambiguation the integrator would otherwise force via a rework loop.
+
+**Post one epic comment** (summary + pointer, alongside or combined with the CUJ comment) with `mcp__mcp-atlassian__jira_add_comment`:
+```markdown
+## Ownership Registry
+
+### Summary
+- {N} stories allocated; {M} shared schema files
+- Notable disambiguations: {one line, or "none needed"}
+- Riskiest shared boundary: {schema/module} — {one-line why}
+
+📄 Detail: {Repo Web Base}/blob/{base_branch}/docs/sdlc/{EPIC-KEY}/ownership.md
+```
+
+**In `Pass: lead`, STOP after this step.** Return the ownership summary + the CUJ summary in your return text (in fast mode, return per the Fast Mode section). Do NOT write per-story tech specs — that is the detail pass.
+
+### Step 1 — Per-story specs — DETAIL PASS
+
+*Run in `Pass: detail` (or legacy no-pass). In `Pass: detail`, do NOT run Step 0/0.5.*
+
+**Read the ownership registry first.** Read `docs/sdlc/{EPIC-KEY}/ownership.md` (fast mode: `docs/sdlc/_wave-{WAVE-ID}/ownership.md`) locally. Find your story's block under `## Per-story allocation`. You will **reserve only the names it granted you** — your `names-reserved.md` must be a subset of your allocation. If you find you genuinely need a name the registry did **not** grant you (a gap or a name owned by a sibling), do NOT silently claim it: note it in your return text as a `Registry gap:` line so the orchestrator can re-run the lead pass, and reserve a clearly-namespaced placeholder in the meantime. For shared wire-contract schemas, reference the exact canonical file path the registry assigned — never redefine a schema owned by another story.
+
+For each story key:
 
 For each story key:
 
@@ -245,9 +294,17 @@ For each story key:
 
 ## Pre-submit checklist
 
-Before posting your `## Technical Specification` comment, verify:
+**Lead pass (`Pass: lead`) — before you stop, verify:**
+- [ ] Did you write `docs/sdlc/{EPIC-KEY}/cujs.md` (CUJs) AND `docs/sdlc/{EPIC-KEY}/ownership.md` (registry)? (Fast mode: both under `docs/sdlc/_wave-{WAVE-ID}/`.)
+- [ ] Does `ownership.md` allocate **every** namespace category (files, symbols, routes, CLI, env/config) with **exactly one owner** per name, `none` where empty?
+- [ ] Is every shared wire-contract schema file assigned to exactly one owning story, with consumers listed?
+- [ ] Did you proactively disambiguate names two stories would otherwise both grab?
+- [ ] Did you post the epic `## Critical User Journeys` + `## Ownership Registry` summary+pointer comments (normal mode only) and STOP without writing per-story specs?
 
-- [ ] Did you write the CUJ detail file `docs/sdlc/{EPIC-KEY}/cujs.md` and post the epic-level `## Critical User Journeys` summary+pointer comment **once** at the start of this Phase 3 run (before any story spec)?
+**Detail pass (`Pass: detail`, or legacy) — before posting your `## Technical Specification` comment, verify:**
+
+- [ ] Did you read `docs/sdlc/{EPIC-KEY}/ownership.md` and confine every reservation to your story's allocation (your `names-reserved.md` is a **subset** of the registry's grant, and references — not redefines — any shared schema you consume)?
+- [ ] (Legacy no-pass only) Did you write the CUJ detail file `docs/sdlc/{EPIC-KEY}/cujs.md` + `ownership.md` and post the epic-level comments **once** before any story spec?
 - [ ] For each story, did you write BOTH `docs/sdlc/{STORY-KEY}/tech-spec.md` AND `docs/sdlc/{STORY-KEY}/names-reserved.md`?
 - [ ] Does each story's `## Smoke Path` (in `tech-spec.md`) reference at least one CUJ from the epic, with a concrete command + success signal + failure signal?
 - [ ] Did you list every new file path in `names-reserved.md` → New files?
@@ -266,13 +323,16 @@ If your SDLC Context block contains the line `Jira: off`, the wave is running in
 
 1. **Skip the mandatory startup ToolSearch and load NO `mcp__mcp-atlassian__*` tools.** There is no Jira in this wave.
 2. **Read your work units from git, not Jira.** Your units use synthetic keys `{PROJECT}-F{n}`. Read each unit's description + AC from its `## {KEY}` section of `docs/sdlc/_wave-{WAVE-ID}/plan.md`. The "epic" a unit belongs to is named in that section (and in the ledger's `epic:` field).
-3. **Write all the same detail files** — `cujs.md` (once, under the wave's nominal epic — write it to `docs/sdlc/_wave-{WAVE-ID}/cujs.md`), and per unit `tech-spec.md` + `names-reserved.md`, exactly as in normal mode. These are already git-based; the orchestrator commits them.
-4. **Skip every Jira write** — no epic `## Critical User Journeys` comment (Step 0's Jira post), no per-story summary+pointer comment (Step 5c), no `jira_update_issue` (Step 6), no transition (Step 7), no issue links (Step 8). The pointer URLs are moot in fast mode; the detail files are read locally.
-5. **Return your verdict in your return text**, one line per unit designed:
+3. **Two passes still apply.** Your `Pass:` line governs which steps you run (see "Two-pass architecture" above), same as normal mode:
+   - **`Pass: lead`** — write `cujs.md` and `ownership.md` to the **wave dir** (`docs/sdlc/_wave-{WAVE-ID}/cujs.md` and `docs/sdlc/_wave-{WAVE-ID}/ownership.md`), then STOP. Return the CUJ + ownership summary.
+   - **`Pass: detail`** — read `docs/sdlc/_wave-{WAVE-ID}/ownership.md`, then write per unit `tech-spec.md` + `names-reserved.md` reserving only within your allocation, exactly as normal mode.
+   - Legacy no-pass: do both in sequence.
+4. **Skip every Jira write** — no epic `## Critical User Journeys` / `## Ownership Registry` comment, no per-story summary+pointer comment (Step 5c), no `jira_update_issue` (Step 6), no transition (Step 7), no issue links (Step 8). The pointer URLs are moot in fast mode; the detail files are read locally.
+5. **Return your verdict in your return text.** In `Pass: lead`, return the CUJ + ownership summary (and the discovered cross-unit dependencies from `## Sequencing` so the orchestrator seeds the ledger `deps[]`). In `Pass: detail`, one line per unit designed:
    ```
    {KEY}: Status: architected   (deps: {KEY2}, ...)   # or "ready" if no design/integration phase follows
    ```
-   Report cross-unit dependencies you discovered in the return text so the orchestrator can record them in the ledger `deps[]` and sequence development.
+   If a unit needs a name the registry didn't grant, add a `Registry gap: {KEY} needs {name}` line so the orchestrator can re-run the lead pass.
 
 Inert unless `Jira: off` is present.
 
