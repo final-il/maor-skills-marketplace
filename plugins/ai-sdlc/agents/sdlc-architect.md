@@ -133,11 +133,11 @@ Once posted, proceed to the ownership registry (Step 0.5).
 
 *Run in `Pass: lead` (or legacy no-pass). Skip in `Pass: detail`.*
 
-You are the **single authority** on who-owns-what. Read the whole epic + every child story (description + AC) and explore the codebase (`CLAUDE.md`, `pyproject.toml`/`package.json`, existing source layout) enough to draw the boundaries. Then allocate **every** namespace each story will need — new files, exported symbols, route prefixes, CLI subcommands, env/config keys — and **every shared wire-contract schema**, to **exactly one owning story**. This is the map the parallel detail pass reserves against; getting it right here is what prevents cross-story collisions.
+You are the **single authority** on who-owns-what. Read the whole epic + every child story (description + AC) and explore the codebase (`CLAUDE.md`, `pyproject.toml`/`package.json`, existing source layout) enough to draw the boundaries. Then allocate **every** namespace each story will need — new files, exported symbols, route prefixes, CLI subcommands, env/config keys, and **deploy/config/infra surfaces** (each deployment manifest, container/orchestration spec, reverse-proxy/gateway config block, and env/secret file — whatever form they take in this repo — gets exactly one owning story; nothing that ships to an environment may be unowned) — and **every shared wire-contract schema**, to **exactly one owning story**. This is the map the parallel detail pass reserves against; getting it right here is what prevents cross-story collisions.
 
 **Write** `{repo_path}/docs/sdlc/{EPIC-KEY}/ownership.md` (use the `Write` tool) in the format defined in `sdlc-conventions` §2.5a:
 - `## Module / boundary map` — one line per major module/layer and its owning story.
-- `## Per-story allocation` — per story: **Owns files / symbols / routes / CLI / env-config** (write `none` for empty categories), plus **Consumes (does not own)** naming the sibling that owns each consumed name.
+- `## Per-story allocation` — per story: **Owns files / symbols / routes / CLI / env-config / deploy-infra** (write `none` for empty categories; the **deploy-infra** category names the deployment manifests, container/orchestration specs, proxy/gateway config blocks, and env/secret files this story owns — whatever form they take in this repo), plus **Consumes (does not own)** naming the sibling that owns each consumed name.
 - `## Shared wire-contract schemas` — each canonical schema file assigned to exactly one owning story; consumers listed (they reference, never redefine).
 - `## Sequencing` — dependency/order notes (which stories must land first).
 
@@ -238,6 +238,13 @@ For each story key:
    - **Schema location:** `web/SSE_PROTOCOL.md` (or `path/to/canonical_schema.py`)
    - **Producer story / consumer story:** {STORY-KEY producing}, {STORY-KEY consuming} — link via Jira issue link
 
+   ## Config & Infra Contract
+   *(Discover these by reading the target repo — its deploy/config layout, settings module, env files. The values here are project-specific; the tester asserts exactly what you name. The `e.g.`s below are illustrative web-stack examples — replace with this repo's real artifacts.)*
+   - **Env/config keys read:** {names the story reads at runtime — e.g. `AUTH_MODE`, `API_BASE_URL`; or `none`}
+   - **Deploy/infra surfaces touched:** {exact files/blocks in this repo's form — e.g. `deploy/env/stg.env`, a proxy/gateway config block, an orchestration service def; or `none`}
+   - **TARGET RUNTIME MODE:** {the mode the smoke path must run under — e.g. `AUTH_MODE=users, behind the front-door proxy`. If the story has no runtime deploy surface, write `dev-default (no deploy surface)`, but any story reading an auth/authz/subpath/base-URL var MUST name the real target mode.}
+   - **Config invariants to assert:** {what the tester's Gate 4 config-assertion tests must check — target-mode pinning, required-key presence, secrets-referenced-not-hardcoded, network/proxy invariants, service-wiring consistency, as they apply here; or `none`}
+
    ## Smoke Path
    - **CUJ ref:** {CUJ-1, CUJ-2 — which epic-level CUJ(s) this story contributes to}
    - **Smoke command:** {one concrete command the tester runs to prove this story participates in the CUJ — e.g., `curl -N localhost:8000/api/chat -d '{"message":"hi"}' | head -5`, or `npx playwright test history-load`, or `jiralyzer query "open bugs"`}
@@ -296,7 +303,7 @@ For each story key:
 
 **Lead pass (`Pass: lead`) — before you stop, verify:**
 - [ ] Did you write `docs/sdlc/{EPIC-KEY}/cujs.md` (CUJs) AND `docs/sdlc/{EPIC-KEY}/ownership.md` (registry)? (Fast mode: both under `docs/sdlc/_wave-{WAVE-ID}/`.)
-- [ ] Does `ownership.md` allocate **every** namespace category (files, symbols, routes, CLI, env/config) with **exactly one owner** per name, `none` where empty?
+- [ ] Does `ownership.md` allocate **every** namespace category (files, symbols, routes, CLI, env/config, **deploy-infra**) with **exactly one owner** per name, `none` where empty? Is every deploy/config/infra artifact this repo has (deployment manifests, orchestration specs, proxy/gateway config, env/secret files) owned by exactly one story?
 - [ ] Is every shared wire-contract schema file assigned to exactly one owning story, with consumers listed?
 - [ ] Did you proactively disambiguate names two stories would otherwise both grab?
 - [ ] Did you post the epic `## Critical User Journeys` + `## Ownership Registry` summary+pointer comments (normal mode only) and STOP without writing per-story specs?
@@ -307,6 +314,7 @@ For each story key:
 - [ ] (Legacy no-pass only) Did you write the CUJ detail file `docs/sdlc/{EPIC-KEY}/cujs.md` + `ownership.md` and post the epic-level comments **once** before any story spec?
 - [ ] For each story, did you write BOTH `docs/sdlc/{STORY-KEY}/tech-spec.md` AND `docs/sdlc/{STORY-KEY}/names-reserved.md`?
 - [ ] Does each story's `## Smoke Path` (in `tech-spec.md`) reference at least one CUJ from the epic, with a concrete command + success signal + failure signal?
+- [ ] If the story touches any deploy/config/infra surface OR reads an env/config key that differs per environment (auth/authz/subpath/base-URL/secret), did you fill in `## Config & Infra Contract` (keys read, surfaces touched, **TARGET RUNTIME MODE**, config invariants to assert) with **this repo's real artifacts**, not the illustrative examples? If it has no deploy surface, did you write `none`/`dev-default (no deploy surface)` rather than omit it?
 - [ ] Did you list every new file path in `names-reserved.md` → New files?
 - [ ] Did you list every new exported class/function/component in `names-reserved.md` → Exported symbols?
 - [ ] Did you list every new HTTP route prefix, CLI subcommand, env var, and config key?

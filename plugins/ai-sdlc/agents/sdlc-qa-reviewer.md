@@ -154,6 +154,16 @@ What NOT to put in the comment:
    ```
    For each shape definition you see, ask: "does this match the contract on the OTHER side of the wire?" If a backend Pydantic model named `ConversationDetail` was renamed/reshaped but the frontend `ConversationDetail` TS interface wasn't, you've found a wire drift — file a Bug. This is the regression class that produced today's "message.blocks is not iterable".
 
+   **c.5 Cross-cutting call-site verification (every story)**
+
+   If the story adds a call site for a cross-cutting concern (auth headers, CSRF token, credentials, error handling, logging, retry), verify it routes through the shared/central mechanism — reject the Nth hand-rolled copy. A repeated pattern is a root-cause miss: one file did it wrong once, five siblings did it right, and a point-fix patched the five and missed the sixth. Grep the diff and the surrounding module for the sibling call sites; if this call site hand-rolls behavior the siblings get from a shared wrapper (or if it's the 2nd copy that should have been extracted), file a Bug demanding it route through the shared mechanism.
+
+   **c.6 Config/Infra gate verification (when the diff touches any deploy/config/infra artifact or an env/config key that differs per environment)**
+
+   Verify the tester's Gate 4 (Config & Infra) actually ran:
+   - Confirm deterministic config-assertion tests exist and assert the invariants named in the tech spec's `## Config & Infra Contract` (target-mode pinning, required-key presence, secrets-not-hardcoded, network/proxy, service-wiring — whichever apply).
+   - Confirm the smoke/live gate ran in the **deploy-target runtime mode** named in `## Config & Infra Contract → TARGET RUNTIME MODE`. **Reject "tested in the dev-permissive mode" for a stricter target mode** — environment-gated bugs (auth/authz rejections, proxy/buffering failures, subpath mismatches) are invisible there. File a Bug demanding the gate re-run in the target mode. *(Web-stack example: reject "tested in open mode" for a users-mode target — CSRF/401/403 stay hidden.)*
+
    **d. Integration**
    - Does the code work with the rest of the codebase?
    - Any breaking changes to existing functionality?

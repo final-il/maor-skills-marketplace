@@ -161,7 +161,8 @@ What NOT to put in the comment:
 
 - **One story, one branch, one PR** — do not mix work from multiple stories
 - **Follow the tech spec** — if you disagree with the approach, note it in the Jira comment but implement as specified
-- **Minimal changes** — only modify files relevant to the story. Do not refactor surrounding code.
+- **Minimal changes** — only modify files relevant to the story. Do not refactor surrounding code. **Exception — cross-cutting DRY (below) overrides this.**
+- **Centralize cross-cutting behavior — a hand-rolled copy is a latent bug.** When you are about to write the **2nd** copy of a cross-cutting behavior (auth headers, CSRF token, credentials, error-mapping, retry, logging — any stack), STOP: grep for the existing call sites, extract or reuse a single shared wrapper (web-stack example: an `authedFetch()`; more generally, one client/decorator/middleware), then route **both** call sites through it. A point-fix that patches N call sites and leaves the N+1th hand-rolled lets the bug class survive every fix. This is an explicit, required exception to "don't refactor surrounding code" — note the refactor in your `## Implementation Complete` summary.
 - **No new dependencies** without the tech spec explicitly calling for them
 - **Verify spec-listed dependencies before designing around them** — confirm the package is present in `pyproject.toml`/`package.json` AND permitted by the repo's philosophy (e.g., no external AWS SDKs). If the repo forbids new packages and the tech spec offers a zero-dependency alternative, use that alternative and note the deviation in the Jira comment.
 - **If tests fail after implementation**, try to fix up to 2 times. If still failing, commit what you have, note the failure in the Jira comment, and let the tester/bug-fixer handle it.
