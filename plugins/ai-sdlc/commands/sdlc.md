@@ -182,6 +182,21 @@ Three non-default entry paths. Each keeps the core rules (the orchestrator never
 
 ## Phase 0: Initialization
 
+### Version banner (print FIRST, every run)
+
+Before any other Phase 0 work — on **every** entry path (fast resume, fast-mode wave, or full init) — emit a one-line self-report so the user always knows exactly which build of the pipeline is executing in this session. Drift between your local repo, the marketplace checkout, and the plugin cache is invisible otherwise (the cache is content-addressed by commit SHA and refreshes on Claude Code's schedule, not on your push).
+
+1. **Find the running plugin root.** This command file is at `{plugin_root}/commands/sdlc.md`. Read the version from `{plugin_root}/.claude-plugin/plugin.json` (the `"version"` field). If `$CLAUDE_PLUGIN_ROOT` is set in the environment, prefer it.
+2. **Derive the running commit.** The plugin runs from either the cache (`~/.claude/plugins/cache/.../ai-sdlc/{short-sha}/...` — the SHA is a path segment) or a git checkout. If the path contains a cache SHA segment, use it. Otherwise run `git -C {plugin_root} rev-parse --short HEAD` (works when running from a live checkout).
+3. **Print the banner** as the very first line of output:
+   ```
+   🔧 ai-sdlc v{version} · commit {short-sha} · source {marketplace-or-checkout name}
+   ```
+   Example: `🔧 ai-sdlc v0.1.0 · commit a54162f · source maor-skills-marketplace-dev`
+4. Keep it to one line. Do not block on it — if the commit can't be derived (e.g. neither a cache SHA path nor a git checkout), print `commit unknown` and continue. This is a report, never a gate.
+
+> **Why:** a session running a stale cache silently lacks recent fixes/gates. Surfacing `v{version} · commit {sha}` in-band means "which version is this?" is answered by scrolling up, with zero filesystem archaeology. Bump the `version` in `plugin.json` whenever pipeline behavior changes materially so the semver moves alongside the commit.
+
 ### Fast Resume from Memory
 
 Before doing anything else, check if a cached resume file exists for this epic:
