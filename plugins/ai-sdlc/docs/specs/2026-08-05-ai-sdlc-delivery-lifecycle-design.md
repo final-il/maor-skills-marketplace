@@ -1,6 +1,6 @@
 # AI-SDLC Delivery Lifecycle — Design
 
-**Status:** Design (2026-08-05). Not yet implemented. For review/refinement before any agent edits.
+**Status:** Approved (2026-08-06). All open questions resolved (see "Resolved decisions" below). Ready for implementation per the sketch at the end.
 **Author:** Maor + Claude
 **Related:** `2026-07-08-ai-sdlc-hybrid-artifact-store-design.md` (the `docs/sdlc/` git store this builds on), `2026-07-08-ai-sdlc-documentation-phase-design.md` (Phase 7.7, extended here), `2026-07-19-ai-sdlc-fast-mode-design.md` (ledger/wave model this must coexist with). Also see this session's config/infra edits (Gate 4, `## Config & Infra Contract`, target-mode gates) — the Delivery Model is the environment those gates run *in*.
 **Reference implementation:** `~/git-dev/jiralyzer` — `docs/cicd.md`, `deploy/*.sh`, `Jenkinsfile`, `docker-compose*.yml`. Used throughout as **one worked example of a stack-agnostic contract**, never as the prescribed stack.
@@ -117,7 +117,7 @@ Guiding principles (consistent with this session's generality work):
 
 Runs **once per project** (idempotent: skips with a log line if `delivery-model.md` already exists and is current). Placed after Phase 3 (architecture) because only then is the tech stack + runtime shape known — satisfying the "derived, not imposed" principle.
 
-- **Agent:** a new `sdlc-delivery-architect` (opus), or extend `sdlc-architect` with a `Pass: delivery` mode. (Open question below.)
+- **Agent:** a new `sdlc-delivery-architect` (opus). (Decided — see Resolved decisions.)
 - **Input:** epic + all story tech specs + `ownership.md` + CLAUDE.md + repo probe (existing `deploy/`, `Dockerfile`, CI config, branches).
 - **Behavior:**
   1. Infer the runtime shape from the architecture.
@@ -191,24 +191,30 @@ The user's actual pattern was: *"we dev on Mac, test, copy to stg, test+fix on b
 
 ---
 
-## Open questions (for review)
+## Resolved decisions (2026-08-06 review)
 
-1. **New agent vs. new pass?** `sdlc-delivery-architect` (clean separation, one more agent file) vs. `sdlc-architect --pass delivery` (fewer agents, but overloads a large file). Leaning **new agent** — delivery reasoning is distinct from per-story tech design.
-2. **Phase number.** 3.7 (after 3.6 integrator) reads naturally, but design (3.5) currently precedes 3.6. Confirm 3.7 slots after the integrator, or make it 3.8 to sit clearly after all architecture is settled.
-3. **`--bootstrap` as flag vs. auto.** Auto-scaffold when zero delivery machinery is detected, or require explicit `--bootstrap`? Leaning **auto-detect the gap, propose, but require approval** — no silent flag needed.
-4. **Where do scaffolded deploy scripts live** — a dedicated "delivery setup" story/PR in the current epic, or a separate one-time `/sdlc bootstrap` invocation? Leaning **its own story** so it flows through the normal gates.
-5. **Template home.** Ship the stack-agnostic delivery skeleton as an on-demand reference (`skills/sdlc-conventions/references/recipes-delivery.md`) that the delivery-architect loads, mirroring the existing `recipes-iac.md` pattern.
-6. **Remote E2E mechanics.** Playwright against a remote base URL through a corporate front door (self-signed TLS, ssh tunnel) needs the same `-k`/tunnel handling `deploy/smoke.sh` already uses — capture as a reference recipe.
+All six open questions are decided. This section is now decision-of-record; the implementation sketch below reflects them.
+
+1. **New agent.** `sdlc-delivery-architect` (opus) — a dedicated agent, not a pass on `sdlc-architect`. Delivery reasoning (env topology, branch model, CI/CD, deploy contract, promotion) is distinct from per-story tech design and would overload the already-large architect file.
+2. **Phase 3.7** — slots directly after 3.6 (integrator). All per-story architecture is settled by 3.6, so the Delivery Model derives from a complete picture. No reserved gap.
+3. **Auto-detect the gap, propose, require approval** — no `--bootstrap` flag. When zero delivery machinery is detected (no `deploy/`, no Dockerfile-equivalent, no CI config), the agent proposes a scaffold and pauses for approval; nothing is written silently. A first run of a greenfield project therefore triggers the offer without the user needing to know a flag exists.
+4. **Its own "delivery setup" story/PR** in the current epic — the scaffold flows through the normal dev→test→QA→merge gates like any other work, so it is reviewed and tested, never a side write. (No separate `/sdlc bootstrap` entry point.)
+5. **Template home** — ship the stack-agnostic delivery skeleton as an on-demand reference at `skills/sdlc-conventions/references/recipes-delivery.md`, loaded by the delivery-architect, mirroring the existing `recipes-iac.md` pattern.
+6. **Remote E2E mechanics** — capture the self-signed-TLS / ssh-tunnel handling (the same `-k`/tunnel logic `deploy/smoke.sh` already uses) as a recipe inside `recipes-delivery.md`.
+
+### Design note surfaced in review: Phase 8 is a resumable checkpoint, not a single pass
+
+A staging deploy is a long, human-in-the-loop, outward action that can pause for hours (default authority = `prepare-runbook` → human runs it → confirm). Phase 8 must therefore be a **resumable checkpoint**: it writes its progress (built? deployed to stg? smoke passed?) to the resume file / Fast Work Ledger so `/sdlc continue {KEY}` (or `continue {WAVE-ID}` in fast mode) re-enters at the right sub-step rather than re-running the build. Each Phase 8 sub-step (build → deploy stg → remote smoke+CUJ replay → prod) is an independently resumable state.
 
 ---
 
 ## Implementation sketch (once approved)
 
 Anchored `.md` edits, in dependency order:
-1. `sdlc-conventions/SKILL.md` — add §2.7 (Delivery Model), rewrite `## Branching Model`, extend `## Pipeline Phases`.
-2. `skills/sdlc-conventions/references/recipes-delivery.md` — NEW: stack-agnostic delivery skeleton + jiralyzer worked example + remote-E2E recipe.
-3. `agents/sdlc-delivery-architect.md` — NEW agent (or architect `Pass: delivery`).
-4. `commands/sdlc.md` — Phase 0 (load Delivery Model), Phase 3.7 (NEW), Phase 8 (staging-deploy gate + prod-via-contract), core-principle line ("Tested = … in the target environment" already added; add "Delivery is a decided contract, not rediscovered").
-5. `agents/sdlc-documenter.md` + Phase 7.7 — in-app content targets + doc-sync check.
-6. `.claude-plugin` / marketplace + CLAUDE.md — register the new agent; note the plugin-cache re-sync in done criteria.
-7. Dogfood: run `/sdlc` on a small change to confirm the new phases parse and the Delivery Model round-trips.
+1. `skills/sdlc-conventions/references/recipes-delivery.md` — NEW: stack-agnostic delivery skeleton (the `delivery-model.md` shape) + jiralyzer worked example + remote-E2E recipe (self-signed TLS / ssh tunnel). Built first so the agent + conventions can point at it.
+2. `agents/sdlc-delivery-architect.md` — NEW agent (opus). Inputs, discover-existing-machinery behavior, propose-and-approve Delivery Model, auto-detect-gap → offer scaffold as a "delivery setup" story, load `recipes-delivery.md` on demand.
+3. `sdlc-conventions/SKILL.md` — add §2.7 (Delivery Model: artifact, lifecycle 3.7→0→8, context-block fields), rewrite `## Branching Model` (strategy is a derived Delivery-Model field; current two models become examples alongside three-tier + trunk-plus-tags; auto-detect survives as pre-model fallback), extend `## Pipeline Phases` with 3.7 + Phase 8 staging gate.
+4. `commands/sdlc.md` — Phase 0 (load Delivery Model, auto-detect as fallback + new context-block fields), Phase 3.7 (NEW), Phase 8 (staging-deploy gate + prod-via-contract, **as a resumable checkpoint** — each sub-step writes resume state), core-principle line ("Tested = … in the target environment" already added; add "Delivery is a decided contract, not rediscovered").
+5. `agents/sdlc-documenter.md` + Phase 7.7 — in-app content targets + doc-sync check across git/Confluence/in-app.
+6. `.claude-plugin` / marketplace.json + CLAUDE.md — register `sdlc-delivery-architect`; note the plugin-cache re-sync in done criteria; bump `plugin.json` version (pipeline behavior changes materially).
+7. Dogfood: run `/sdlc` on a small change to confirm the new phases parse and the Delivery Model round-trips (including a `continue` mid-Phase-8 to prove the checkpoint resumes).
