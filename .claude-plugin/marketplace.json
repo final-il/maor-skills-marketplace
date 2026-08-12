@@ -64,12 +64,6 @@
       "strict": false
     },
     {
-      "name": "jira-creq",
-      "description": "Create tickets in the CREQ (CSI Request) Jira project without hitting its required-field and issue-type quirks. Captures issue types, the mandatory Zone and Does-Impact-Production fields, assignee resolution, and the batch-create pitfall.",
-      "source": "./plugins/jira-creq",
-      "strict": false
-    },
-    {
       "name": "airlock-jira",
       "description": "Read and update Jira from the internet-isolated internal (island) network using the airlock-jira CLI — the only path to Jira there. Relays every call internal → Aurora → S3 → external worker → real Jira and back, with no outbound internet or credentials on the island. Covers reads, guarded comment/transition writes, and preflight (SSM tunnel + creds) fixes.",
       "source": "./plugins/airlock-jira",
