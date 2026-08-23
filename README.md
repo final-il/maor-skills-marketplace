@@ -18,20 +18,28 @@ A collection of custom skills, agents, and plugins for Claude Code.
 
 | Plugin | Description |
 |--------|-------------|
-| [ai-sdlc](plugins/ai-sdlc/) | AI-powered software development lifecycle — plans projects, creates Jira tickets, designs architecture, writes code, tests, reviews, and fixes bugs through 7 coordinated agents |
+| [ai-sdlc](plugins/ai-sdlc/) | AI-powered software development lifecycle — researches, plans, challenges the plan, creates Jira tickets, designs architecture, audits cross-story integration, writes code, tests, reviews, fixes bugs, merges PRs, and documents through 16 coordinated agents |
 
 ### AI-SDLC Agents
 
 | Agent | Role | Model |
 |-------|------|-------|
+| sdlc-researcher | Surveys OSS landscape for build-vs-buy before planning | opus |
 | sdlc-planner | Breaks projects into epics/stories with acceptance criteria | opus |
-| sdlc-jira-creator | Creates Jira tickets with hierarchy and links | sonnet |
-| sdlc-architect | Designs technical specs per story | opus |
+| sdlc-plan-challenger | Adversarially stress-tests the plan before user approval | opus |
+| sdlc-jira-creator | Creates Jira tickets with hierarchy and links (also retro reconciliation) | sonnet |
+| sdlc-architect | Designs technical specs per story (two-pass: lead ownership registry + parallel detail) | opus |
 | sdlc-designer | UI/UX design specs — layouts, colors, wireframes (optional, user-facing stories only) | opus |
+| sdlc-integrator | Audits cross-story name/file collisions before development | sonnet |
 | sdlc-developer | Implements code, commits, opens PRs | opus |
-| sdlc-tester | Writes and runs tests | sonnet |
+| sdlc-tester | Writes and runs tests, incl. smoke-path + live-process E2E | sonnet |
 | sdlc-qa-reviewer | Reviews code quality and requirement compliance | opus |
 | sdlc-bug-fixer | Fixes bugs found by tester/QA | sonnet |
+| sdlc-conflict-resolver | Union-merges additive multi-PR conflicts during continuous merge | sonnet |
+| sdlc-documenter | Synthesizes product docs (README/docs/Confluence) after merge (`--docs`) | sonnet |
+| sdlc-jira-reader | Reads/summarizes Jira for the orchestrator without bloating its context | sonnet |
+| sdlc-lesson-extractor | Proposes rule additions from corrections + agent self-reports (self-learning) | sonnet |
+| sdlc-curator | Proposes rule removals/consolidations — subtractive inverse of the extractor | sonnet |
 
 ### AI-SDLC Skills
 

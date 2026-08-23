@@ -40,7 +40,7 @@ The load-bearing concepts, straight from the source:
   Jira ticket and writes its output back as a ticket comment; the ticket's *status* is how the
   orchestrator knows what to do next. **In fast mode (`Jira: off`) that message bus becomes the
   Fast Work Ledger** — an orchestrator-held git + resume file — and agents return their verdict in
-  return text instead of writing Jira. (`commands/sdlc.md:12`, `skills/sdlc-conventions/SKILL.md:19`)
+  return text instead of writing Jira. (`commands/sdlc.md:12`, `skills/sdlc-conventions/SKILL.md:15`)
 - **Agents are autonomous and isolated.** Each runs on its own with full context pulled from its
   inputs — no shared memory, no side channels. (`commands/sdlc.md:13`)
 - **The orchestrator coordinates but never does the work itself.** It does not write code, fix bugs,
@@ -50,9 +50,15 @@ The load-bearing concepts, straight from the source:
 - **The pipeline pauses for you.** It stops and asks for approval at specific gates — after
   planning, before UI development, and before promoting to production — plus a one-line
   fast-vs-normal choice at the start of each wave. You are always in the loop at the moments that
-  matter. (`commands/sdlc.md:14`, `commands/sdlc.md:527-551`)
+  matter. (`commands/sdlc.md:14`, `commands/sdlc.md:409-433`)
 - **It fails gracefully.** Retries are bounded; when a loop can't converge, it flags the work for a
   human instead of spinning forever. (`commands/sdlc.md:15`)
+- **"Tested" means all three layers, in the target environment.** "Done" requires **code *and*
+  config *and* infra** verified in the actual deploy-target runtime (behind the real front
+  door/gateway), not just backend unit tests green in dev. Deployment manifests, env/secret files,
+  orchestration specs, proxy/gateway config, container images — whatever form the target repo uses
+  — are owned artifacts the architect allocates and the tester asserts against (**Gate 4**).
+  Coverage of one layer is not coverage of the failure surface. (`commands/sdlc.md:20`)
 
 Here's the whole system in one picture — the parts and how they group:
 
@@ -66,8 +72,9 @@ mindmap
       Orchestrator never does the work
       Pause for approval
       Fail gracefully
+      Tested = all three layers (Gate 4)
     Pipeline
-      0 Init
+      0 Init - + version banner
       0.5 Research
       1 Plan
       1.5 Challenge
@@ -102,7 +109,7 @@ mindmap
 ```
 
 *(Agent count and phase list derived from `ls agents/*.md` — 16 files — and the `## Phase`
-headings in `commands/sdlc.md:258-1017`.)*
+headings in `commands/sdlc.md:183-899`.)*
 
 ---
 
@@ -111,15 +118,19 @@ headings in `commands/sdlc.md:258-1017`.)*
 Work moves through numbered **phases**. The numbering is not 1..8 — it has fractional phases
 (`0.5`, `1.5`, `3.5`, `3.6`, `7.5`, `7.7`, `8.5`) that were inserted as the pipeline matured, and
 one combined phase (`4-7`) that is really a per-story loop. Read them off the source, never assume
-the count. (`commands/sdlc.md:258-1017`)
+the count. (`commands/sdlc.md:183-899`)
 
 Two phases are **mode-conditional**: Phase 2 (Jira creation) runs only in **normal** mode, and
 Phase 8.5 (retro reconciliation) runs only in **fast** mode. A one-line gate right after plan
-approval picks the mode for the whole wave. (`commands/sdlc.md:527-551`)
+approval picks the mode for the whole wave. (`commands/sdlc.md:409-433`)
+
+> **File order ≠ numeric order.** In `commands/sdlc.md` the *Mode selection* (`:409`) and
+> *Fast-path phase routing* (`:447`) sections physically precede *Phase 2* (`:489`), because fast
+> mode skips Phase 2 entirely. The numeric phase order below is the logical flow.
 
 | Phase | Name | Who runs it | What it produces | Gate? |
 |------:|------|-------------|------------------|-------|
-| 0 | Initialization | orchestrator | context block, transition map, agent paths, branching model | — |
+| 0 | Initialization | orchestrator | version banner, context block, transition map, agent paths, branching model | — |
 | 0.5 | Research (build-vs-buy) | `sdlc-researcher` | OSS survey report (advisory) | — |
 | 1 | Planning | `sdlc-planner` | epic/story breakdown with acceptance criteria | — |
 | 1.5 | Plan Challenge | `sdlc-plan-challenger` | adversarial findings + verdict | — |
@@ -131,16 +142,16 @@ approval picks the mode for the whole wave. (`commands/sdlc.md:527-551`)
 | 3.5 | Design *(optional)* | `sdlc-designer` | design spec for user-facing stories | ⛔ **pause** |
 | 3.6 | Integration Audit | `sdlc-integrator` | registry-drift / collision confirmation | — |
 | 4 | Develop | `sdlc-developer` | code, commit, PR → *In Review* | — |
-| 5 | Test | `sdlc-tester` | tests + results (Playwright E2E for UI) | — |
+| 5 | Test | `sdlc-tester` | tests + results; mandatory smoke-path + live-process E2E for user-facing stories | — |
 | 6 | QA Review | `sdlc-qa-reviewer` | QA verdict → *Done* or a Bug | — |
 | 7 | Bug Fix | `sdlc-bug-fixer` | fix → back to *In Review* | — |
 | 7.5 | Continuous merge | orchestrator / `sdlc-conflict-resolver` | Done PRs merged into base | ⛔ pause *if pile-up* |
 | 7.7 | Documentation *(`--docs` only)* | `sdlc-documenter` | README/docs/Confluence proposal | ⛔ **pause** |
-| 8 | Completion + Promotion | orchestrator | epic summary, CUJ replay, dev→main promotion | ⛔ **pause** |
+| 8 | Completion + Promotion | orchestrator | epic summary, epic-level CUJ replay, dev→main promotion | ⛔ **pause** |
 | 8.5 | Retro Reconciliation *(fast only)* | `sdlc-jira-creator` (reconcile) | back-filled QBV→Epic→Story→Bug in Jira | ⛔ **pause** |
 
-*(Phases and owners from `commands/sdlc.md:258-1017`; owner-to-model mapping from the table at
-`commands/sdlc.md:79-97`.)*
+*(Phases and owners from `commands/sdlc.md:183-899`; owner-to-model mapping from the table at
+`commands/sdlc.md:80-98`.)*
 
 The same thing as a flowchart, with the loops, gates, and the fast/normal split drawn in — the
 loops and the mode branch are the point, so they're not hidden:
@@ -186,17 +197,17 @@ flowchart TD
   G5 --> DONE
 ```
 
-*(Mode gate `commands/sdlc.md:527-563`; two-pass architecture `commands/sdlc.md:637-683`;
-challenge loopback `commands/sdlc.md:516`; integration-audit loopback `commands/sdlc.md:737`;
-defect loop `commands/sdlc.md:745-846`; merge-conflict routes `commands/sdlc.md:870-896`; drift
-halt `commands/sdlc.md:902-910`; docs gate `commands/sdlc.md:937`; reconcile gate
-`commands/sdlc.md:1021-1026`.)*
+*(Mode gate `commands/sdlc.md:409-447`; two-pass architecture `commands/sdlc.md:519-565`;
+challenge loopback `commands/sdlc.md:398`; integration-audit loopback `commands/sdlc.md:619`;
+defect loop `commands/sdlc.md:709-720`; merge-conflict route `commands/sdlc.md:756`; drift
+halt `commands/sdlc.md:786-790`; docs gate `commands/sdlc.md:819`; reconcile gate
+`commands/sdlc.md:903-908`.)*
 
 ### How a ticket moves (the state machine)
 
 The *phases* are what the pipeline does; the *statuses* are where a Story ticket sits. They're
 orthogonal. A Story walks this path (`skills/sdlc-conventions/references/workflow-states.md:5`,
-`workflow-states.md:16-23`):
+`workflow-states.md:9-12`):
 
 ```mermaid
 stateDiagram-v2
@@ -217,7 +228,7 @@ stateDiagram-v2
 > Bug issue** parented to the Story and move the Story back to *In Progress*. While that Bug is
 > open, the parent Story sits in *In Progress*. You detect "is this Story in the bug loop?" by
 > querying its children (`parent = X AND issuetype = Bug AND status != Done`), **not** by reading
-> the Story's own status. (`workflow-states.md:7,47-53`)
+> the Story's own status. (`workflow-states.md:7,47,50`)
 
 > **In fast mode there are no tickets** — a per-unit **ledger `phase`** stands in for the status,
 > mapping 1:1 to these statuses so a wave can be faithfully rebuilt in Jira later:
@@ -233,41 +244,41 @@ stateDiagram-v2
 and approving it at a few checkpoints. Everything in between runs on its own.
 
 **How to start:**
-- `/sdlc "a description of what you want"` — brand-new project (`commands/sdlc.md:2-3`)
-- `/sdlc /path/to/plan.md` — start from a plan file you already wrote (`commands/sdlc.md:153`)
-- `/sdlc CSI-123` — **resume** a normal-mode epic where you left off (`commands/sdlc.md:154`)
+- `/sdlc "a description of what you want"` — brand-new project (`commands/sdlc.md:159`)
+- `/sdlc /path/to/plan.md` — start from a plan file you already wrote (`commands/sdlc.md:154`)
+- `/sdlc CSI-123` — **resume** a normal-mode epic where you left off (`commands/sdlc.md:155`)
 - `/sdlc continue` (or `continue {WAVE-ID}`) — **resume a fast-mode wave** by its wave id
-  (fast waves have no Jira epic key) (`commands/sdlc.md:157`)
+  (fast waves have no Jira epic key) (`commands/sdlc.md:158`)
 
 **Fast vs normal — the one new choice.** Right after you approve the plan, the pipeline recommends
-**fast** or **normal** in one line and lets you pick (`commands/sdlc.md:527-551`):
+**fast** or **normal** in one line and lets you pick (`commands/sdlc.md:409-433`):
 - **Normal** — Jira is the message bus as you go; every ticket transition and comment is live so
   stakeholders can watch the board. Best for large multi-epic projects and multiple stakeholders.
 - **Fast** — skips **only the Jira ceremony** during the build (no tickets, transitions, comments,
   or Bug issues) while keeping **every engineering gate** — planner, challenger, architect,
-  designer, integrator, developer, tester (incl. real-browser E2E), QA, bug-fixer, and PR merge.
-  Coordination moves to a local ledger; when the wave finishes it *offers to create the tickets in
-  retrospect*. Best when you're driving live and the wave is small. (`commands/sdlc.md:166`,
-  `skills/sdlc-conventions/SKILL.md:197-199`)
+  designer, integrator, developer, tester (incl. smoke-path + live-process real-browser E2E), QA,
+  bug-fixer, and PR merge. Coordination moves to a local ledger; when the wave finishes it *offers
+  to create the tickets in retrospect*. Best when you're driving live and the wave is small.
+  (`commands/sdlc.md:167`, `skills/sdlc-conventions/SKILL.md:197,199`)
 
 You can pre-answer with `--fast` / `--normal`, or let `--auto` take the recommendation.
-(`commands/sdlc.md:164-169`)
+(`commands/sdlc.md:165-170`)
 
 **The moments it will stop and wait for you** — this is what you'll actually experience:
 
 1. **After planning** — it shows you the epic/story breakdown *plus* an adversarial review of that
    plan, and asks *"Approve this plan? Or modify?"*. Nothing gets created until you say yes.
-   (`commands/sdlc.md:520-525`)
-2. **Fast or normal?** — a one-line recommendation you confirm. (`commands/sdlc.md:544-551`)
+   (`commands/sdlc.md:402-407`)
+2. **Fast or normal?** — a one-line recommendation you confirm. (`commands/sdlc.md:427-432`)
 3. **Before building anything with a user interface** — if a story has a UI, CLI output, or a
    dashboard, a designer proposes the look and asks *"Approve this design? Or modify?"* before any
-   code is written. Pure backend stories skip this. (`commands/sdlc.md:708-712`)
+   code is written. Pure backend stories skip this. (`commands/sdlc.md:590-593`)
 4. **If you passed `--docs`** — after everything's merged, it proposes README/docs/Confluence
-   updates for you to approve. (`commands/sdlc.md:937`)
+   updates for you to approve. (`commands/sdlc.md:819`)
 5. **Before going to production** — when everything's done on `dev`, promotion to `main` happens
-   only when you explicitly ask. (`commands/sdlc.md:994-997`)
+   only when you explicitly ask. (`commands/sdlc.md:879`)
 6. **After a fast wave** — it offers to back-fill the Jira tickets in retrospect.
-   (`commands/sdlc.md:1021-1026`)
+   (`commands/sdlc.md:903-908`)
 
 Between those, it plans, (optionally files tickets), designs the architecture, writes the code,
 tests it (real browser tests for anything user-facing), reviews it, fixes its own bugs, and merges
@@ -275,7 +286,7 @@ the PRs.
 
 **One thing that surprises people:** if the plan has a serious flaw, an internal "challenger"
 catches it and sends it back for a rewrite *before you ever see it* — so the plan you're asked to
-approve has already survived a round of criticism. (`commands/sdlc.md:501-518`)
+approve has already survived a round of criticism. (`commands/sdlc.md:383-400`)
 
 ---
 
@@ -283,6 +294,22 @@ approve has already survived a round of criticism. (`commands/sdlc.md:501-518`)
 
 You're running this on a live project and need to recognize every state, every pause, and which
 mode you're in.
+
+### Which build am I running?
+
+The **very first line** of every run is a version banner — printed on all entry paths (fast
+resume, fast-mode wave, or full init) before any other Phase 0 work:
+
+```
+🔧 ai-sdlc v{version} · commit {short-sha} · source {marketplace-or-checkout name}
+```
+
+It reads `version` from `.claude-plugin/plugin.json` and derives the commit from either the
+content-addressed cache path segment or `git rev-parse` on a live checkout. This exists because the
+plugin cache refreshes on Claude Code's schedule, not on your push — so a session can silently run
+a **stale** build lacking recent fixes/gates. If someone reports odd behavior, scroll to the banner
+first. It's a report, never a gate (`commit unknown` if it can't be derived).
+(`commands/sdlc.md:185-198`)
 
 ### Which mode am I in?
 
@@ -292,8 +319,8 @@ mode you're in.
   **Fast Work Ledger** at `docs/sdlc/_wave-{WAVE-ID}/ledger.md` (also mirrored in the resume file),
   committed to git after every phase. Units get synthetic keys `{PROJECT}-F1`, `{PROJECT}-F2`, …;
   requirements live in `docs/sdlc/_wave-{WAVE-ID}/plan.md`. The board fills in only if you accept
-  the Phase 8.5 retro reconciliation. (`commands/sdlc.md:555-605`,
-  `skills/sdlc-conventions/SKILL.md:197-199`)
+  the Phase 8.5 retro reconciliation. (`commands/sdlc.md:447-487`,
+  `skills/sdlc-conventions/SKILL.md:197,199`)
 
 ### Reading the board (normal mode)
 
@@ -304,7 +331,7 @@ will see are: **Backlog · Selected for Development · In Progress · In Review 
 
 Under the **hybrid artifact store**, each phase posts **one summary+pointer comment** on the ticket
 whose header tells you it succeeded — the *detail* lives in a git file under `docs/sdlc/{KEY}/`, not
-in Jira. Watch for these headers (`skills/sdlc-conventions/SKILL.md:119-157`, `commands/sdlc.md` per-phase Write Artifact lines):
+in Jira. Watch for these headers (`skills/sdlc-conventions/SKILL.md:119-155`, `commands/sdlc.md` per-phase Write Artifact lines):
 
 | Phase | Artifact header (Jira comment) | Detail file in git | Status it moves to |
 |------|--------------------------------|--------------------|--------------------|
@@ -318,7 +345,7 @@ in Jira. Watch for these headers (`skills/sdlc-conventions/SKILL.md:119-157`, `c
 | Bug fix | `## Bug Fix Complete` | — | In Review |
 | Merge | `## Merge Result` | — | (Done, PR merged) |
 
-*(Headers cited at `commands/sdlc.md:648,663,702,730,786,796,812,833,890`.)*
+*(Headers cited at `commands/sdlc.md:530,545,584,612,668,678,694,715,772`.)*
 
 ### The decision points and their caps
 
@@ -355,21 +382,22 @@ flowchart TD
 
 The caps you must know, verbatim from source:
 
-- **Plan challenge:** at most **2 challenge iterations** per session; a third still-critical round
-  halts for you to triage. (`commands/sdlc.md:516`)
+- **Plan challenge:** verdicts are **CLEAR / SURFACE / LOOPBACK**; at most **2 challenge iterations**
+  per session; a third still-critical round halts for you to triage.
+  (`commands/sdlc.md:398-400`)
 - **Architecture (two-pass):** the **lead pass** allocates every file/symbol/route/CLI/env name and
   shared wire-contract schema to exactly one owning story so detail architects can't collide; a
   `Registry gap:` from a detail architect re-runs the lead pass, capped at **2 lead-pass
-  iterations** per epic. (`commands/sdlc.md:637-667`, `skills/sdlc-conventions/SKILL.md:157-195`)
+  iterations** per epic. (`commands/sdlc.md:534,549`, `skills/sdlc-conventions/SKILL.md:157-195`)
 - **Integration audit:** with the registry in place this is a **confirmation gate** — it verifies
   each story stayed within its allocation and should almost always return `Action required: 0`;
-  drift re-runs Phase 3, capped at **2 audit iterations** per epic. (`commands/sdlc.md:722,737`)
+  drift re-runs Phase 3, capped at **2 audit iterations** per epic. (`commands/sdlc.md:602,619`)
 - **Bug-fix loop:** a Story goes through fix → re-test at most **3 times**; after that it's flagged
   blocked and the pipeline moves on (counted from ledger `bugs[].loop` in fast mode).
-  (`commands/sdlc.md:601`, `workflow-states.md:55-57,73`)
+  (`commands/sdlc.md:720`, `workflow-states.md:57,73`)
 - **Merge drift:** if more than `MAX_UNMERGED_DONE_PRS` (env, **default 5**) Done PRs are unmerged,
   the pipeline **halts** and asks you to investigate — this is the conflict-pile-up alarm Phase 7.5
-  exists to trip. (`commands/sdlc.md:852,902-910`)
+  exists to trip. (`commands/sdlc.md:734,786-790`)
 
 ### One story's life, across agents
 
@@ -395,7 +423,7 @@ sequenceDiagram
     T->>J: open child Bug (ledger bugs[] in fast), Story → In Progress
     O->>B: spawn (reads Bug + tech spec)
     B->>J: ## Bug Fix Complete, Story → In Review
-    Note over O,J: fix→re-test loops up to 3× (commands/sdlc.md:601)
+    Note over O,J: fix→re-test loops up to 3× (commands/sdlc.md:720)
   else tests pass
     T->>J: Story → Testing
     O->>Q: spawn (reads all summaries + test results)
@@ -405,20 +433,20 @@ sequenceDiagram
 
 *(In fast mode the "Jira / Ledger" participant is the Fast Work Ledger + git spec files; the
 transitions above are ledger `phase` updates the orchestrator drives from each agent's return text
-— `commands/sdlc.md:578-591`.)*
+— `commands/sdlc.md:447-487`.)*
 
 ### Pausing and resuming safely
 
 - **Auto-save** happens at batch boundaries and when context runs high — a resume file is written
-  with no confirmation. (`commands/sdlc.md:1058`)
+  with no confirmation. (`commands/sdlc.md:940`)
 - **Explicit handoff** — say "pause" / "stop" / "save progress" and it runs the full `sdlc-handoff`
   skill: scans git state, offers a checkpoint commit, captures decisions/blockers.
-  (`commands/sdlc.md:1054`)
+  (`commands/sdlc.md:976`)
 - **Resume a normal epic** with `/sdlc CSI-123`; Phase 0 fast-resume reloads the cached context and
-  only re-routes stories whose status drifted. (`commands/sdlc.md:260`)
+  only re-routes stories whose status drifted. (`commands/sdlc.md:204`)
 - **Resume a fast wave** with `/sdlc continue` (bare picks the most recent unreconciled wave) or
   `/sdlc continue {WAVE-ID}` — it rebuilds state from the wave id + the Fast Work Ledger, since a
-  fast wave has no Jira epic key. (`commands/sdlc.md:157,285-291`)
+  fast wave has no Jira epic key. (`commands/sdlc.md:158,225`)
 
 ### Self-learning (it improves itself)
 
@@ -427,7 +455,7 @@ self-reported `## Lessons` — into an append-only journal. The orchestrator "dr
 spawns `sdlc-lesson-extractor` to classify each, and surfaces a **proposal** for your approval
 before changing any canonical file. The inverse also exists: `/sdlc lessons curate` spawns
 `sdlc-curator` to propose **removals/consolidations** of stale or duplicated rules. Toggle the
-whole loop with `/sdlc lessons on|off`. (`commands/sdlc.md:1110`, `commands/sdlc.md:1132-1144`)
+whole loop with `/sdlc lessons on|off`. (`commands/sdlc.md:992,994`)
 
 ---
 
@@ -440,7 +468,7 @@ by the paths below — this section is the map, not a substitute for reading the
 
 Agents never call each other. They share context through named artifacts, and — under the
 **hybrid artifact store** — the *detail* of each artifact lives in a git file while only a
-**summary + pointer** goes into Jira (`skills/sdlc-conventions/SKILL.md:48-56,119-157`):
+**summary + pointer** goes into Jira (`skills/sdlc-conventions/SKILL.md:82-97,119-155`):
 
 ```mermaid
 flowchart LR
@@ -458,7 +486,7 @@ flowchart LR
   note[/"Prompt = structural metadata · Jira/ledger = summary + status · git = spec detail + code"/]
 ```
 
-The discipline that keeps this cheap (`skills/sdlc-conventions/SKILL.md:78-157`):
+The discipline that keeps this cheap (`skills/sdlc-conventions/SKILL.md:82-155`):
 
 - **One artifact per phase.** Each agent posts exactly one comment at the end of its phase; the
   orchestrator's prompt names which prior artifacts it may read. Agents do **not** scan the whole
@@ -467,16 +495,17 @@ The discipline that keeps this cheap (`skills/sdlc-conventions/SKILL.md:78-157`)
   pointer to a file under `docs/sdlc/{KEY}/`; the heavy content (tech specs, ownership registry,
   design specs, integration notes) is committed to git, not pasted into Jira. This is what makes
   fast mode possible — the content is already local, so Jira status can be dropped.
-  (`skills/sdlc-conventions/SKILL.md:119-157,197-199`)
+  (`skills/sdlc-conventions/SKILL.md:119-155,197`)
 - **Never store** full test output, code snippets, restated requirements, or file contents in Jira —
   reference commit SHA + path; the worktree is the source of truth.
+  (`skills/sdlc-conventions/SKILL.md:280-283`)
 
 ### Two-pass architecture (why Phase 3 is split)
 
 Boundary-setting is a **global-consistency** problem: if N architects each design one story in
 isolation, two can independently reserve the same file/symbol/route/schema, and the collision only
 surfaces later at the integrator — forcing an expensive re-architecture loop. So Phase 3 runs in
-**two passes** (`skills/sdlc-conventions/SKILL.md:157-195`, `commands/sdlc.md:637-683`):
+**two passes** (`skills/sdlc-conventions/SKILL.md:157-195`, `commands/sdlc.md:519-565`):
 
 - **3a — lead pass (serial, once):** one architect writes the epic CUJs and the **ownership
   registry** (`ownership.md`) allocating every name to exactly one owning story.
@@ -489,9 +518,9 @@ just verifies each story's `names-reserved.md` is a subset of its allocation. Fo
 
 ### Fast mode (the `Jira:` axis)
 
-Fast mode is the biggest recent addition. It skips **only** the Jira ceremony during the build and
-keeps every engineering gate. Mechanically (`commands/sdlc.md:555-605`,
-`skills/sdlc-conventions/SKILL.md:197-199`, `workflow-states.md:59-75`):
+Fast mode is a major recent addition. It skips **only** the Jira ceremony during the build and
+keeps every engineering gate. Mechanically (`commands/sdlc.md:447-487`,
+`skills/sdlc-conventions/SKILL.md:197-278`, `workflow-states.md:59-75`):
 
 - After plan approval the mode gate stamps a `WAVE-ID = {PROJECT}-W{timestamp}`, assigns synthetic
   keys `{PROJECT}-F{n}`, writes `docs/sdlc/_wave-{WAVE-ID}/plan.md`, and initializes the **Fast Work
@@ -502,22 +531,32 @@ keeps every engineering gate. Mechanically (`commands/sdlc.md:555-605`,
 - Phase 7.5 (PR merge) is byte-for-byte unchanged — it operates on git/GitHub, not Jira.
 - **Phase 8.5 retro reconciliation** (opt-in at wave end) spawns `sdlc-jira-creator` in reconcile
   mode to back-fill the full QBV → Epic → Story(→ Bug) hierarchy, each walked to its recorded final
-  status via the ledger↔status map. (`commands/sdlc.md:1017-1026`, `workflow-states.md:63-75`)
+  status via the ledger↔status map. (`commands/sdlc.md:899-908`, `workflow-states.md:63-75`)
 
 Full design: `docs/specs/2026-07-19-ai-sdlc-fast-mode-design.md`.
+
+### On the roadmap (not yet wired in)
+
+- **Delivery lifecycle.** A design for teaching AI-SDLC the full dev→stg→prod lifecycle — branch
+  strategy, environments, CI/CD, remote deploy + smoke, and in-app docs as a decided/persisted/
+  replayed **Delivery Model** contract — is **approved but not yet implemented**. No live
+  orchestrator, conventions, or agent behavior references it today; it exists only as
+  `docs/specs/2026-08-05-ai-sdlc-delivery-lifecycle-design.md`. When it lands, expect a new
+  Delivery Model artifact in Phase 0/3 and deploy/smoke gates around Phase 8. Until then, the
+  live "path to prod" is the Phase 8 dev→main promotion described above.
 
 ### How agents are spawned (the part that trips people up)
 
 Plugin subagents **cannot access MCP tools** — a Claude Code platform limitation. Every SDLC agent
 needs Jira MCP access, so they are **all** spawned as **general-purpose agents** via `Agent()` with
-**no `subagent_type`**. (`commands/sdlc.md:22-24`)
+**no `subagent_type`**. (`commands/sdlc.md:25,78,101`)
 
 The spawn is **pointer-not-body**: the orchestrator passes the *path* to the agent's role file and
 the agent reads its own definition as its first action. Reading the body in the orchestrator would
 inline ~2k tokens per spawn across 7–9 spawns per epic. Agent paths are resolved once via a single
-Glob in Phase 0 and reused. (`commands/sdlc.md:26-48`)
+Glob in Phase 0 and reused. (`commands/sdlc.md:27-33`)
 
-Model tier is hardcoded per role (`commands/sdlc.md:79-97`) — opus for reasoning-heavy roles
+Model tier is hardcoded per role (`commands/sdlc.md:80-98`) — opus for reasoning-heavy roles
 (researcher, planner, plan-challenger, architect, designer, developer, qa-reviewer), sonnet for the
 rest (jira-creator, integrator, tester, bug-fixer, conflict-resolver, jira-reader, lesson-extractor,
 curator, documenter).
@@ -529,7 +568,7 @@ Any agent that touches the repo runs in a **dedicated git worktree**, one per st
 worktrees → safe parallelism. Same-story agents (developer → tester → QA → bug-fixer) share one
 worktree and run sequentially. **Never** point two concurrent agents at the same worktree. Spec
 files (Phases 3/3.5/3.6) are instead committed on the base-branch checkout, since no worktree exists
-yet. (`commands/sdlc.md:749-765`, `skills/sdlc-conventions/SKILL.md:352-374`)
+yet. (`commands/sdlc.md:631-658`, `skills/sdlc-conventions/SKILL.md:352-390`)
 
 ### Where the source of truth lives
 
@@ -540,6 +579,7 @@ yet. (`commands/sdlc.md:749-765`, `skills/sdlc-conventions/SKILL.md:352-374`)
 | Jira conventions, hybrid store, two-pass, fast mode, worktrees, branching | `skills/sdlc-conventions/SKILL.md` |
 | Statuses, bug lifecycle, retry cap, ledger↔status map | `skills/sdlc-conventions/references/workflow-states.md` |
 | Context-passing protocol | `skills/sdlc-conventions/references/context-protocol.md` |
+| New-project bootstrap (repo creation, dev/prod clone, protected-main/Cycode) | `skills/sdlc-conventions/references/project-bootstrap.md` |
 | Design rationale (the "why") | `docs/specs/*.md`, `docs/plans/*.md` |
 
 **Rule when adding an agent or phase:** behavior is defined in the orchestrator (`commands/sdlc.md`)
