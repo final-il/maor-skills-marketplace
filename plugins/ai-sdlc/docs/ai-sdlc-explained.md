@@ -139,7 +139,7 @@ approval picks the mode for the whole wave. (`commands/sdlc.md:422-446`)
 | — | **Approve the plan** | **user** | plan approved (or sent back) | ⛔ **pause** |
 | — | **Fast or normal?** | **user** | mode for the wave (fast skips Jira ceremony) | ⛔ **pause** |
 | 2 | Jira Ticket Creation *(normal only)* | `sdlc-jira-creator` | QBV + epics + stories in Jira | — |
-| 3a | Architecture — lead | `sdlc-architect` | CUJs + **ownership registry** (who-owns-what) | — |
+| 3a | Architecture — lead | `sdlc-architect` | **User Journeys** + **ownership registry** (who-owns-what) | — |
 | 3b | Architecture — detail | `sdlc-architect` (parallel) | tech spec + names-reserved per story | — |
 | 3.5 | Design *(optional)* | `sdlc-designer` | design spec for user-facing stories | ⛔ **pause** |
 | 3.6 | Integration Audit | `sdlc-integrator` | registry-drift / collision confirmation | — |
@@ -149,11 +149,17 @@ approval picks the mode for the whole wave. (`commands/sdlc.md:422-446`)
 | 7 | Bug Fix | `sdlc-bug-fixer` | fix → back to *In Review* | — |
 | 7.5 | Continuous merge | orchestrator / `sdlc-conflict-resolver` | Done PRs merged into base | ⛔ pause *if pile-up* |
 | 7.7 | Documentation *(`--docs` only)* | `sdlc-documenter` | README/docs/Confluence proposal | ⛔ **pause** |
-| 8 | Completion + Promotion | orchestrator | epic summary, epic-level CUJ replay, dev→main promotion | ⛔ **pause** |
+| 8 | Completion + Promotion | orchestrator | epic summary, epic-level user-journey replay, dev→main promotion | ⛔ **pause** |
 | 8.5 | Retro Reconciliation *(fast only)* | `sdlc-jira-creator` (reconcile) | back-filled QBV→Epic→Story→Bug in Jira | ⛔ **pause** |
 
 *(Phases and owners from `commands/sdlc.md:185-912`; owner-to-model mapping from the table at
 `commands/sdlc.md:80-98`.)*
+
+> **Term note.** This doc says **User Journey** for what the source names a **Critical User Journey
+> (CUJ)** — an end-to-end flow a real user must be able to complete after the epic ships. It's the
+> same thing: the artifact header is literally `## Critical User Journeys` and the detail file is
+> `docs/sdlc/{EPIC}/cujs.md`, so those exact strings (which you'd grep for) are kept verbatim below.
+> (`agents/sdlc-architect.md:79,83`)
 
 **Codex second opinion (planning phases only).** In Phases 0.5, 1, and 1.5 the orchestrator brings
 **Codex (GPT-5.x)** in as an independent second model, via the external `codex:codex-rescue`
@@ -180,7 +186,7 @@ flowchart TD
   G1 -->|approve| MODE{⛔ Fast or Normal?}
   MODE -->|normal| P2[2 Jira Creation]
   MODE -->|fast: stamp WAVE-ID, write plan.md + ledger| P3
-  P2 --> P3[3a Lead: ownership registry + CUJs]
+  P2 --> P3[3a Lead: ownership registry + User Journeys]
   P3 --> P3b[3b Detail: tech spec per story - parallel]
   P3b -. user-facing only .-> P35[3.5 Design]
   P35 --> G2{⛔ Approve design?}
@@ -431,7 +437,7 @@ sequenceDiagram
   participant J as Jira / Ledger
 
   O->>A: spawn 3a lead (reads epic + all stories)
-  A->>J: ## Ownership Registry + CUJs (epic)
+  A->>J: ## Ownership Registry + ## Critical User Journeys (epic)
   O->>A: spawn 3b detail (reads its allocation)
   A->>J: ## Technical Specification → Selected for Development
   O->>D: spawn (reads tech spec)
@@ -526,7 +532,8 @@ isolation, two can independently reserve the same file/symbol/route/schema, and 
 surfaces later at the integrator — forcing an expensive re-architecture loop. So Phase 3 runs in
 **two passes** (`skills/sdlc-conventions/SKILL.md:157-195`, `commands/sdlc.md:532-576`):
 
-- **3a — lead pass (serial, once):** one architect writes the epic CUJs and the **ownership
+- **3a — lead pass (serial, once):** one architect writes the epic **User Journeys** (source term:
+  *Critical User Journeys*, header `## Critical User Journeys`, file `cujs.md`) and the **ownership
   registry** (`ownership.md`) allocating every name to exactly one owning story.
 - **3b — detail pass (parallel):** one architect per story reads its allocation and reserves
   **only within its slice** — so collisions can't form.
