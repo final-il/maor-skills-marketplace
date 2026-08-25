@@ -51,9 +51,11 @@ A collection of custom skills, agents, and plugins for Claude Code.
 
 **Usage:** `/sdlc "project description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KEY` (resume) or `/sdlc continue {WAVE-ID}` (resume a fast wave)
 
-**Flags:** `--auto` (auto-approve all gates) · `--docs` (synthesize product docs after merge) · `--fast` / `--normal` (pre-answer the fast-vs-normal mode gate)
+**Flags:** `--auto` (auto-approve all gates) · `--docs` (synthesize product docs after merge) · `--fast` / `--normal` (pre-answer the fast-vs-normal mode gate) · `--no-codex` (disable the Codex second opinion in the planning phases)
 
 **Fast mode:** Every run offers **fast vs normal** with a recommendation. Fast mode skips only Jira ceremony during the build (no tickets, transitions, comments, or Bug issues) while keeping every engineering gate — tests, smoke + live-process E2E, QA, and PR merge all run identically. Coordination moves to a git-backed **Fast Work Ledger** (`docs/sdlc/_wave-{WAVE-ID}/`); work units use synthetic `{PROJECT}-F{n}` keys. At wave end, opt-in **retro reconciliation** back-fills the full Jira QBV → Epic → Story(→ Bug) hierarchy with spec pointers, PR links, and final statuses.
+
+**Codex second opinion:** In the early planning phases only — Research (0.5), Planning (1), Plan Challenge (1.5) — the orchestrator brings **Codex (GPT-5.x)** in as an independent second model via the `codex:codex-rescue` subagent (read-only). Model diversity: Codex critiques the research, the draft plan, and adversarially attacks the plan, while **Claude always owns the artifact** ("consult, Claude reconciles"). On by default (`--no-codex` disables); **auto-skips gracefully** if Codex isn't installed/authenticated, so it never blocks a run. In Phase 1.5 a Codex *critical* finding is binding (LOOPBACK). Requires the [`codex`](https://github.com/openai/codex) plugin (`/codex:setup`).
 
 **Branching:** Auto-detects dev/prod model (dev + main branches) or single-branch. PRs target the correct branch automatically. Promotion (dev → main) offered at completion with user approval.
 

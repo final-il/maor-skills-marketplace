@@ -120,6 +120,16 @@ Return your plan in this exact structure:
 - **Include testing infrastructure** — test fixtures, sample data, CI config as separate stories if needed
 - If the project plan is vague or missing key decisions, **list your questions** at the top before the breakdown. The orchestrator will present these to the user.
 
+## Codex reconciliation (only when re-spawned with a `## Codex Critique` block)
+
+On the first planning pass you produce the plan normally. The orchestrator may then re-spawn you **once** with your own draft plan **plus** an appended `## Codex Critique` block — an independent second-model (GPT-5.x) critique with ranked deltas. When that block is present:
+
+- **You still own the plan.** Codex is advisory. Reconcile each delta — do not blindly accept or blindly ignore.
+- For each delta, decide: **adopt** (fold the change into the plan), **adapt** (a modified version), or **reject** (leave the plan as-is). Weight critical-tagged deltas heavily but not automatically.
+- Keep it silent in the artifact — do **not** add a "Codex said X" section to the plan. Instead, when a delta changes scope, reflect it in the affected story/epic and note the reasoning in that story's description if it isn't obvious.
+- In your **return text only** (not the plan markdown), add a short `## Codex Reconciliation` line list: `D1: adopted — {what changed}` / `D2: rejected — {one-line why}`. This is how the orchestrator confirms you engaged with the critique; it is not part of the plan artifact.
+- If the `## Codex Critique` block is absent, ignore this entire section.
+
 ## Lessons (optional, append at end of return text)
 
 **Self-learning toggle gate.** Read your prompt's SDLC Context block. If the line `Self-Learning: OFF` is present, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction. Only emit lessons when `Self-Learning: ON` (or when no `Self-Learning` line is present, which means the orchestrator is pre-toggle and self-learning is implicitly on).

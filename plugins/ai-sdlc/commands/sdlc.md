@@ -167,6 +167,8 @@ Parse these flags from `$ARGUMENTS` before processing:
 - **`--fast`** — Pre-answer the mode-selection gate with **fast** (skip Jira during the build; coordinate through the Fast Work Ledger — see "Mode selection & offer" and `sdlc-conventions` §2.6). No pause at the offer gate. Keeps every engineering gate (planner, challenger, architect, designer, integrator, developer, tester incl. smoke + live-process E2E gates, QA, bug-fixer, Phase 7.5 merge). Jira can be back-filled after the wave via Phase 8.5.
 - **`--normal`** — Pre-answer the mode-selection gate with **normal** (Jira as the message bus, as today). Overrides the recommendation. No pause at the offer gate.
 
+- **`--no-codex`** — Disable the Codex consult in the early planning phases (0.5/1/1.5). The Codex second opinion is **on by default** — a different model (GPT-5.x, via the `codex:codex-rescue` subagent) advises the researcher/planner/challenger read-only while Claude owns every artifact. Pass `--no-codex` to run Claude-only. Persisted to the resume file's `## Codex` block. See `sdlc-conventions` → "Codex Consult Protocol". Note: even when enabled, the consult **auto-skips gracefully** (one log line) if Codex isn't installed/authenticated — it never blocks a run.
+
 `--fast` and `--normal` are mutually exclusive; if both are present, `--normal` wins (the safer, fuller-traceability choice) and log the conflict.
 
 Strip flags from `$ARGUMENTS` before using the remaining text as the project description.
@@ -219,6 +221,8 @@ Before doing anything else, check if a cached resume file exists for this epic:
    - **`Repo Web Base` backfill (hybrid store — §2.5).** If the cached context block predates the hybrid store and has no `Repo Web Base` line, derive it now (Phase 0 step 7b — one `git remote get-url origin` + normalize) and add it to the in-memory context block so downstream spawns carry it. Cheap; no full Phase 0 needed.
 
    **Self-Learning toggle restore.** While parsing the resume file, look for a top-level `## Self-Learning` block with an `enabled: true|false` line. Restore that boolean into in-memory orchestrator state and use it to build the `Self-Learning: ON|OFF` line of the SDLC Context block. **If the resume file has no `## Self-Learning` field (or the file is missing entirely), treat the toggle as ON by default.** On the next auto-save, write `enabled: true` explicitly so subsequent reads are no longer implicit. This is the only place the toggle is read; agents never read the resume file.
+
+   **Codex consult restore.** Also look for a top-level `## Codex` block with an `enabled: true|false` line (written from `--no-codex`). Restore it into orchestrator state to gate the Phase 0.5/1/1.5 Codex consult. **Absent field → ON by default.** (Resume rarely re-runs the planning phases — this only matters if a `/sdlc continue` re-enters Phase 1, e.g. after a plan-level loopback. See `sdlc-conventions` → "Codex Consult Protocol".)
 
 This saves ~15-20k tokens on resume (skips Glob, transitions discovery, reader spawn).
 
@@ -359,6 +363,8 @@ The researcher surveys OSS libraries/frameworks/projects to put build-vs-buy on 
 
 2. The researcher returns a build-vs-buy report (Summary + 3-7 candidates + verdict). Capture the report — it becomes input to Phase 1 (planner reads it) and Phase 1.5 (challenger reads it).
 
+2c. **Codex second opinion** (unless `--no-codex`; see `sdlc-conventions` → "Codex Consult Protocol"). Spawn `codex:codex-rescue` (`Agent(subagent_type: "codex:codex-rescue")`, read-only) with: the project/feature description + the researcher's build-vs-buy report, asking for an independent build-vs-buy take in the `## Codex Second Opinion` output contract (verdict + ranked deltas: missed candidates, over-/under-valued options, a "buy" the researcher called "build" or vice-versa). **Append** the returned block to the research report as a `## Codex Second Opinion` addendum — the planner reconciles it in Phase 1. If Codex is unavailable, log one skip line and proceed.
+
 3. **No user approval gate here** — the report goes through to the planner unmodified. The user sees it bundled with the plan in Phase 1's approval gate. The researcher's verdict is advisory; the planner may override it (and the challenger will flag the override if it's a bad call).
 
 ## Phase 1: Planning
@@ -378,7 +384,12 @@ The researcher surveys OSS libraries/frameworks/projects to put build-vs-buy on 
    - Stories with acceptance criteria, dependencies, complexity
    - The plan must explicitly note whether it adopts, partially adopts, or overrides the researcher's recommendation, and why.
 
-3. **PAUSE here is moved to AFTER Phase 1.5** — the user reviews the plan + the challenger's findings together. Do NOT show the plan to the user yet.
+3. **Codex critique + reconcile** (unless `--no-codex`; see `sdlc-conventions` → "Codex Consult Protocol"). Do NOT show the plan to the user yet — Codex sees the draft first:
+   a. Spawn `codex:codex-rescue` (`Agent(subagent_type: "codex:codex-rescue")`, read-only) with: the planner's draft plan markdown + the research report (incl. its `## Codex Second Opinion` addendum) + the original description. Ask for the `## Codex Critique` output contract — ranked deltas on missed stories, wrong epic boundaries, hidden complexity, dependency-ordering errors, over-scoped/under-scoped stories.
+   b. **Re-spawn the planner once** (`Agent Paths.planner`, `model: "opus"`) with the same task **plus** the returned `## Codex Critique` block appended. The planner adopts/adapts/rejects each delta per its "Codex reconciliation" rule and returns the reconciled plan (v2). This is a single reconcile pass — do not loop on Codex here (Phase 1.5 is the loop gate).
+   c. If Codex is unavailable, skip a-b (log one line) and carry the draft plan forward unchanged.
+
+4. **PAUSE here is moved to AFTER Phase 1.5** — the user reviews the plan + the challenger's findings together. Do NOT show the plan to the user yet.
 
 ## Phase 1.5: Plan Challenge
 
@@ -394,14 +405,16 @@ The challenger adversarially reviews the plan before it goes to the user. Critic
 
 2. The challenger returns a findings report (Summary + critical/important/nice-to-have findings + verdict).
 
-3. **Route on verdict:**
+2c. **Codex adversarial pass + merge** (unless `--no-codex`; see `sdlc-conventions` → "Codex Consult Protocol"). Spawn `codex:codex-rescue` (`Agent(subagent_type: "codex:codex-rescue")`, read-only) with: the reconciled plan + the research report + the original description, asking it to independently attack the plan and return findings tagged `critical | important | nice-to-have` (the `## Codex Second Opinion` contract, framed adversarially). **Merge** Codex's findings into the challenger's report, de-duped by topic (a shared finding is listed once, noted as "flagged by both"). For verdict routing in step 3, a **critical from either source** counts — this is the one place a Codex finding is binding, not merely advisory. If Codex is unavailable, log one skip line and route on the challenger's verdict alone.
+
+3. **Route on verdict** (computed over the **merged** critical set from step 2 + 2c):
    - **LOOPBACK** (any critical findings) → re-spawn the planner with the critical findings appended to its task. Cap at 2 challenge iterations per session; if the third iteration still produces critical findings, halt and ask the user to triage. Then re-run Phase 1.5 on the revised plan.
    - **SURFACE** (no critical, ≥1 important) → proceed to step 4 (user approval) with the plan + challenger findings shown side-by-side.
    - **CLEAR** (no findings worth raising) → proceed to step 4 with a one-line "challenger cleared" note.
 
-4. **PAUSE — Present plan + challenger findings to the user for approval.**
+4. **PAUSE — Present plan + merged findings to the user for approval.**
    - Show the epic/story breakdown clearly.
-   - Show the challenger's `## Summary` and any `important` findings (skip nice-to-haves unless asked).
+   - Show the **merged** `## Summary` and any `important` findings from the challenger + Codex (skip nice-to-haves unless asked); mark any finding "flagged by both" where they agreed. If Codex was skipped, note "(Codex consult skipped)" once.
    - Show the build-vs-buy alignment line.
    - If `--auto`: log "Auto-approving plan (challenger verdict: {verdict})" and proceed immediately.
    - Otherwise: Ask "Approve this plan? Or modify?" — do NOT proceed until the user approves. The user may accept individual important findings ("apply I1, skip I2") — capture those and pass them to the jira-creator as plan deltas.

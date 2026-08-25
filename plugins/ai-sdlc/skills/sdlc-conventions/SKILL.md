@@ -317,6 +317,56 @@ The E2E spec must:
 
 **Enforcement:** The orchestrator checks `## Test Results` for the phrase "E2E:" or "Playwright:" on any story with frontend changes. If absent, the tester is re-spawned with explicit instructions to add browser coverage before the story can advance to Testing.
 
+## Codex Consult Protocol
+
+During the **early planning phases only** — Phase 0.5 (Research), Phase 1 (Planning), Phase 1.5 (Plan Challenge) — the orchestrator brings **Codex (GPT-5.x)** in as an **independent second model**. The value is model diversity: a different model surfaces framings, gaps, and risks the Claude agent's own reasoning misses. Codex **advises; Claude owns the artifact** ("consult, Claude reconciles"). Codex never writes the plan, the repo, or Jira.
+
+**On by default.** The consult runs automatically in those three phases. The user disables it with `--no-codex` (persisted to the resume file's `## Codex` block). It never runs outside Phases 0.5/1/1.5.
+
+### How the orchestrator invokes Codex
+
+Spawn the **`codex:codex-rescue`** typed subagent via `Agent(subagent_type: "codex:codex-rescue")` — it is the plugin's own forwarder to the Codex runtime and resolves its own paths/auth. This is the **one exception** to "spawn SDLC agents as general-purpose": Codex is not an SDLC agent and needs no Jira/MCP access.
+
+Frame every consult task as **read-only research/review**:
+
+- Start the task text with: `Read-only review — do NOT edit any files, do NOT run write commands. Wait for the result (foreground).` (This keeps `codex:codex-rescue` from adding `--write`, and makes it block and return Codex's output.)
+- Do **not** pass `--model`, `--effort`, `--background`, `--resume`, or `--fresh` unless the user asked.
+- Hand Codex only the artifacts it needs (the plan / research report / project description) inline — Codex runs in its own context; it does not read the SDLC context block.
+
+### Output contract (ask Codex for exactly this)
+
+```markdown
+## Codex Second Opinion
+- Verdict: {AGREE | AGREE-WITH-DELTAS | DISAGREE}
+- Top miss: {one line — the single most valuable gap or wrong call}
+
+### Deltas (ranked, most valuable first)
+- D1 — {one line: what to change and why} — severity: {critical | important | nice-to-have}
+- D2 — {one line} — severity: ...
+(cap at ~6 deltas; one line each)
+```
+
+Cap the whole response at ~600 tokens. Codex is a consult, not a co-author.
+
+### Graceful skip (never a hard failure)
+
+If `codex:codex-rescue` returns nothing, an error, or a setup/auth message (e.g. Codex not installed or not authenticated), the orchestrator logs **one line** — `"Codex consult skipped ({reason}); continuing."` — and proceeds with the Claude-only path. A missing Codex must never block or fail a `/sdlc` run. If the user wants Codex, point them at `/codex:setup` once, then continue.
+
+### Reconciliation owner per phase
+
+| Phase | Codex produces | Who reconciles |
+|-------|----------------|----------------|
+| 0.5 Research | Second opinion on the build-vs-buy report | Orchestrator appends it to the report as a `## Codex Second Opinion` addendum; the **planner** reconciles when it reads the report in Phase 1 |
+| 1 Planning | Critique of the planner's draft plan | Orchestrator re-spawns the **planner once** with a `## Codex Critique` block; the planner adopts/adapts/rejects each delta (see planner "Codex reconciliation" rule) |
+| 1.5 Challenge | An independent adversarial findings pass on the plan | Orchestrator **merges** Codex findings with `sdlc-plan-challenger`'s, de-duped by topic; a **critical from either source** → LOOPBACK |
+
+### Guardrails
+
+- **Read-only, always.** Codex must not edit files, commit, or touch Jira in these phases.
+- **One consult per phase per iteration.** Do not chain follow-up Codex calls; if a planner reconcile loop re-runs, a fresh single consult per iteration is fine (cap total planning-phase consults at ~5/wave).
+- **Advisory, not binding** — except the Phase 1.5 merge rule, where a Codex *critical* carries the same LOOPBACK weight as a challenger critical (a different model flagging a blocker is signal, not noise).
+- **Never inline Codex's full output into orchestrator history** beyond the bounded contract block above — the contract exists to keep the consult cheap.
+
 ## Pipeline Phases
 
 ```

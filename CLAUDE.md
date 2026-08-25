@@ -88,6 +88,8 @@ Entry point: `/sdlc "description"` or `/sdlc /path/to/plan.md` or `/sdlc EPIC-KE
 
 **Branching model:** Phase 0 auto-detects dev/prod (two-branch) vs single-branch setups. Context block includes `Base Branch` and `PR Target` so agents always branch and open PRs against the correct branch. Phase 8 handles promotion (dev → main) with user approval.
 
+**Codex second opinion (early phases):** In the planning phases only — Phase 0.5 (Research), Phase 1 (Planning), Phase 1.5 (Plan Challenge) — the orchestrator brings **Codex (GPT-5.x)** in as an independent second model via the `codex:codex-rescue` subagent (read-only). Model diversity: Codex critiques the research report, the draft plan, and adversarially attacks the plan; **Claude always owns the artifact** ("consult, Claude reconciles"). On by default; disable with `--no-codex`. Auto-skips gracefully (one log line) if Codex isn't installed/authenticated — never blocks a run. In Phase 1.5 a Codex *critical* finding is binding (LOOPBACK), same weight as a challenger critical; everywhere else it's advisory. Full contract: `sdlc-conventions` → "Codex Consult Protocol"; requires the `codex` plugin (`/codex:setup`).
+
 Agents use Atlassian MCP tools for all Jira operations. Always pass `contentFormat: "markdown"` and `responseContentFormat: "markdown"` on Jira MCP calls.
 
 ## IMPORTANT: All Skills and Agents Go Here
