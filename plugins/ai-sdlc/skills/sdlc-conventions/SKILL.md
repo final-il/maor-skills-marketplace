@@ -14,6 +14,10 @@ description: >
 
 The AI-SDLC system uses Jira as the coordination layer between autonomous agents. Each agent reads its input from Jira tickets and writes its output back to Jira. This skill defines the shared conventions all agents follow.
 
+## Communication register — write for whoever reads it
+
+The register of any text depends on **who reads it, not where it's written.** Anything a person will read — Jira ticket titles/descriptions/comments, the plan at an approval gate, gate questions, the fast-mode `plan.md`, docs/README/Confluence, completion + reconciliation reports — uses **plain language and real names**: no internal codes (`Epic 1`, `Story 1.1`, finding IDs, bare `S/M/L`, status abbreviations), define each term on first use, and order by purpose (decision → context/options/recommendation; result → outcome/evidence/next; description → why/what/details). Agent-to-agent text (return-text verdicts, the ledger, tech-spec internals, status-as-message-bus) may stay terse; the orchestrator translates it to plain language at the moment it surfaces to a human. **Canonical, runtime-authoritative copy: the "Communication Contract" section in `commands/sdlc.md`** — this is the discoverable summary, that is the source of truth.
+
 ## Jira Workflow
 
 Stories flow through these statuses:
@@ -119,6 +123,8 @@ Downstream agents read the **summary first** and drill into detail only when the
 ### 2.5 Hybrid artifact store — detail lives in git, not Jira
 
 **The rule:** the `## Summary` stays in the Jira comment; the `## Detail` is written to a **git file**, and the Jira comment carries a **pointer** to it. Jira holds *state + a cheap snapshot + a live pointer*; git holds the *canonical content*. This cuts Jira-write latency, lets specs be diffed and reviewed in the same PR as the code, and removes the duplication that comes from re-deriving specs across stores.
+
+**Scope of this rule:** it governs the **architecture-phase** artifacts in the table below (architect / designer / integrator). The **runtime-result** artifacts — the developer's `## Implementation Complete`, the tester's `## Test Results`, QA's `## QA Review`, the bug-fixer's `## Bug Fix Complete` — keep their `## Detail` **inline in the Jira comment** in normal mode. Those four are written as standalone git files (`impl-complete.md`, `test-results.md`, `qa-review.md`, `bug-fix-*.md`) **only in fast mode** (§2.6), where there is no Jira comment to carry them.
 
 Design + rationale: `docs/specs/2026-07-08-ai-sdlc-hybrid-artifact-store-design.md`.
 
@@ -445,7 +451,7 @@ The AI-SDLC pipeline requires the standalone `mcp-atlassian` MCP server (configu
 
 **IMPORTANT:** MCP tools are deferred — agents MUST use `ToolSearch` to load tool schemas before calling them.
 
-**IMPORTANT:** Plugin subagents cannot access MCP tools (Claude Code limitation #25200, #38920). The orchestrator MUST spawn Jira-needing agents as general-purpose `Agent()` calls (no `subagent_type`) with the agent file body as the prompt. Only the planner (no Jira) can use typed subagent spawning.
+**IMPORTANT:** Plugin subagents cannot access MCP tools (Claude Code limitation #25200, #38920). The orchestrator MUST spawn Jira-needing agents as general-purpose `Agent()` calls (no `subagent_type`), passing the **path** to the agent file — never the agent body — in the spawn prompt (pointer-not-body; see `commands/sdlc.md` → "How to Spawn Agents"). The one exception is `codex:codex-rescue`, spawned as a typed subagent (`Agent(subagent_type: "codex:codex-rescue")`) because it is not an SDLC agent and needs no Jira/MCP access.
 
 | Operation | MCP Tool |
 |-----------|----------|

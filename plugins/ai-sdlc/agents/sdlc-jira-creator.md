@@ -54,9 +54,11 @@ You write story/epic descriptions that downstream agents will read every phase. 
 - ❌ Don't restate the plan's preamble in every story
 - ❌ Don't add "Technical Notes" prose — that section is reserved for the architect's later edit
 - ❌ Don't copy the full epic description into each child story
-- ✅ Story description = one paragraph + acceptance criteria + complexity. Nothing else.
+- ✅ Story description = one paragraph + acceptance criteria + effort. Nothing else.
 
 The `## Technical Notes` placeholder stays empty until the architect fills it. See `sdlc-conventions` skill, "Artifact Discipline" section.
+
+**Write for the reader.** Ticket titles and descriptions are read by people managing the project, not just agents. Use plain language and real names; lead each description with *why it matters*, then *what to build*. Never put internal codes in the prose (`Epic 1`, `Story 1.1`, bare `S/M/L`) — the ticket key is already the metadata, so don't repeat it inside the description text. Spell effort out as *Small / Medium / Large*.
 
 ## Process
 
@@ -98,12 +100,12 @@ Once you have all epic keys, create all stories as parallel `jira_create_issue` 
 - `summary`: story title
 - `issue_type`: "Story"
 - `description`: formatted as below
-- `additional_fields`: `"{\"labels\": [\"ai-sdlc\", \"{project_name}\"], \"parent\": \"{EPIC-KEY}\", \"priority\": {\"name\": \"{PRIORITY}\"}}"` where PRIORITY is High (L), Medium (M), or Low (S). **Always include the project name label** — same as on the QBV and epics.
+- `additional_fields`: `"{\"labels\": [\"ai-sdlc\", \"{project_name}\"], \"parent\": \"{EPIC-KEY}\", \"priority\": {\"name\": \"{PRIORITY}\"}}"` where PRIORITY is High (plan effort **Large**), Medium (**Medium**), or Low (**Small**). **Always include the project name label** — same as on the QBV and epics.
 
-Story description format:
+Story description format (this is read by people — plain language, lead with why it matters, no internal codes):
 ```markdown
 ## Description
-{story description}
+{story description — why it matters, then what to build}
 
 ## Acceptance Criteria
 - [ ] {criterion 1}
@@ -112,8 +114,8 @@ Story description format:
 ## Technical Notes
 _To be filled by the Architect agent_
 
-## Complexity
-{S/M/L}
+## Effort
+{Small | Medium | Large}
 ```
 
 Record all story keys before proceeding to dependency linking.
@@ -133,11 +135,11 @@ Return a structured list to the orchestrator:
 ```
 ## Created Tickets
 
-### Epic: {EPIC-KEY} — {title}
-- {STORY-KEY}: {title} (Complexity: M, Dependencies: none)
-- {STORY-KEY}: {title} (Complexity: S, Blocked by: STORY-KEY)
+### Epic: {title} ({EPIC-KEY})
+- {title} ({STORY-KEY}) — Effort: Medium, Dependencies: none
+- {title} ({STORY-KEY}) — Effort: Small, Blocked by: {blocking story title}
 
-### Epic: {EPIC-KEY} — {title}
+### Epic: {title} ({EPIC-KEY})
 - ...
 
 Total: {N} epics, {M} stories created
@@ -179,8 +181,8 @@ ToolSearch(query: "select:mcp__mcp-atlassian__jira_search,mcp__mcp-atlassian__ji
    📄 Tech Spec: {Repo Web Base}/blob/{base_branch}/docs/sdlc/{SYNTHETIC-KEY}/tech-spec.md
    🔀 PR: {ledger pr url}
 
-   ## Complexity
-   {from ledger complexity}
+   ## Effort
+   {Small | Medium | Large — from ledger}
    ```
    Create dependency links from the ledger `deps[]`.
 3. **Post per-phase `## Summary` comments by assembling from the local artifact files** — read the `## Summary` section of each unit's `impl-complete.md`, `test-results.md`, `qa-review.md` (and `design-spec.md` / `integration-notes.md` if present) and post them as the corresponding phase comments, each with a `📄 Detail:` pointer to the file. **Assemble, do not re-derive** — the files are the source of truth.

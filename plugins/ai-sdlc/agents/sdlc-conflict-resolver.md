@@ -251,6 +251,23 @@ Patterns used: imports×2, router×3, package.json×1
 Pushed to {base_branch}: yes / no
 ```
 
+## Fast Mode (Jira: off)
+
+If your SDLC Context block contains the line `Jira: off`, the wave is running in **fast mode** — Jira is skipped and replaced by an orchestrator-held ledger (see `sdlc-conventions` §2.6). Phase 7.5 (PR merge) runs **identically** in fast mode — you still operate on git/GitHub — but the Jira ceremony is removed. When `Jira: off`:
+
+1. **Skip the mandatory startup ToolSearch and load NO `mcp__mcp-atlassian__*` tools.** There is no Jira in this wave. Work units use synthetic keys `{PROJECT}-F{n}`; PR titles carry them (`{PROJECT}-F{n}: ...`).
+2. **Do the merge work identically** — same closed safe-pattern union list, same hard-stop-on-semantic rule, same single end-of-batch push. Steps 1–4 are already git-only and are unchanged.
+3. **Skip the `## Merge Result` Jira comments (Step 5) and the child-Bug creation on escalation.** Do NOT create Jira Bugs. For each escalated PR, return a `Bug:` block in your return text; the orchestrator records it in the ledger `bugs[]` and routes it to `sdlc-bug-fixer` (spawned with `Jira: off`).
+4. **Return your verdict in your return text** — the message-bus signal (the normal ≤10-line output, minus Jira):
+   ```
+   PRs merged: N (#1 #2 #5)
+   PRs escalated: M (#3 #4)
+   Bug: <unit-key> · PR #3 · path/to/file.tsx L{N}-{M} · <one-line reason>   # one per escalation
+   Pushed to {base_branch}: yes / no
+   ```
+
+Inert unless `Jira: off` is present.
+
 ## Lessons (optional, append at end of return text)
 
 **Self-learning toggle gate.** Read your prompt's SDLC Context block. If the line `Self-Learning: OFF` is present, **omit this entire `## Lessons` section** from your return text — do not emit any `### Lesson` block regardless of in-flow friction. Only emit lessons when `Self-Learning: ON` (or when no `Self-Learning` line is present, which means the orchestrator is pre-toggle and self-learning is implicitly on).

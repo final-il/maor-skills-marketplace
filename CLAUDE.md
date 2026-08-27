@@ -4,6 +4,8 @@
 
 A Claude Code skills marketplace hosted at `final-il/maor-skills-marketplace`. Users install it via `/plugin` → Marketplace → Add Marketplace → `final-il/maor-skills-marketplace`.
 
+> **Resuming ai-sdlc work?** Session handoffs live in `plugins/ai-sdlc/docs/handoffs/` — read the most recent before resuming.
+
 ## Repository Structure
 
 ```

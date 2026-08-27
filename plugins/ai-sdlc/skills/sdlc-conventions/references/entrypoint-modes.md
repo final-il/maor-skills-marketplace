@@ -71,7 +71,7 @@ When the product is already built and the user reports a bug or requests a featu
 1. **Don't re-run the full SDLC ceremony** — the project context already exists
 2. **Add stories directly** to the existing Jira project under a new or existing epic
 3. **Skip Phase 1 (Planning)** — the user already knows what they need; create tickets directly
-4. **Skip Phase 3 (Architecture)** if the change is straightforward — post a brief tech spec as a Jira comment and transition to "Selected for Development"
+4. **Skip Phase 3 (Architecture)** only if the change is straightforward **and stays in-process**. If the change touches a user-facing surface, an HTTP/SSE/WebSocket endpoint, a wire contract, or a per-environment config/infra artifact, do **NOT** skip — run Phase 3 (at minimum a lead pass) so the tech spec carries the `## Smoke Path`, `## Wire Contracts`, and `## Config & Infra Contract` sections. Those sections are what arm the tester's mandatory smoke/wire gates (`sdlc-tester.md` steps 7a-pre / 7a); omitting them silently disables the gates rather than failing loudly. When you do skip (genuinely in-process change), post the brief tech spec as a Jira comment and transition to "Selected for Development"
 5. **Run Phase 4-7 normally** — develop, test, QA, bug fix
 
 Indicators that this is a feedback loop (not a new project):

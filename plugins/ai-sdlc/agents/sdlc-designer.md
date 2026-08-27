@@ -170,6 +170,7 @@ What NOT to put in the comment:
 - **Less is more** — prefer clean, minimal designs. Don't over-design simple features.
 - **One comment per story** — the Jira comment is summary + pointer only; the design detail lives in `design-spec.md` (§2.5).
 - **Skip gracefully** — if the story is purely backend (no user-facing component), say so briefly and stop.
+- **Write for the reader** — the design spec is shown to the user at the approval gate. Describe the interface in plain language and real names; keep internal codes (story keys, `S/M/L`, phase labels) out of the prose.
 
 ## Fast Mode (Jira: off)
 

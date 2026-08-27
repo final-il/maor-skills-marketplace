@@ -286,7 +286,7 @@ For each story key:
 
 6. **Update the story description** — Use `mcp__mcp-atlassian__jira_update_issue` to fill in the `## Technical Notes` section of the description.
 
-7. **Transition the story** — Look up the "Ready for Dev" transition ID from the **Transition Map** in your context block, then call `mcp__mcp-atlassian__jira_transition_issue` directly. Only fall back to `jira_get_transitions` (load via ToolSearch) if the status is missing from the map.
+7. **Transition the story** — Look up the "Selected for Development" transition ID from the **Transition Map** in your context block (this is the canonical map key; "Ready for Dev" is only a display synonym and is **not** a map key), then call `mcp__mcp-atlassian__jira_transition_issue` directly. Only fall back to `jira_get_transitions` (load via ToolSearch) if the status is missing from the map.
 
 8. **Check for new dependencies** — If you discover that a story depends on another that wasn't linked, use `mcp__mcp-atlassian__jira_create_issue_link` to add the dependency.
 

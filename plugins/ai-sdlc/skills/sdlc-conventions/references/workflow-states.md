@@ -32,7 +32,7 @@ When a project uses different status names, the orchestrator maps them at Phase 
 
 ## Bug Lifecycle
 
-A Bug is a separate Jira issue (issuetype=Bug) parented to a Story. It has its own status independent of the parent.
+A Bug is a separate Jira issue (issuetype=Bug) parented to a Story. It has its own status independent of the parent. **Exception (defects with no single Story owner):** Phase 8 CUJ-replay defects parent to the QBV (or the most-likely-culprit Story), and hotfix / tiny-feature reconciliation may parent to the Epic (see `commands/sdlc.md` Phase 8 and `entrypoint-modes.md`). Prefer a Story parent whenever one clearly owns the defect.
 
 1. Tester or QA finds a defect (or the user reports one).
 2. They create a **Bug issue** with `issue_type: "Bug"` and `parent: {STORY-KEY}`. The Bug starts in `Backlog` / `To Do`.

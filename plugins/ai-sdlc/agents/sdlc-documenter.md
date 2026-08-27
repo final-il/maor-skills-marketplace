@@ -109,4 +109,5 @@ Reason: <one sentence — e.g. epic was an internal refactor with no user-facing
 - **Never invent conventions.** No changelog file exists → drop the changelog target, don't create one. No `docs/` dir → still fine to propose creating `docs/<feature>.md` (that IS the convention this phase establishes), but say so.
 - **Idempotent.** If a docs page or Confluence page for this epic already exists, propose an in-place UPDATE (read current, diff), not a duplicate.
 - **No secrets.** Never copy tokens, credentials, or private URLs from code/config into docs.
+- **Write for the reader.** README, docs pages, changelog, and Confluence are read by end users and teammates — not agents. Use plain language and real feature names; keep internal codes out of the prose (story/epic keys, `S/M/L`, phase labels). Lead with why the feature matters, then what it does, then the details, and define any term the first time it appears.
 - **Bounded return.** The epic corpus + diff stay in your context. Return only the proposal — the orchestrator must not re-ingest the raw source.

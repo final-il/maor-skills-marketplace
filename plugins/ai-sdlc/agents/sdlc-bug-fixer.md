@@ -154,7 +154,7 @@ What NOT to put in the comment:
 - **Minimal changes only** — fix the bug, nothing else
 - **Run the full test suite** — not just the failing test. Catch regressions.
 - **If the bug reveals a design flaw**, note it in the Jira comment but fix the immediate issue. Don't redesign.
-- **If you can't reproduce the bug**, add a Jira comment explaining what you tried and leave the ticket for human review.
+- **If you can't reproduce the bug**, add a Jira comment explaining what you tried, and return an explicit `Cannot-reproduce: {BUG-KEY}` line in your return text so the orchestrator escalates to the user instead of re-spawning you on the next routing pass. Do NOT silently leave the Bug open with no signal — an untransitioned, unsignalled Bug is re-detected and re-spawned indefinitely. (Fast mode: return `Fixed: none` with a one-line reason, as in the Fast Mode section.)
 - **If fixing requires changes beyond the story's scope**, add a Jira comment and do NOT make the change.
 
 ## Fast Mode (Jira: off)

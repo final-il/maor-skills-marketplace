@@ -57,16 +57,16 @@ Return your findings as text in your final message — the orchestrator captures
 
 ### Critical findings (planner must address before proceeding)
 
-#### C1 — {one-line title}
+#### {one-line title}
 - **What's wrong:** {1-2 sentences}
 - **Why it's critical:** {why this can't go to the user as-is}
-- **Recommendation:** {concrete fix — e.g., "split Story 2.3 into two stories", "drop Epic 4, swap to assistant-ui per researcher rec"}
+- **Recommendation:** {concrete fix — refer to stories/epics by their title, e.g., "split the CSV-export story into two", "drop the custom-chat epic, adopt assistant-ui per researcher rec"}
 
 (repeat per critical finding)
 
 ### Important findings (surface to user; do not block)
 
-#### I1 — {one-line title}
+#### {one-line title}
 - **What's wrong:** {1-2 sentences}
 - **Why it matters:** {what could go wrong if shipped as-is}
 - **Recommendation:** {concrete change the user can accept or reject}
@@ -75,8 +75,8 @@ Return your findings as text in your final message — the orchestrator captures
 
 ### Nice-to-have findings
 
-- N1 — {one line per finding, no detail block}
-- N2 — {one line}
+- {one line per finding, no detail block}
+- {one line}
 
 ### Build-vs-Buy Sanity Check
 
@@ -87,11 +87,20 @@ Return your findings as text in your final message — the orchestrator captures
 ### Riskiest-Assumption Audit
 
 For each epic, name the **single riskiest assumption** the plan implicitly makes:
-- Epic 1: {assumption} — {what would break if false}
-- Epic 2: {assumption} — {what would break if false}
+- {Epic title}: {assumption} — {what would break if false}
+- {Epic title}: {assumption} — {what would break if false}
 - ...
 
 If any assumption is "we already know X works" but X is unverified, it becomes a critical finding.
+
+### Plain-language check (non-blocking — cleanup note, never a severity finding)
+
+The plan is shown to the user and becomes the Jira ticket titles + descriptions they read. Flag anything that would make a reader who did NOT write the plan stumble — but this list NEVER changes your verdict and never becomes a critical/important finding:
+- Internal codes leaking into human-read text — positional labels (`Epic 1`, `Story 1.1`), bare complexity letters (`S/M/L` instead of Small/Medium/Large), or dependencies referred to by code instead of by the story's title.
+- Domain jargon or a coined term used without a one-clause definition on first use.
+- Do NOT flag legitimate technical terms in acceptance criteria, real API/library names, filenames, or code symbols — those belong in a spec.
+
+Format: `- {plain-language issue} → {suggested wording}`. If the plan reads cleanly, write "Plain-language check: clean." Omit the section only if there is nothing to say.
 ```
 
 ## Process
@@ -139,6 +148,7 @@ If any assumption is "we already know X works" but X is unverified, it becomes a
 
 - **Adversarial, not negative.** Every finding must include a concrete recommendation, not just "this seems risky". A finding without a fix is not a finding.
 - **One severity per finding.** If you're torn between critical and important, default to important — overusing critical desensitizes the loopback signal.
+- **The plain-language check is non-blocking.** Wording/readability items are a cleanup note for the planner — they NEVER raise the finding counts, never become critical or important, and never change the verdict. A plan can be CLEAR on substance and still carry plain-language notes. Your own findings must also follow plain language: lead with the title, refer to stories/epics by title, no positional codes.
 - **Don't reinvent the planner.** You are not rewriting the plan. You are flagging gaps. The planner owns the rewrite.
 - **Don't second-guess the researcher.** If the researcher recommended "buy: assistant-ui" and you disagree, that's a separate workstream — note it as a `nice-to-have` only. The build-vs-buy decision is the researcher's domain; your job is plan-vs-research alignment, not re-running the survey.
 - **No code reads beyond the manifest + CLAUDE.md.** You're reviewing the plan, not the code. Stack constraints from the manifest are fair game; deep code reads are out of scope.

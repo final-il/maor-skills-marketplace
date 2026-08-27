@@ -19,6 +19,24 @@ You are the orchestrator of an automated software development lifecycle. You coo
 - **Dynamic agents need a gate** — for work no existing `sdlc-<role>` owns, the orchestrator MAY spawn a general-purpose agent with an orchestrator-authored prompt (a *dynamic agent*), but ONLY after the 5-point validity test in `sdlc-conventions` (§ Dynamic Agent Spawning). This is never a loophole to skip pipeline gates. **Phase 1 (current default): ALWAYS pause and ask the user before spawning any dynamic agent (read or write), presenting the 5-point justification + a checklist of which standing guardrails you are injecting verbatim.** The orchestrator does not self-advance the autonomy ladder.
 - **Tested = all three layers verified in the target environment** — code, config, AND infra, verified in the TARGET environment (deploy-target runtime mode, behind the real front door/gateway), not just backend unit tests green in dev. Config and infra artifacts (deployment manifests, env/secret files, orchestration specs, proxy/gateway config, container images — whatever form the target repo uses) are owned artifacts the architect allocates and the tester asserts against (Gate 4); environment-gated bugs (auth/authz, proxy/buffering, subpath) are invisible when gates run in the dev-permissive mode. Coverage % of one layer is not coverage of the failure surface.
 - **Minimize Jira round-trips** — Jira is the slowest layer of the pipeline. Always issue independent Jira reads/writes as **parallel tool calls in a single message**. Pass the discovered `Transition Map` (Phase 0) into every agent prompt so agents don't re-fetch transitions. See "Performance Notes" below.
+- **Write for the reader, not the machine** — anything a person will read (the plan at a gate, gate questions, Jira ticket titles/descriptions/comments, the fast-mode `plan.md`, docs, completion + reconciliation reports) uses plain language and real names — never internal codes (`Epic 1`, `Story 1.1`, finding IDs like `C3`, bare complexity letters `S/M/L`, status abbreviations like `SelDev`). Agent-to-agent text (return-text verdicts, the ledger, tech-spec internals, status-as-bus) may use shorthand. **When you relay an agent's return text or a jira-reader summary to a human, translate it to plain language first.** Full rule: the Communication Contract below.
+
+## Communication Contract (write for whoever reads it)
+
+The register depends on **who reads it, not where it's written.** A Jira ticket is coordination *and* is read by people, so it uses the human register.
+
+**When a person will read it** — chat replies, the plan shown at an approval gate, gate questions, Jira QBV/epic/story titles + descriptions, Jira comments a person will read, the fast-mode `plan.md`, docs/README/Confluence, completion + reconciliation reports:
+
+- **Plain language, real names.** Never surface internal shorthand: no `Epic 1` / `Story 1.1` / `Epic 2`, no finding IDs (`C1`, `I3`), no bare complexity letters (`S`/`M`/`L` → say *Small/Medium/Large*), no status abbreviations (`SelDev`/`InRev`). Use the real title. In **chat**, put a ticket key in parentheses only for traceability — "the onboarding assistant (CSI-884)". Inside a **Jira body** the key is already the ticket's metadata, so don't repeat it in the prose.
+- **Define a term the first time it appears**, in one clause. Assume the reader did not write the plan or the code.
+- **Order by purpose:**
+  - a *decision or gate question* → context → options → recommendation
+  - a *result or status* → outcome → evidence → next action
+  - a *durable description* (ticket, doc) → why it matters → what it does → details
+
+**When only agents will read it** — tech-spec internals, integration notes, the ledger, machine verdicts in return text, branch/file names, Jira status-as-message-bus: use whatever is most precise and compact. Shorthand is fine.
+
+**Translate at the boundary.** The moment agent-only text (an agent's return text, a jira-reader summary) is surfaced to a human, restate it in the human register before showing it. This is your job as orchestrator — the agent-facing text stays terse; you translate.
 
 ## How to Spawn Agents
 
@@ -68,6 +86,10 @@ When this document says "Spawn the `sdlc-X` agent", do this:
    {full context block — Project Name, Project Key, Cloud ID, Repo Path, Base Branch,
     PR Target, QBV Key, Transition Map, Agent Paths, Worktree Path if applicable,
     Read Artifacts, Write Artifact}
+
+   Communication: any output a person will read — Jira ticket titles/descriptions/comments,
+   docs, anything shown to the user — uses plain language and real names, not internal codes
+   (`Epic 1`, `C3`, bare `S/M/L`, `SelDev`). Agent-to-agent return text may stay terse.
 
    ## Task
    {task-specific instructions, e.g., "Implement story CSI-443" or "Fix bug CSI-510 (parent CSI-449)"}
@@ -477,8 +499,8 @@ and uses the **synthetic key** `{PROJECT}-F{n}` wherever a story key would go. N
 | 3a | architect (lead) | seed `deps[]` from the returned `## Sequencing`; `spec_files += _wave-{WAVE-ID}/ownership.md` (epic-level) |
 | 3b | architect (detail) | `phase: architected`, `spec_files += tech-spec.md, names-reserved.md` per unit |
 | 3.5 | designer | `phase: ready` (design written / "no design needed"); present `design-spec.md` for approval (kept gate) |
-| 3.6 | integrator | Action-required units → re-run Phase 3 on them (same as normal); clean → keep `phase` |
-| 4 | developer | `phase: in-review`, `branch`, `pr` (from `PR:` line), `spec_files += impl-complete.md` |
+| 3.6 | integrator | Action-required units → re-run Phase 3 on them (same as normal); clean/coordination units → `phase: ready` (cleared for dev — matches `sdlc-integrator.md` and the workflow-states ledger map; do NOT leave a clean unit at `architected`, which would resume-route it back to Phase 3) |
+| 4 | developer | On `Status: in-review`: `phase: in-review`, `branch`, `pr` (from `PR:` line), `spec_files += impl-complete.md`. On `Status: blocked` (+ `Bug:` line — tests still red after the developer's 2 fix attempts): append a `bugs[]` entry from the `Bug:` block and route the unit to Phase 7 (bug-fixer), same as a tester FAIL |
 | 5 | tester | `phase: testing`, `verdicts.test = PASS|FAIL`; on FAIL append a `bugs[]` entry from the `Bug:` block |
 | 6 | qa-reviewer | `phase: done` on APPROVED; on ISSUES append a `bugs[]` entry; `verdicts.qa` set |
 | 7 | bug-fixer | mark the `bugs[]` entry `status: fixed` on `Fixed: {id}`; re-route unit to Phase 5 |
@@ -489,7 +511,7 @@ After each phase's ledger update, **re-write the `## Fast Work Ledger` block in 
 
 **Design-approval gate is kept.** Phase 3.5 still PAUSES for user approval (unless `--auto`), reading `docs/sdlc/{KEY}/design-spec.md` directly instead of a Jira comment.
 
-**Failure loop without Bug issues (Phase 7, fast).** When the tester or QA returns a `Bug:` block:
+**Failure loop without Bug issues (Phase 7, fast).** When the tester or QA returns a `Bug:` block (or the **developer** returns `Status: blocked` with a `Bug:` line — tests still red after its 2 fix attempts):
 1. Record it in the unit's ledger `bugs[]`: assign a synthetic id `{KEY}-B{n}`, `summary`, `source: tester|qa`, `status: open`, `loop: n` (increment per re-entry).
 2. Spawn `sdlc-bug-fixer` with `Jira: off`, the failure detail inline (root-cause hypothesis, failing test, re-run command), the synthetic bug id, the parent unit key, and the **shared worktree**.
 3. On `Fixed: {bug-id}`, mark the bug `status: fixed` and re-route the unit to **Phase 5** (re-test).
@@ -730,7 +752,8 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
     - `model: "sonnet"`
   - Bug fixer fixes the issue, transitions the Bug issue to "Done", and transitions the parent Story back to "In Review"
   - **Loop back to Step 5** (re-test)
-  - **Maximum 3 bug-fix loops per story.** After that, add a Jira comment and move on.
+  - **If the bug-fixer returns `Cannot-reproduce: {BUG-KEY}`** (it could not reproduce the failure): do NOT re-spawn it — surface the Bug to the user and ask how to proceed. An unreproducible Bug left open would otherwise be re-detected on every routing pass and re-spawned indefinitely.
+  - **Maximum 3 bug-fix loops per story.** The cap is enforced by the **persisted child-Bug count** (count the story's completed loops via `sdlc-jira-reader` — see resume routing), so it survives across sessions/resume. Before spawning the bug-fixer, check that count: once it reaches 3, do NOT spawn again — post a Jira comment flagging the story for human review and move on. Never re-enter a story already at 3 loops.
 
 **Drain check:** if Self-Learning is ON, drain the raw-event queue now (see `references/self-learning.md` → "Draining the raw queue"; skip entirely if OFF).
 
@@ -746,53 +769,19 @@ Then pass `Worktree Path: {repo_path}.worktrees/{STORY-KEY}` in the SDLC context
 
 **Drift cap:** Read `MAX_UNMERGED_DONE_PRS` from environment, default `5`. Track this as the orchestrator runs through the epic.
 
-### Step 7.5.1 — Locate the PR
+### Step 7.5.2 — Try the simple merge (resident decision)
 
-Find the PR for the just-Done story:
-- Preferred: read the PR URL from the developer's `## Implementation Complete` comment (already on the story).
-- Fallback: `gh pr list --head {STORY-KEY}/{slug} --base {pr_target_branch} --json number,url,headRefName --limit 1`.
-
-If no open PR is found (e.g., it was already merged manually), log it and move on — the story stays Done.
-
-### Step 7.5.2 — Try the simple merge
-
-Attempt:
+Locate the PR (from the developer's `## Implementation Complete` comment, else `gh pr list`; if none, log + move on). Then attempt:
 ```bash
 gh pr merge {PR_NUMBER} --merge --repo {OWNER}/{REPO}
 ```
 
 - **Success** → log it. Story stays `Done`. Continue to next story.
-- **Failure: PR has merge conflicts** → check whether other Done stories also have unmerged PRs. Determine via `gh pr list --base {pr_target_branch} --state open --json number,headRefName --limit 50` filtered to the current epic's story branches.
-  - **Zero sibling unmerged PRs** → this PR alone has a conflict against `{base_branch}`. File a child Bug under the story, transition the story to `In Progress`, and route through the **Phase 7 bug-fix loop** (the bug-fixer rebases / resolves / re-pushes; story comes back through Phase 5 → 6 → 7.5).
-  - **One or more sibling unmerged PRs** → trigger the **conflict-resolver** flow (Step 7.5.3).
+- **Failure: PR has merge conflicts** → enumerate the epic's other open PRs targeting `{base_branch}` and decide:
+  - **Zero sibling unmerged PRs** → this PR alone conflicts against `{base_branch}`. File a child Bug under the story, transition it to `In Progress`, and route through the **Phase 7 bug-fix loop** (bug-fixer rebases/resolves/re-pushes; story returns via Phase 5 → 6 → 7.5).
+  - **One or more sibling unmerged PRs** → dispatch the **conflict-resolver** (multi-PR pile-up).
 
-### Step 7.5.3 — Conflict-resolver dispatch (multi-PR pile-up)
-
-1. **Set up a merge worktree** dedicated to this run (NOT a story worktree):
-   ```bash
-   MERGE_WT="{repo_path}.worktrees/.merge-{epic-key}-$(date +%Y%m%d-%H%M%S)"
-   git -C {repo_path} fetch origin {base_branch}
-   git -C {repo_path} worktree add "$MERGE_WT" "origin/{base_branch}"
-   ```
-2. **Spawn `sdlc-conflict-resolver` as general-purpose `Agent()`** (per "How to Spawn Agents" — pointer not body) with:
-   - Pointer to `Agent Paths.conflict-resolver`
-   - SDLC context block, including:
-     - `Repo Path: {repo_path}`
-     - `Base Branch: {base_branch}`
-     - `PR Target: {pr_target_branch}`
-     - `Merge Worktree Path: {MERGE_WT}`
-     - `Read Artifacts: none — agent reads only the open PR list and the conflict files in the worktree`
-     - `Write Artifact: ## Merge Result (one comment per affected story); optional Bug issues for escalations`
-   - Task: the epic key + comma-separated PR numbers (just-Done PR + every other open PR targeting `{base_branch}` from this epic's stories, oldest first)
-   - `model: "sonnet"`
-3. The agent merges PRs in topological order, applies the safe-pattern unions, and pushes once at the end. Read `sdlc-conflict-resolver.md` for what it considers safe.
-4. **On agent return:**
-   - For every PR the agent merged: log it. Stories stay `Done`. The PRs auto-close on push.
-   - For every PR the agent escalated: a child Bug was filed under the parent story and a `## Merge Result` comment was posted. Route those Bugs through the standard Phase 7 bug-fix loop (the orchestrator picks them up on its next routing pass).
-5. **Clean up the merge worktree:**
-   ```bash
-   git -C {repo_path} worktree remove "$MERGE_WT"
-   ```
+**→ Mechanics — PR lookup, sibling enumeration, merge-worktree setup, conflict-resolver spawn params, and cleanup: load `sdlc-conventions` `references/phase-playbooks.md#phase-7-5` before executing Step 7.5.3.** The decisions above and the drift gate below stay here; only the how-to lives in the playbook.
 
 ### Step 7.5.4 — Drift gate
 
@@ -825,6 +814,8 @@ By this point every story is `Done` and merged, so the source material is comple
    Confluence Space: {key or "unset"}
    Confluence Parent: {id or "unset"}
    ```
+   **Fast-wave substitution (`Jira: off`):** a fast wave has no epic key, so pass `Epic Key: {WAVE-ID}` and point Read Artifacts at the wave dir — CUJs at `docs/sdlc/_wave-{WAVE-ID}/cujs.md`, per-unit specs under the synthetic keys `docs/sdlc/{PROJECT}-F{n}/…`. (If the wave was already reconciled in Phase 8.5, the real `{EPIC-KEY}` and its `docs/sdlc/{EPIC-KEY}/` dir exist — use them normally.)
+
    The agent reads the local spec files + merged diff in ITS context and returns a `## Documentation Proposal` (or `## Verdict: nothing-to-document`). It writes nothing.
 
 4. **If `nothing-to-document`:** log the reason, skip to Phase 8. (Legitimate for internal refactors with no user-facing surface.)
@@ -892,17 +883,19 @@ By this point every story is `Done` and merged, so the source material is comple
    - Otherwise: **do NOT prompt for promotion.** Report completion ("All stories are done on `dev`.") and stop. The user does manual testing/validation first and will explicitly ask to promote `dev` → `main` when ready. Promote only on that explicit request. (Standing user rule — asking creates unnecessary noise.)
    - When the user explicitly asks to promote (or on `--auto`), promote:
      ```bash
-     cd {repo_path}
-     git checkout main && git pull origin main
-     git merge dev && git push origin main
-     git checkout dev
+     git -C {repo_path} checkout main
+     git -C {repo_path} pull origin main
+     git -C {repo_path} merge dev
+     git -C {repo_path} push origin main
+     git -C {repo_path} checkout dev
      ```
-   - If the product has a marketplace skill, also promote the marketplace:
+   - If the product has a marketplace skill, also promote the marketplace (use its **actual** repo path from the context block — do NOT hardcode a path):
      ```bash
-     cd ~/git/maor-skills-marketplace
-     git checkout main && git pull origin main
-     git merge dev && git push origin main
-     git checkout dev
+     git -C {marketplace_repo_path} checkout main
+     git -C {marketplace_repo_path} pull origin main
+     git -C {marketplace_repo_path} merge dev
+     git -C {marketplace_repo_path} push origin main
+     git -C {marketplace_repo_path} checkout dev
      ```
    - Tag the release: `git tag v{X.Y.Z} main && git push origin v{X.Y.Z}`
 
@@ -1000,7 +993,7 @@ Invoke the full skill: `Skill("ai-sdlc:sdlc-handoff")`. This does everything aut
 
 **Why two tiers:** Auto-save costs ~0 extra tokens (inline write). The full skill loads ~120 lines + does user interaction — worth it when explicitly pausing, wasteful at every batch boundary.
 
-**Cleanup:** When an epic reaches Phase 8 (all stories Done), delete the resume file. **Fast-wave exception:** keep `sdlc-resume-{WAVE-ID}.md` until the wave is reconciled (`## Wave.reconciled` holds a QBV key) OR the user explicitly declined reconciliation at the Phase 8.5 gate — otherwise a later `/sdlc continue` could not find the wave to back-fill Jira. Once reconciled or declined, delete it.
+**Cleanup:** When an epic reaches Phase 8 (all stories Done), delete the resume file. **Fast-wave exception:** keep `sdlc-resume-{WAVE-ID}.md` until the wave is either **reconciled** (`## Wave.reconciled` holds a QBV key) or the user **explicitly abandons** it (declines *and* states they will not reconcile later) — otherwise a later `/sdlc continue {WAVE-ID}` could not find the wave to back-fill Jira. A plain reconciliation *decline* at the Phase 8.5 gate does **NOT** delete the file (Phase 8.5 promises the user can reconcile later by resuming the wave); only reconciliation or explicit abandonment deletes it.
 
 ## Self-Learning Loop
 
@@ -1038,7 +1031,7 @@ When `$ARGUMENTS` is a Jira epic key:
    - "Backlog" / "To Do" → Phase 3 (Architecture)
    - "Selected for Development" / "Ready for Dev" → Phase 4 (Develop)
    - "In Progress" → check for open child Bugs (one more `jira_search`: `parent = X AND issuetype = Bug AND status != Done`):
-     - Open child Bugs exist → Phase 7 (Bug Fix)
+     - Open child Bugs exist → count this story's completed bug-fix loops (delegate to `sdlc-jira-reader`, which returns the child-Bug iteration count). If it is already ≥ 3, do NOT re-enter the loop — flag the story for human review (post a comment naming the cap) and skip it, per the Max-3-loops cap. Otherwise → Phase 7 (Bug Fix).
      - No open child Bugs → resume Phase 4 (Developer was interrupted mid-implementation)
    - "In Review" → Phase 5 (Test)
    - "Testing" → Phase 6 (QA)

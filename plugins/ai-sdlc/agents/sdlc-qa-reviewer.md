@@ -106,39 +106,12 @@ What NOT to put in the comment:
    - Are error paths tested?
    - Do tests follow project conventions?
 
-   **c.1 Wire-contract verification (MANDATORY when story has a `## Wire Contracts` section)**
+   **c.1 / c.1.5 / c.2 — Wire, Smoke-artifact & Live-gate verification (MANDATORY for the matching story types).** Confirm the tester's gates were actually run and aren't fakes; file a Bug (status ISSUES FOUND) if not:
+   - **Wire** (`## Wire Contracts` story): ≥1 test must feed real producer bytes into the real consumer parser. Reject any banned pattern — fixture-against-parser, byte-normalization before parse, event-name mismatch with the real producer, or schema ≠ `## Wire Contracts`. No end-to-end contract test = blocking.
+   - **Smoke** (`## Smoke Path` in tech spec): `ls tests/artifacts/{STORY-KEY}/`, **read the artifact**, confirm the success signal from `## Smoke Path → Success signal`; for a `.png`, open it with the Read tool and **look** — a blank/error page is ISSUES FOUND. A `## Test Results` reference to a missing artifact is fabricated → Bug. **Never skipped, even in Fast Mode.**
+   - **Live gates** (diff touches HTTP/SSE/WS/browser/external-service): the `#### Live Gates Run` section must name a real command + outcome per applicable gate; generic "all green" fails. Frontend → Playwright with a no-`console.error` / no-error-boundary assertion. Chat/persistence → a **second-turn replay** must exist. A skipped required gate = Bug.
 
-   The tester is required to write end-to-end contract tests when a story produces or consumes data across a process boundary (see `sdlc-tester` "Wire-contract tests"). Verify they actually exist and aren't fakes:
-
-   - Open the test file. Confirm at least one test feeds real producer bytes into the real consumer parser (or the canonical schema's serialization round-trips through both sides).
-   - Reject as ISSUES FOUND if you see any banned pattern:
-     - Test authors a fixture and feeds it into the parser. (Tests parser against itself.)
-     - Test normalizes bytes before parsing (`replace("\r\n", "\n")`, JSON pretty-print before parse, lowercasing event names).
-     - Frontend test uses different event names than the backend actually emits.
-     - The wire schema referenced in the test does not match `## Wire Contracts` → schema location.
-   - Cross-check the test against the actual producer/consumer code: if the producer emits `event: text` but the test mocks `event: token`, file a Bug.
-   - If the story has a `## Wire Contracts` section but no end-to-end contract test exists, that is a blocking issue — file a Bug, status ISSUES FOUND.
-
-   **c.1.5 Smoke-path artifact verification (MANDATORY when the tech spec has a `## Smoke Path` section)**
-
-   The tester (step 7a-pre in `sdlc-tester`) is required to run the smoke path against a real running system and commit an observable artifact under `tests/artifacts/{STORY-KEY}/`. Verify it exists and is real:
-
-   - `ls tests/artifacts/{STORY-KEY}/` — confirm the file exists in the worktree.
-   - **Read the artifact yourself.**
-     - For text/JSON: `cat` it (or use Read), confirm the success signal named in the tech spec's `## Smoke Path → Success signal` is present in the bytes.
-     - For a screenshot (`smoke.png`): use the Read tool on the image path. **Look at the screenshot.** Confirm the rendered content matches what the tech spec described (chart visible, list populated, button labeled correctly). A blank page or error overlay = ISSUES FOUND.
-   - Cross-check the artifact's command against the tech spec's `## Smoke Path → Smoke command`. If the tester ran a different command (e.g., a unit test instead of the named curl), that's ISSUES FOUND — file a Bug demanding the actual smoke path.
-   - If the `## Test Results` comment references a smoke artifact path but the file is missing on disk, that's a fabricated artifact — ISSUES FOUND, file a Bug, switch to full review.
-   - The smoke-path check is **never skipped, even in Fast Mode** — it is the single most reliable signal that the story actually participates in its CUJ.
-
-   **c.2 Live-gates verification (MANDATORY when the diff touches HTTP/SSE/WebSocket endpoints, browser code, or external-service integration)**
-
-   The tester (step 7a in `sdlc-tester`) is required to run live process gates for those story types. Verify they were actually run:
-   - Open the `## Test Results` comment. Look for the `#### Live Gates Run` section.
-   - For each gate that should have run given the diff, confirm the comment names a real command + outcome (HTTP code, browser test name, external-service response sample). Generic "all green" without a command + outcome is a fail.
-   - If the diff touches frontend: confirm a Playwright (or equivalent) spec was either added or run, with a passing assertion that includes "no console.error / no error-boundary visible".
-   - If the diff touches a chat agent / persistence: confirm a **second-turn replay** test exists (load a persisted conversation, send a follow-up message, assert no 4xx). The bug class "tool_use.input must be a dict" only surfaces on replay; missing this gate is ISSUES FOUND.
-   - If the tester skipped a required gate, file a Bug naming the missing gate. Do not approve.
+   **→ Full "real vs. fake test" verification procedure per gate: load `../skills/sdlc-conventions/references/recipes-wire-and-config.md` §4 now** when any trigger above applies.
 
    **c.3 Test-summary explanation grep (every story)**
 
@@ -158,11 +131,7 @@ What NOT to put in the comment:
 
    If the story adds a call site for a cross-cutting concern (auth headers, CSRF token, credentials, error handling, logging, retry), verify it routes through the shared/central mechanism — reject the Nth hand-rolled copy. A repeated pattern is a root-cause miss: one file did it wrong once, five siblings did it right, and a point-fix patched the five and missed the sixth. Grep the diff and the surrounding module for the sibling call sites; if this call site hand-rolls behavior the siblings get from a shared wrapper (or if it's the 2nd copy that should have been extracted), file a Bug demanding it route through the shared mechanism.
 
-   **c.6 Config/Infra gate verification (when the diff touches any deploy/config/infra artifact or an env/config key that differs per environment)**
-
-   Verify the tester's Gate 4 (Config & Infra) actually ran:
-   - Confirm deterministic config-assertion tests exist and assert the invariants named in the tech spec's `## Config & Infra Contract` (target-mode pinning, required-key presence, secrets-not-hardcoded, network/proxy, service-wiring — whichever apply).
-   - Confirm the smoke/live gate ran in the **deploy-target runtime mode** named in `## Config & Infra Contract → TARGET RUNTIME MODE`. **Reject "tested in the dev-permissive mode" for a stricter target mode** — environment-gated bugs (auth/authz rejections, proxy/buffering failures, subpath mismatches) are invisible there. File a Bug demanding the gate re-run in the target mode. *(Web-stack example: reject "tested in open mode" for a users-mode target — CSRF/401/403 stay hidden.)*
+   **c.6 Config/Infra gate verification (when the diff touches any deploy/config/infra artifact or a per-environment env/config key).** Confirm the tester's Gate 4 ran: deterministic config-assertion tests asserting the `## Config & Infra Contract` invariants exist, **and** the smoke/live gate ran in the **deploy-target runtime mode** (from `## Config & Infra Contract → TARGET RUNTIME MODE`). **Reject "tested in the dev-permissive mode" for a stricter target** — env-gated bugs (auth/authz rejections, proxy/buffering failures, subpath mismatches) are invisible there; file a Bug demanding a re-run in the target mode. Procedure: recipe §4.
 
    **d. Integration**
    - Does the code work with the rest of the codebase?

@@ -115,26 +115,9 @@ What NOT to put in the comment:
    - **Integration tests** — if the story connects multiple components
    - Place tests in the correct directory following project conventions
 
-   **Wire-contract tests (MANDATORY when the story has a `## Wire Contracts` section):**
+   **Wire-contract tests (MANDATORY when the story has a `## Wire Contracts` section):** write at least one **end-to-end contract test** that runs the real producer and the real consumer in the same process on real bytes. **Never** a parser against a fixture you authored; **never** with wire bytes normalized (`\r\n`→`\n`, JSON pretty-print, lowercased event names) before parsing. The acceptance criterion **"matches the wire contract in `<schema location>`"** is implicit on every wire-bearing story (treat it as **AC0**).
 
-   For every wire contract this story produces or consumes, write at least one **end-to-end contract test** that runs the real producer and the real consumer in the same test process and asserts the full round-trip works on real bytes:
-
-   - For an HTTP endpoint: spawn the real FastAPI app with a real client (e.g., `httpx.ASGITransport`) and assert response shape against the schema location named in `## Wire Contracts`.
-   - For SSE: drive bytes from the **real** `event_to_sse` (or equivalent producer) into the **real** frontend parser. Use the real wire separator (`\r\n\r\n` for SSE) — do not hand-construct frames in the test that the parser would obviously accept.
-   - For JSON-RPC / WebSocket / IPC: feed the real producer's serialized output into the real consumer's deserializer; assert dispatched event/object equals the expected shape.
-   - For file formats: write with the real producer, read with the real consumer; never test one half against a hand-rolled fixture.
-
-   **Banned patterns** (these are why CSI-529 / CSI-530 / CSI-531 slipped through):
-   - ❌ Test feeds a fixture into the parser, asserts the parser parses it. The fixture was authored by you — the parser will obviously accept it. This tests the parser against itself, not against the producer.
-   - ❌ Test normalizes wire bytes (e.g., `text.replace("\r\n", "\n")`) before parsing. The bug you're trying to catch lives in the bytes you just normalized away.
-   - ❌ Frontend test uses a different event-name set than the backend emits (e.g., `event: token` mock when backend emits `event: text`).
-   - ❌ Backend test asserts the SSE comment looks right but never feeds it to the frontend parser.
-
-   If the story is the **producer** in a wire contract: call the producer, capture the bytes/payload, then feed those bytes through whatever consumer code exists in the same repo (import the frontend parser into a node test, or import the consumer module into a Python test). If the consumer is in a different runtime (e.g., browser-only TS), produce a fixture file the consumer side will load — the consumer-side story's tester must add the matching test that loads that fixture and parses it.
-
-   If the story is the **consumer** in a wire contract: import the producer (or use the canonical schema's reference implementation) to generate input bytes for your parser test. Do NOT hand-author wire-byte fixtures.
-
-   The acceptance criterion **"matches the wire contract in `<schema location>`"** is implicit on every wire-bearing story even if the story description doesn't list it. Treat it as AC0.
+   **→ Procedure, producer/consumer construction, and the full banned-pattern list: load `../skills/sdlc-conventions/references/recipes-wire-and-config.md` §1 now.** (You have a `## Wire Contracts` section, so this is required, not optional.)
 
 7. **Run all tests with coverage:**
    ```bash
@@ -149,66 +132,20 @@ What NOT to put in the comment:
 
 7a-pre. **Smoke-path artifact (MANDATORY for every story that has a `## Smoke Path` section in the tech spec).**
 
-The architect's tech spec includes a `## Smoke Path` section naming a concrete command, a success signal, and a failure signal. The smoke path is **not unit-testable** — it is the proof that the story participated in its epic-level Critical User Journey. You must run the smoke path against a **real running system** and save an observable artifact.
+The architect's tech spec's `## Smoke Path` names a concrete command, a success signal, and a failure signal. The smoke path is **not unit-testable** — it is the proof the story participated in its epic-level Critical User Journey. You **must** run it against a **real running system**, save an observable artifact under `tests/artifacts/{STORY-KEY}/`, confirm the success signal is present, **and visually open any screenshot** (a blank/wrong render is a fail even with 0 console errors). Missing signal or missing artifact = smoke failed → file a Bug; do not approve. Commit the artifact: `git add tests/artifacts/{STORY-KEY}/`.
 
-**Run the smoke command literally** (the tech spec gives you the exact command). If the command is:
-- A `curl` against a running backend → start the backend (per Gate 1 below), run the curl, capture the response body and HTTP code. Save the raw bytes to `tests/artifacts/{STORY-KEY}/smoke.txt` (or `.json`).
-- A Playwright spec → run the spec headed-or-headless against a running dev server. Save the spec's screenshot output to `tests/artifacts/{STORY-KEY}/smoke.png`. Use `await page.screenshot({path: 'tests/artifacts/{STORY-KEY}/smoke.png', fullPage: true})` in the spec; if the existing spec doesn't take one, ADD the screenshot call.
-- A CLI command → run it against the real CLI binary (e.g., `uv run jiralyzer query ...`). Save stdout + stderr to `tests/artifacts/{STORY-KEY}/smoke.txt`.
-- A browser flow without Playwright in the repo → install Playwright (`npm i -D @playwright/test && npx playwright install chromium`), write a one-shot spec that reproduces the flow, and screenshot it.
+   **→ Full run-the-command-literally procedure (curl / Playwright / CLI / install-Playwright): load `../skills/sdlc-conventions/references/recipes-wire-and-config.md` §2 now.** (Required whenever a `## Smoke Path` section exists.)
 
-**Verify the success signal is present in the artifact.** The tech spec names a concrete substring/JSON shape/visible element. Grep / parse / visually inspect the artifact and confirm. If the success signal is missing, the smoke path failed — file a Bug; do not approve.
+7a. **Live-process validation (MANDATORY when the story changes any HTTP/SSE/WebSocket endpoint, browser code, external-service integration, or config/infra artifact).**
 
-**Visually look at any screenshot you produced.** A "0 console errors" assertion is necessary but not sufficient — the page may render blank, or the wrong content. Open the screenshot. If you (the agent) cannot see what was meant to be rendered, the story is not done.
+   Unit + component tests with mocked clients miss ~30% of bugs — wire-shape drift, DI failures, in-browser runtime crashes, 4xx from external proxies, environment-gated auth/proxy failures — that only appear when real processes talk to each other **in the deploy-target runtime mode**. Every story that crosses a process boundary must have the applicable gate(s) below run **green** before you post `## Test Results`:
+   - **Gate 1 — Backend live-process** (any FastAPI/HTTP/SSE change): start the real backend, `curl` each touched endpoint, assert the wire shape matches `## Wire Contracts`; any `ERROR`/`Traceback` fails even on a 200.
+   - **Gate 2 — Browser smoke** (any user-visible frontend change): run/add a Playwright spec asserting zero `pageerror`/`console.error` and no error-boundary overlay.
+   - **Gate 3 — External-service** (credentials/base-URL/model-name/SDK-config change): one real call per service; a 4xx/5xx IS a failure.
+   - **Gate 4 — Config & Infra** (any deploy/config/infra artifact, or an env/config key that differs per environment): write deterministic config-assertion tests for the invariants named in the tech spec's `## Config & Infra Contract`, **and run the smoke/live gates in the deploy-target runtime mode** (env-gated bugs are invisible in the permissive dev mode).
+   - **Chat-agent gate** (chat router/agent loop/tools/persistence): run a **second-turn replay** exercising persisted `tool_use` blocks.
 
-Commit the artifact alongside your tests: `git add tests/artifacts/{STORY-KEY}/`.
-
-**Why this is mandatory:** Unit/component tests with hand-rolled fixtures shipped 3 wire-format bugs (CSI-526..531) and a dashboard outage to "Done". A real curl + a real screenshot would have caught all four. The smoke artifact is the evidence the QA reviewer cross-checks; without it, "tests pass" is unfalsifiable.
-
-7a. **Live-process validation (MANDATORY when the story changes any HTTP/SSE/WebSocket endpoint, browser code, or external-service integration).**
-
-   Unit + component tests with mocked clients catch ~70% of bugs. The remaining 30% — wire-shape drift, dependency injection failures, runtime crashes inside the browser, 4xx from external proxies — only appear when real processes talk to each other. Every story that crosses a process boundary must have at least one of the gates below run **green** before you post `## Test Results`.
-
-   **Gate 1 — Backend live-process gate (any FastAPI/HTTP/SSE change):**
-   - Start the real backend (e.g. `nohup ./test.sh python -m jiralyzer_web > /tmp/test-backend.log 2>&1 &`). Wait for `Application startup complete.` in the log.
-   - For each endpoint touched by the diff, `curl` it with a representative payload. SSE endpoints: stream the response and capture at least the first 5 events.
-   - Assert the wire shape matches `## Wire Contracts` from the architect's tech spec (use `jq` for JSON; eyeball event names + JSON bodies for SSE). Save the captured response under `tests/fixtures/api/<endpoint-slug>.json` if a recording fixture pattern exists in the repo.
-   - Kill the backend cleanly. If the log shows any `ERROR` or `Traceback`, that's a failure even if the curl returned 200.
-
-   **Gate 2 — Browser smoke gate (any frontend change to a user-visible flow):**
-   - If the repo has Playwright (or Cypress/equivalent) installed: run the `test:e2e` (or matching) script. The browser smoke must include the scenario the diff touches.
-   - If no browser-test framework is installed in the repo, **install Playwright** (`npm i -D @playwright/test && npx playwright install chromium`) and add at least one spec that:
-     - Loads the dev/preview URL
-     - Exercises the user flow this story implements (button click, form submit, conversation load)
-     - Asserts zero `pageerror`, zero `console.error`, no error-boundary overlay visible
-   - This catches the React-runtime errors (e.g., `X is not iterable`, "Unexpected Application Error") that vitest never sees.
-
-   **Gate 3 — External-service gate (any change to credentials, base URLs, model names, third-party SDK config):**
-   - Make exactly **one real call** against each external service the change touches: API proxy (LiteLLM/Anthropic), Jira API, S3, etc.
-   - Capture the response code + first 200 chars of the body in your `## Test Results` `## Detail` section under a `#### External-Service Probe` heading.
-   - A 4xx/5xx from an external service IS a failure — file a Bug; do not paper over it with a try/except in the test.
-
-   **Gate 4 — Config & Infra gate (MANDATORY when the diff touches any deploy/config/infra artifact — deployment manifests, container/orchestration specs, reverse-proxy/gateway config, env/secret files, or any runtime-settings/env-var declaration; whatever form they take in this repo):**
-
-   Config and infra are the two layers the pipeline was historically blind to — no agent designed them and no gate tested them, so drift shipped to a real environment undetected. You own them when the diff touches them. The categories below are stack-agnostic; the **concrete invariants for this project come from the tech spec's `## Config & Infra Contract`** (the architect discovered them by reading the target repo). Assert what that contract names — do not invent project specifics from these examples.
-
-   (a) **Write deterministic config-assertion tests** that parse the actual config artifacts and assert their invariants — ordinary tests in the suite, run automatically, not manual eyeballing. Cover these categories wherever they apply to this repo:
-   - **Target-mode pinning** — every value that must differ per environment is pinned to the deploy-target value, not left at a dev/permissive default.
-   - **Required-key presence** — keys the runtime depends on are present; a missing key fails loudly, not via a silent default.
-   - **Secrets referenced, not hardcoded** — config references secret mounts / injected vars; no literal tokens/passwords in tracked files.
-   - **Network / proxy / gateway invariants** — routing-rule ordering, buffering/timeout/size settings the app depends on, and any front-door behavior large or streaming responses rely on.
-   - **Service-wiring consistency** — names referenced across artifacts resolve (a target one artifact points at actually exists in another; service ↔ env ↔ route names agree).
-   - *Web-stack example (illustrative — jiralyzer): parse `deploy/env/*.env` + compose `environment:` and assert `AUTH_MODE` is the target value (`users`, not `open`); parse `nginx.conf.template` and assert `location`-block ordering + `proxy_buffering`/`proxy_temp` presence + upstream names resolve to a defined service. Substitute your stack's equivalents.*
-
-   (b) **Run the smoke/live gates in the DEPLOY-TARGET runtime mode**, not the dev-permissive default. The tech spec's `## Config & Infra Contract` names the `TARGET RUNTIME MODE`. Bring the smoke/live process up in that mode (set the env, route through the same front door / gateway the target uses) and run Gates 1–2 there. Environment-gated bugs (auth/authz rejections, proxy/buffering failures, subpath/base-URL mismatches) are **invisible** in the permissive dev mode — a health-check returning 200 proves nothing about the real request path in the real mode. *Web-stack example (illustrative): a users-mode target behind nginx surfaces CSRF/401/403 and `ERR_HTTP2_PROTOCOL_ERROR` on large chunks that open-mode-in-dev never sees.*
-
-   **Chat-agent–specific gate (any change in the chat router, agent loop, tools, or persistence):**
-   - In addition to a single-turn happy-path probe, run a **second-turn replay**: send turn 1, persist the conversation, then send a turn 2 that exercises the persisted tool_use blocks. The bug class "tool_use.input must be a dict" only surfaces on replay.
-   - For any story touching conversation persistence: load every fixture conversation under `tests/fixtures/conversations/` (create the dir + at least one fixture if none exists) through the real loader and assert no exception. The fixture must reflect the on-disk Anthropic shape `{role, content:[...]}`, not the frontend `ChatMessage` shape.
-
-   **Recorded fixtures (frontend tests that consume backend responses):**
-   - If `tools/capture-fixtures.sh` (or equivalent) exists in the repo, **re-run it** when your story changes any backend response shape. Commit the regenerated fixtures alongside your tests.
-   - Frontend component/hook tests that mock `/api/*` MUST load the recorded JSON file from `web/frontend/tests/fixtures/api/`. Hand-rolled mock dicts in tests are a banned pattern from this story forward — the QA reviewer will reject them.
+   **→ Full Gate 1–4 + chat-agent + recorded-fixture procedures: load `../skills/sdlc-conventions/references/recipes-wire-and-config.md` §3 now.** The invariants and the `TARGET RUNTIME MODE` come from the tech spec's `## Config & Infra Contract`; assert what it names — do not invent. "If you didn't start the process in the target mode, you didn't test."
 
 8. **Verify coverage:**
    - Total coverage must be >= 80% — tests will fail automatically if not
@@ -244,7 +181,7 @@ Commit the artifact alongside your tests: `git add tests/artifacts/{STORY-KEY}/`
 
    #### Live Gates Run
    - Backend live probe: ✅ `POST /api/chat` → 200, SSE shape matches contract
-   - Browser smoke: ✅ `npm run test:e2e -- history-load chat-roundtrip` (2 passed)
+   - E2E: ✅ Playwright — `npm run test:e2e -- history-load chat-roundtrip` (2 passed)
    - External-service probe: ✅ LiteLLM `bedrock-claude-sonnet` → 200, sample bytes `{"id":"msg_..."}`
    - Second-turn replay (chat stories): ✅ persisted → reloaded → second turn 200
    ```
@@ -273,6 +210,7 @@ Commit the artifact alongside your tests: `git add tests/artifacts/{STORY-KEY}/`
 - **Config and infra are testable artifacts you own when the diff touches them** — assert against them and fail on drift (Gate 4). A green health-check in the dev-permissive mode is not evidence the config/infra layer is correct.
 - **Never hand-author frontend mock dicts that simulate `/api/*` responses** — load from `web/frontend/tests/fixtures/api/*.json` recorded by `tools/capture-fixtures.sh`. If the fixture is missing, run the script first.
 - **Always exercise the second turn for chat-agent stories** — replay a persisted conversation, do not stop at "first message returned 200".
+- **Emit an explicit `E2E:` marker** in `## Test Results` (and in your fast-mode return text) for any user-facing / HTTP / CLI story — the orchestrator greps for the literal case-sensitive token `E2E:` (or `Playwright:`) to enforce the E2E gate. A green browser run described without that literal token reads as "gate skipped" and gets you re-spawned.
 - **Always produce a smoke-path artifact when the tech spec has a `## Smoke Path` section** — real curl bytes, real screenshot, real CLI stdout. Commit it under `tests/artifacts/{STORY-KEY}/`. The QA reviewer rejects stories whose `## Test Results` references an artifact that does not exist on disk. A passing unit test is NOT a substitute — the smoke artifact is what proves the story actually participates in its CUJ.
 
 ## Fast Mode (Jira: off)
@@ -289,6 +227,7 @@ If your SDLC Context block contains the line `Jira: off`, the wave is running in
    Status: testing            # on PASS
    PR: <url or n/a>
    Verdict: PASS | FAIL
+   E2E: <Playwright spec + result, or "n/a — backend-internal">   # required on user-facing/HTTP/CLI units
    Bug: <one-line root cause + failing test name + re-run command>   # only on FAIL
    ```
 

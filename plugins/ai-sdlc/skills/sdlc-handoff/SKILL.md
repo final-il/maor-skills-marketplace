@@ -106,6 +106,18 @@ Epic Key: {EPIC-KEY}
 Transition Map: {full map as JSON — e.g., {"To Do": "11", "In Progress": "21", ...}}
 Agent Paths: {full map as JSON — e.g., {"planner": "/path/...", "developer": "/path/...", ...}}
 
+## Mode
+{current operating mode: `normal`, `feedback-loop`, `hotfix`, or `fast`}
+
+## Self-Learning
+enabled: {true|false}
+
+## Codex
+enabled: {true|false}   # omit the block only if Codex was never toggled this session
+
+## Docs
+{--docs settings if set: confluence_space, confluence_parent — omit the block if --docs was not used}
+
 ## Story Routing Table
 
 | Key | Title (short) | Status | Next Phase | Branch | Notes |
@@ -144,6 +156,24 @@ Agent Paths: {full map as JSON — e.g., {"planner": "/path/...", "developer": "
 |----------|--------|-------|-------------|-------------|
 | {STORY-KEY} | {branch} | {N commits} | {yes/no} | {short sha + message} |
 ```
+
+**Fast-wave variant (`Jira: off`).** A fast wave has **no Jira epic key**, so it must not be saved as an epic-keyed file. Instead:
+- Name the file `sdlc-resume-{WAVE-ID}.md` (`{WAVE-ID}` = `{PROJECT}-W{YYYYMMDD-HHMMSS}`, same memory dir).
+- Replace the `## Story Routing Table` (there are no Jira statuses to route on) with the two fast-mode blocks the orchestrator's auto-save uses (see `commands/sdlc.md` → "Fast-mode resume file"):
+  ```
+  ## Wave
+    id: {WAVE-ID}
+    project: {PROJECT}
+    mode: fast
+    plan_file: docs/sdlc/_wave-{WAVE-ID}/plan.md
+    reconciled: false            # or the {QBV-KEY} once Phase 8.5 back-fills Jira
+
+  ## Fast Work Ledger
+    {one YAML entry per work unit — full schema in `sdlc-conventions` §2.6:
+     key, title, epic, ac[], complexity, deps[], phase, branch, pr, spec_files[], bugs[], verdicts, jira}
+  ```
+- Keep `## Context Block`, `## Mode` (`fast`), `## Self-Learning`, `## Codex`, `## Session Notes`, `## Last Action`, `## Active Worktrees`, `## Git State` exactly as above.
+- The canonical ledger copy also lives at `docs/sdlc/_wave-{WAVE-ID}/ledger.md` (committed each phase), so a resume can rebuild state even if this memory file is lost.
 
 ### 5. Update MEMORY.md
 
@@ -193,7 +223,7 @@ Output a structured handoff summary:
 - {anything the next session should know}
 
 ### Resume Command
-`/sdlc continue {EPIC-KEY}`
+`/sdlc continue {EPIC-KEY}`   (fast wave: `/sdlc continue {WAVE-ID}`)
 ```
 
 ## Routing Rules Reference
@@ -210,6 +240,8 @@ Use these to fill the "Next Phase" column:
 | Testing | Phase 6 (QA) |
 | Done | skip |
 
+**Fast wave (`Jira: off`):** there are no Jira statuses — do not build a status routing table. Route from the ledger `phase` field instead (`architected` / `ready` / `in-progress` / `in-review` / `testing` / `done` / `blocked`); see `sdlc-conventions` `references/workflow-states.md` → "Fast Mode — Ledger Phase ↔ Jira Status".
+
 ## Rules
 
 - **Scan state automatically** — don't ask the user to list what happened
@@ -222,4 +254,4 @@ Use these to fill the "Next Phase" column:
 - **Keep it concise** — the next session needs actionable context, not a narrative
 - **Overwrite, don't append** — the resume file replaces any previous version for the same epic
 - **Mark unknowns** — if you can't determine a value, write `{UNKNOWN — will rediscover}` rather than guessing
-- **Delete on completion** — when the epic reaches Phase 8, delete the resume file
+- **Delete on completion** — when a **normal** epic reaches Phase 8 (all stories Done), delete the resume file. **Fast-wave exception:** keep `sdlc-resume-{WAVE-ID}.md` until the wave is **reconciled** (Phase 8.5 sets `## Wave.reconciled` to a QBV key) or the user **explicitly abandons** it — a plain reconciliation *decline* does NOT delete it (see `commands/sdlc.md` → "Cleanup"). Otherwise a later `/sdlc continue {WAVE-ID}` cannot find the wave to back-fill Jira.

@@ -81,9 +81,11 @@ See `sdlc-conventions` skill, "Artifact Discipline" section.
 
 6. **Map dependencies** — Identify which stories must complete before others can start. Minimize dependencies — prefer independent stories.
 
-7. **Assess complexity** — Rate each story as S (small, < 1 day), M (medium, 1-2 days), or L (large, 2-3 days). If any story is XL, split it.
+7. **Assess effort** — Rate each story **Small** (< 1 day), **Medium** (1-2 days), or **Large** (2-3 days). If any story is bigger than Large, split it.
 
 ## Output Format
+
+**Write for the reader.** This plan is shown to the user at the approval gate and becomes the epic/story titles + descriptions they read in Jira. Use plain language and real names throughout — a human who did not write this plan must understand it. **No internal codes**: don't label epics/stories `Epic 1` / `Story 1.1`, don't rate effort as bare `S/M/L`, and don't refer to dependencies by a code. Lead each description with *why it matters*, then *what it does*. Define any coined term the first time it appears, in one clause.
 
 Return your plan in this exact structure:
 
@@ -93,23 +95,25 @@ Return your plan in this exact structure:
 ## Summary
 {1-2 sentence overview}
 
-## Epic 1: {Epic Title}
-{Description — what this epic delivers}
+## Epic: {Epic Title}
+{Description — why this epic matters, then what it delivers}
 
-### Story 1.1: {Story Title}
-**Description:** {What to build and why}
+### Story: {Story Title}
+**Description:** {Why it matters, then what to build}
 **Acceptance Criteria:**
 - [ ] {Criterion 1 — specific, testable}
 - [ ] {Criterion 2}
-**Dependencies:** None | Story X.Y
-**Complexity:** S / M / L
+**Dependencies:** None | "{title of the blocking story}"
+**Effort:** Small | Medium | Large
 
-### Story 1.2: {Story Title}
+### Story: {Story Title}
 ...
 
-## Epic 2: {Epic Title}
+## Epic: {Epic Title}
 ...
 ```
+
+Story and epic titles are the identifiers a human reads; the Jira creator maps each title to a ticket key. Refer to dependencies by the blocking story's **title**, never by a positional code.
 
 ## Rules
 
