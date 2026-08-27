@@ -4,7 +4,7 @@
 
 A Claude Code skills marketplace hosted at `final-il/maor-skills-marketplace`. Users install it via `/plugin` → Marketplace → Add Marketplace → `final-il/maor-skills-marketplace`.
 
-> **Resuming ai-sdlc work?** Session handoffs live in `plugins/ai-sdlc/docs/handoffs/` — read the most recent before resuming.
+> **⚠️ ai-sdlc moved (2026-08-27).** ai-sdlc is now developed in **`final-csi/csi-marketplace`** (`~/git-dev/csi-marketplace`, `plugins/ai-sdlc/`). The copy in this repo is a **frozen mirror — do not edit it here.** Make all ai-sdlc changes in csi-marketplace (versioned there as `ai-sdlc-vX.Y.Z`; handoffs in its `plugins/ai-sdlc/docs/handoffs/`).
 
 ## Repository Structure
 
@@ -96,7 +96,7 @@ Agents use Atlassian MCP tools for all Jira operations. Always pass `contentForm
 
 ## IMPORTANT: All Skills and Agents Go Here
 
-**Every new skill or agent created in any Claude Code session must be added to this marketplace repo.** This is the single source of truth for Maor's custom skills. After adding a skill:
+**Every new skill or agent created in any Claude Code session must be added to this marketplace repo.** This is the single source of truth for Maor's custom skills — **except `ai-sdlc`, which is now developed in `final-csi/csi-marketplace`** (the copy here is a frozen mirror). After adding a skill:
 1. Follow the steps below to register it
 2. Commit and push to `final-il/maor-skills-marketplace`
 3. Install via the marketplace to verify the marketplace config is correct and the skill works
