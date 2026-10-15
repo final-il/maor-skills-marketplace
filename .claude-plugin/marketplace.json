@@ -68,6 +68,12 @@
       "description": "Read and update Jira from the internet-isolated internal (island) network using the airlock-jira CLI — the only path to Jira there. Relays every call internal → Aurora → S3 → external worker → real Jira and back, with no outbound internet or credentials on the island. Covers reads, guarded comment/transition writes, and preflight (SSM tunnel + creds) fixes.",
       "source": "./plugins/airlock-jira",
       "strict": false
+    },
+    {
+      "name": "html-presentations",
+      "description": "Design system for animated single-file HTML presentations — dark glass look, staggered reveals, page dots, overview mode, embedded images and video, opens offline.",
+      "source": "./plugins/html-presentations",
+      "strict": false
     }
   ]
 }

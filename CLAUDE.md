@@ -72,6 +72,7 @@ maor-skills-marketplace/
 | **technical-docs** | Structured documentation with YAML frontmatter |
 | **architecture-diagrams** | Diagrams in Mermaid, PlantUML, Draw.io |
 | **mac-expert** | macOS system config, diagnostics, troubleshooting |
+| **html-presentations** | Design system for animated single-file HTML presentations |
 | **jiralyzer** | Jira ticket analytics — natural language queries, SQL, charts |
 
 ## Plugins
